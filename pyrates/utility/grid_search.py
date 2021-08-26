@@ -58,8 +58,7 @@ __status__ = "development"
 
 def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union[dict, pd.DataFrame], param_map: dict,
                 step_size: float, simulation_time: float, inputs: dict, outputs: dict,
-                sampling_step_size: Optional[float] = None, permute_grid: bool = False, init_kwargs: dict = None,
-                clear: bool = True, **kwargs) -> tuple:
+                sampling_step_size: Optional[float] = None, permute_grid: bool = False, **kwargs) -> tuple:
     """Function that runs multiple parametrizations of the same circuit in parallel and returns a combined output.
 
     Parameters
@@ -83,10 +82,8 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
     permute_grid
         If true, all combinations of the provided param_grid values will be realized. If false, the param_grid values
         will be traversed pairwise.
-    clear
-        If true, all files that have been created by PyRates to run the grid-search will be cleaned up afterwards.
     kwargs
-        Additional keyword arguments passed to the `:class:ComputeGraph` initialization.
+        Additional keyword arguments passed to the `CircuitTemplate.run` call.
 
 
     Returns
@@ -100,11 +97,7 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
     # argument pre-processing
     #########################
 
-    if not init_kwargs:
-        init_kwargs = {}
-    vectorization = init_kwargs.pop('vectorization', True)
-    if type(circuit_template) is str:
-        circuit_template = CircuitTemplate.from_yaml(circuit_template)
+    vectorization = kwargs.pop('vectorization', True)
 
     # linearize parameter grid if necessary
     if type(param_grid) is dict:
@@ -118,41 +111,38 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
     N = param_grid.shape[0]
 
     # assign parameter updates to each circuit, combine them to unconnected network and remember their parameters
-    circuit = CircuitIR()
     circuit_names = []
+    circuit = CircuitTemplate(name='top_lvl', path='none')
     for idx in param_grid.index:
         new_params = {}
         for key in param_keys:
             new_params[key] = param_grid[key][idx]
-        circuit_key = f'{circuit_template.label}_{idx}'
-        circuit_tmp = adapt_circuit(deepcopy(circuit_template).apply(), new_params, param_map)
-        circuit.add_circuit(circuit_key, circuit_tmp)
+        circuit_tmp = adapt_circuit(circuit_template, new_params, param_map)
+        circuit_key = f'{circuit_tmp.name}_{idx}'
+        circuit = circuit.update_template(circuits={circuit_key: circuit_tmp})
         circuit_names.append(circuit_key)
     param_grid.index = circuit_names
 
-    # create backend graph
-    net = circuit.compile(vectorization=vectorization, **init_kwargs)
-
     # adjust input of simulation to combined network
     for inp_key, inp in inputs.copy().items():
-        inputs[f"all/{inp_key}"] = np.tile(inp, (1, N))
+        inputs[f"all/{inp_key}"] = inp
         inputs.pop(inp_key)
 
     # adjust output of simulation to combined network
+    outputs_new = []
+    out_keys = []
     for out_key, out in outputs.items():
-        outputs[out_key] = f"all/{out}"
+        outputs_new.append(f"all/{out}")
+        out_keys.append(out_key)
 
     # simulate the circuits behavior
-    results = net.run(simulation_time=simulation_time,
-                      step_size=step_size,
-                      sampling_step_size=sampling_step_size,
-                      inputs=inputs,
-                      outputs=outputs,
-                      **kwargs)    # type: pd.DataFrame
-
-    # clean up config files
-    if clear:
-        net.clear()
+    results = circuit.run(simulation_time=simulation_time,
+                          step_size=step_size,
+                          sampling_step_size=sampling_step_size,
+                          inputs=inputs,
+                          outputs=outputs_new,
+                          vectorization=vectorization,
+                          **kwargs)    # type: pd.DataFrame
 
     # return results
     if 'profile' in kwargs:
@@ -1236,7 +1226,7 @@ def linearize_grid(grid: dict, permute: bool = False) -> pd.DataFrame:
                          'must have the same number of elements.')
 
 
-def adapt_circuit(circuit: CircuitIR, params: dict, param_map: dict) -> CircuitIR:
+def adapt_circuit(circuit: Union[CircuitTemplate, str], params: dict, param_map: dict) -> CircuitTemplate:
     """Changes the parametrization of a circuit.
 
     Parameters
@@ -1255,39 +1245,36 @@ def adapt_circuit(circuit: CircuitIR, params: dict, param_map: dict) -> CircuitI
 
     """
 
+    if type(circuit) is str:
+        circuit = CircuitTemplate.from_yaml(circuit)
+
+    node_updates = {}
+    edge_updates = []
+
     for key in params.keys():
 
         val = params[key]
 
-        for var in param_map[key]['vars']:
-
-            # change variable values on nodes
-            nodes = param_map[key]['nodes'] if 'nodes' in param_map[key] else []
-            for node in nodes:
-                circuit[node].values = deepcopy(circuit[node].values)
-                if "/" in var:
-                    op, var_name = var.split("/")
-                    if op in circuit[node]:
-                        circuit[node].values[op][var_name] = float(val)
-                else:
-                    for op, _ in circuit[node]:
-                        try:
-                            circuit[node].values[op][var] = float(val)
-                        except KeyError:
-                            print(f'WARNING: Variable {var} has not been found on node {node}.')
-
-            # change variable values on edges
-            edges = param_map[key]['edges'] if 'edges' in param_map[key] else []
-            if edges and len(edges[0]) < 3:
+        if 'nodes' in param_map[key]:
+            for n in param_map[key]['nodes']:
+                for v in param_map[key]['vars']:
+                    node_updates[f"{n}/{v}"] = val
+        else:
+            edges = param_map[key]['edges']
+            if len(edges[0]) < 3:
                 for source, target in edges:
-                    if var in circuit.edges[source, target, 0]:
-                        circuit.edges[source, target, 0][var] = float(val)
+                    for var in param_map[key]['vars']:
+                        edge = circuit.get_edge(source=source, target=target, idx=0)
+                        if var in edge[3]:
+                            edge_updates.append((edge[0], edge[1], {var: val}))
             else:
-                for source, target, edge in edges:
-                    if var in circuit.edges[source, target, edge]:
-                        circuit.edges[source, target, edge][var] = float(val)
+                for source, target, idx in edges:
+                    for var in param_map[key]['vars']:
+                        edge = circuit.get_edge(source=source, target=target, idx=idx)
+                        if var in edge[3]:
+                            edge_updates.append((edge[0], edge[1], {var: val}))
 
-    return circuit
+    return circuit.update_var(node_vars=node_updates, edge_vars=edge_updates)
 
 
 class StreamTee(object):

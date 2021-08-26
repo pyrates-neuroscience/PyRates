@@ -481,6 +481,6 @@ def test_2_6_inputs_outputs():
     n2 = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net14")
     r2 = n2.run(sim_time, outputs=['all/all/op9/a', 'all/all/op10/a'],
                 inputs={'all/all/op9/I_ext': inp, 'all/all/op10/I_ext': inp2},
-                vectorization=True, step_size=dt, backend=backend, solver='scipy', clear=False)
+                vectorization=True, step_size=dt, backend=backend, solver='scipy', clear=True)
 
     assert np.mean(r1.values.flatten() - r2.values.flatten()) == pytest.approx(0., rel=1e-4, abs=1e-4)

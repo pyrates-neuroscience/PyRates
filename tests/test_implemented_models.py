@@ -66,14 +66,12 @@ def test_3_1_jansenrit():
     # single operator JRC
     jrc1 = CircuitTemplate.from_yaml("model_templates.jansen_rit.simple_jansenrit.JRC_simple")
     r1 = jrc1.run(T, outputs={'EIN': 'JRC/JRC_op/PSP_ein'}, backend='numpy', step_size=dt, solver='scipy',
-                  sampling_step_size=dts)
-    jrc1.clear()
+                  sampling_step_size=dts, clear=True)
 
     # multi-node JRC
     jrc2 = CircuitTemplate.from_yaml("model_templates.jansen_rit.simple_jansenrit.JRC")
     r2 = jrc2.run(T, outputs={'EIN': 'EIN/RPO_e/PSP'}, backend='numpy', step_size=dt, solver='scipy',
-                  sampling_step_size=dts)
-    jrc2.clear()
+                  sampling_step_size=dts, clear=True)
 
     assert np.mean(r1.values.flatten() - r2.values.flatten()) == pytest.approx(0., rel=1e-4, abs=1e-4)
 
@@ -99,8 +97,7 @@ def test_3_2_montbrio():
 
     # perform simulation
     r1 = m1.run(T, sampling_step_size=dts, inputs={"p/Op_e/inp": inp}, outputs={"r": "p/Op_e/r"},
-                vectorization=True, backend='numpy', solver='scipy', step_size=dt)
-    m1.clear()
+                vectorization=True, backend='numpy', solver='scipy', step_size=dt, clear=True)
 
     # test firing rate relationships at pre-defined times
     times = [25.0, 49.0, 79.0]
@@ -131,8 +128,7 @@ def test_3_3_wilson_cowan():
 
     # perform simulation
     r1 = wc1.run(T, sampling_step_size=dts, inputs={"E/Op_rate/I_ext": inp}, outputs={"R_e": "E/Op_rate/r"},
-                 vectorization=True, backend='numpy', solver='scipy', step_size=dt)
-    wc1.clear()
+                 vectorization=True, backend='numpy', solver='scipy', step_size=dt, clear=True)
 
     # test firing rate relationships at pre-defined times
     times = [29.0, 49.0, 79.0]
@@ -142,6 +138,8 @@ def test_3_3_wilson_cowan():
 
     # repeat for model with short-term plasticity
     #############################################
+
+    # TODO: re-enable edge operators
 
     T = 220.0
     dt = 5e-3
@@ -157,8 +155,7 @@ def test_3_3_wilson_cowan():
 
     # perform simulation
     r2 = wc2.run(T, sampling_step_size=dts, inputs={"E/E_op/I_ext": inp}, outputs={"V_e": "E/E_op/v"},
-                 vectorization=True, backend='numpy', solver='scipy', step_size=dt)
-    wc2.clear()
+                 vectorization=True, backend='numpy', solver='scipy', step_size=dt, clear=True)
 
     # test firing rate relationships at pre-defined times
     times = [29.0, 49.0, 219.0]
@@ -183,8 +180,7 @@ def test_3_4_kuramoto():
 
     # perform simulation
     r1 = km1.run(T, sampling_step_size=dts, outputs={"theta": "p1/Op_base/theta"}, vectorization=True, backend='numpy',
-                 solver='scipy', step_size=dt)
-    km1.clear()
+                 solver='scipy', step_size=dt, clear=True)
 
     # test linear oscillator properties
     omega = 10.0
@@ -204,8 +200,7 @@ def test_3_4_kuramoto():
 
     # perform simulation
     r2 = km2.run(T, sampling_step_size=dts, outputs={"theta1": "p1/Op_base/theta", "theta2": "p2/Op_base/theta"},
-                 vectorization=True, backend='numpy', solver='scipy', step_size=dt)
-    km2.clear()
+                 vectorization=True, backend='numpy', solver='scipy', step_size=dt, clear=True)
 
     # test whether oscillator 2 showed a faster phase development than oscillator 1
     assert r2['theta1'].iloc[-1, 0] < r2['theta2'].iloc[-1, 0]
@@ -226,8 +221,7 @@ def test_3_4_kuramoto():
     # perform simulation
     r3 = km3.run(T, sampling_step_size=dts, outputs={"theta1": "p1/Op_noise/theta", "theta2": "p2/Op_noise/theta"},
                  inputs={"p1/Op_noise/xi": inp1, "p2/Op_noise/xi": inp2}, vectorization=True, backend='numpy',
-                 solver='scipy', step_size=dt)
-    km3.clear()
+                 solver='scipy', step_size=dt, clear=True)
 
     # test whether oscillator 2 showed a faster phase development than oscillator 1
     assert r3['theta1'].iloc[-1, 0] < r3['theta2'].iloc[-1, 0]

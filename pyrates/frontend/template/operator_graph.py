@@ -44,9 +44,11 @@ class OperatorGraphTemplate(AbstractBaseTemplate):
         super().__init__(name, path, description)
 
         self.operators = {}  # dictionary with operator path as key and variations to the template as values
+        self._op_map = {}
         if isinstance(operators, str):
             operator_template = self._load_operator_template(operators)
             self.operators[operator_template] = {}  # single operator path with no variations
+            self._op_map[operator_template.name] = operator_template
         elif isinstance(operators, list):
             for op in operators:
                 try:
@@ -54,6 +56,7 @@ class OperatorGraphTemplate(AbstractBaseTemplate):
                 except TypeError:
                     operator_template = op
                 self.operators[operator_template] = {}  # multiple operator paths with no variations
+                self._op_map[operator_template.name] = operator_template
         elif isinstance(operators, dict):
             for op, variations in operators.items():
                 try:
@@ -61,15 +64,11 @@ class OperatorGraphTemplate(AbstractBaseTemplate):
                 except TypeError:
                     operator_template = op
                 self.operators[operator_template] = variations
+                self._op_map[operator_template.name] = operator_template
         # for op, variations in operators.items():
         #     if "." not in op:
         #         op = f"{path.split('.')[:-1]}.{op}"
         #     self.operators[op] = variations
-
-    def _load_operator_template(self, path: str) -> OperatorTemplate:
-        """Load an operator template based on a path"""
-        path = _complete_template_path(path, self.path)
-        return OperatorTemplate.from_yaml(path)
 
     def update_template(self, name: str = None, path: str = None, operators: Union[str, List[str], dict] = None,
                         description: str = None):
@@ -90,6 +89,14 @@ class OperatorGraphTemplate(AbstractBaseTemplate):
             operators = self.operators
 
         return self.__class__(name=name, path=path, operators=operators, description=description)
+
+    def update_var(self, op: str, var: str, val: Union[float, int]):
+
+        op_template = self.get_op(op)
+        self.operators[op_template][var] = val
+
+    def get_op(self, op: str):
+        return self._op_map[op]
 
     def apply(self, values: dict = None, label: str = None):
         """ Apply template to gain a node or edge intermediate representation.
@@ -143,6 +150,11 @@ class OperatorGraphTemplate(AbstractBaseTemplate):
     @staticmethod
     def target_ir(*args, **kwargs):
         raise NotImplementedError
+
+    def _load_operator_template(self, path: str) -> OperatorTemplate:
+        """Load an operator template based on a path"""
+        path = _complete_template_path(path, self.path)
+        return OperatorTemplate.from_yaml(path)
 
 
 def _update_operators(base_operators: dict, updates: Union[str, List[str], dict]):

@@ -88,6 +88,7 @@ class CircuitTemplate(AbstractBaseTemplate):
                 else:
                     self.circuits[key] = circuit
 
+        self._edge_map = {}
         if edges:
             self.edges = self._load_edge_templates(edges)
         else:
@@ -133,6 +134,41 @@ class CircuitTemplate(AbstractBaseTemplate):
             edges = self.edges
 
         return self.__class__(name=name, path=path, description=description,circuits=circuits, nodes=nodes, edges=edges)
+
+    def update_var(self, node_vars: dict = None, edge_vars: list = None):
+        """
+
+        Parameters
+        ----------
+        node_vars
+        edge_vars
+
+        Returns
+        -------
+
+        """
+
+        if node_vars is None:
+            node_vars = {}
+        if edge_vars is None:
+            edge_vars = []
+
+        # updates to node variable values
+        for key, val in node_vars.items():
+            *node, op, var = key.split('/')
+            target_nodes = self.get_nodes(node_identifier=node, var_identifier=(op, var))
+            if not target_nodes:
+                print(f'WARNING: Variable {var} has not been found on operator {op} of node {node[0]}.')
+            for n in target_nodes:
+                node_temp = self.get_node_template(n)
+                node_temp.update_var(op=op, var=var, val=val)
+
+        # updates to edge variable values
+        for source, target, edge_dict in edge_vars:
+            _, _, _, base_dict = self.get_edge(source, target)
+            base_dict.update(edge_dict)
+
+        return self
 
     def run(self, simulation_time: float, step_size: float, inputs: Optional[dict] = None,
             outputs: Optional[Union[dict, list]] = None, sampling_step_size: Optional[float] = None,
@@ -296,8 +332,7 @@ class CircuitTemplate(AbstractBaseTemplate):
                 # extend edge dict by edge variables
                 base_dict = edge_col[(source_new, target_new, template, delayed)]
                 for key, val in edge_dict.items():
-                    if type(val) is float or type(val) is int:
-                        base_dict[key].append(val)
+                    base_dict[key].append(val)
                 base_dict['source_idx'].append(s_idx)
                 base_dict['target_idx'].append(t_idx)
 
@@ -305,8 +340,7 @@ class CircuitTemplate(AbstractBaseTemplate):
 
                 # prepare edge dict for vectorization
                 for key, val in edge_dict.items():
-                    if type(val) is float or type(val) is int:
-                        edge_dict[key] = [val]
+                    edge_dict[key] = [val]
                 edge_dict['source_idx'] = [s_idx]
                 edge_dict['target_idx'] = [t_idx]
 
@@ -521,7 +555,7 @@ class CircuitTemplate(AbstractBaseTemplate):
             target = "/".join(target)
 
         *s_node, s_op, s_var = source.split('/')
-        *t_node, t_op, t_var = source.split('/')
+        *t_node, t_op, t_var = target.split('/')
 
         # extract requested source and target nodes from circuit
         source_nodes = self.get_nodes(s_node)
@@ -582,6 +616,12 @@ class CircuitTemplate(AbstractBaseTemplate):
                 edges[i] = (svar, tvar, template, edge, delayed)
         return edges
 
+    def get_edge(self, source: str, target: str, idx: int = None):
+
+        if idx is None:
+            idx = 0
+        return self._edge_map[(source, target, idx)]
+
     def clear(self):
         """Removes all temporary files and directories that may have been created during simulations of that circuit.
         Also deletes operator template caches, imports and path variables from working memory."""
@@ -632,6 +672,12 @@ class CircuitTemplate(AbstractBaseTemplate):
                 template = EdgeTemplate.from_yaml(path)
 
             edges_with_templates.append((source, target, template, variables))
+
+            idx = 0
+            while (source, target, idx) in self._edge_map:
+                idx += 1
+            self._edge_map[(source, target, idx)] = edges_with_templates[-1]
+
         return edges_with_templates
 
     def _add_input(self, target: str, inp: np.ndarray, adaptive: bool, sim_time: float):
@@ -732,9 +778,10 @@ class CircuitTemplate(AbstractBaseTemplate):
             # extract index for single output node
             for t in target_nodes:
                 backend_op = self._get_op_identifier(f"{t}/{out_op}")
+                key = f"{t}/{out_op}/{out_var}"
                 idx = indices[t]
-                out_map[t] = [idx]
-                out_vars[t] = f"{backend_op}/{out_var}"
+                out_map[key] = [idx]
+                out_vars[key] = f"{backend_op}/{out_var}"
 
         return out_map, out_vars
 

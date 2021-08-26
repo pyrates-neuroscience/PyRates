@@ -471,7 +471,8 @@ class BaseBackend(object):
             return self.graph.nodes[name]
 
     def run(self, T: float, dt: float, dts: float = None, outputs: dict = None, solver: str = None,
-            in_place: bool = True, func_name: str = None, file_name: str = None, compile_kwargs: dict = None, **kwargs) -> dict:
+            in_place: bool = True, func_name: str = None, file_name: str = None, compile_kwargs: dict = None, **kwargs
+            ) -> dict:
 
         # preparations
         ##############
@@ -659,27 +660,35 @@ class BaseBackend(object):
             code_gen.add_linebreak()
 
         # get equation string and argument list for each non-DE node at the end of the compute graph hierarchy
-        func_args2, code_gen = self._generate_update_equations(code_gen, nodes=self.graph.var_updates['non-DEs'],
-                                                               funcs=backend_funcs)
+        func_args2, delete_args1, code_gen = self._generate_update_equations(code_gen,
+                                                                             nodes=self.graph.var_updates['non-DEs'],
+                                                                             funcs=backend_funcs)
 
         # get equation string and argument list for each DE node at the end of the compute graph hierarchy
-        func_args1, code_gen = self._generate_update_equations(code_gen, nodes=self.graph.var_updates['DEs'],
-                                                               rhs_var=rhs_var, indices=rhs_indices_str,
-                                                               funcs=backend_funcs)
+        func_args1, delete_args2, code_gen = self._generate_update_equations(code_gen,
+                                                                             nodes=self.graph.var_updates['DEs'],
+                                                                             rhs_var=rhs_var, indices=rhs_indices_str,
+                                                                             funcs=backend_funcs)
 
-        return func_args1 + func_args2, code_gen
+        # remove unnecessary function arguments
+        func_args = func_args1 + func_args2
+        for arg in delete_args1 + delete_args2:
+            while arg in func_args:
+                func_args.pop(func_args.index(arg))
+
+        return func_args, code_gen
 
     def _generate_update_equations(self, code_gen: CodeGen, nodes: dict, rhs_var: str = None, indices: list = None,
                                    funcs: dict = None):
 
         # collect right-hand side expression and all input variables to these expressions
-        func_args, expressions, var_names = [], [], []
+        func_args, expressions, var_names, defined_vars = [], [], [], []
         for node, update in nodes.items():
 
             # collect expression and variables of right-hand side of equation
             expr_args, expr = self.graph.node_to_expr(update, **funcs)
             func_args.extend(expr_args)
-            expressions.append(expr)
+            expressions.append(self._expr_to_str(expr))
 
             # process left-hand side of equation
             var = self.get_var(node)
@@ -701,8 +710,7 @@ class BaseBackend(object):
 
                 # DE updates stored in a state-vector
                 for idx, expr in zip(indices, expressions):
-                    expr_str = self._expr_to_str(expr)
-                    code_gen.add_code_line(f"{rhs_var}[{idx}] = {expr_str}")
+                    code_gen.add_code_line(f"{rhs_var}[{idx}] = {expr}")
 
             else:
 
@@ -711,8 +719,7 @@ class BaseBackend(object):
                                      )
 
                 # DE update stored in a single variable
-                expr_str = self._expr_to_str(expressions[0])
-                code_gen.add_code_line(f"{rhs_var} = {expr_str}")
+                code_gen.add_code_line(f"{rhs_var} = {expressions[0]}")
 
             # add rhs var to function arguments
             func_args = [rhs_var] + func_args
@@ -721,28 +728,24 @@ class BaseBackend(object):
 
             # non-differential equation update
 
-            var_names, expressions, undefined_vars = sort_equations(var_names, expressions)
+            var_names, expressions, undefined_vars, defined_vars = sort_equations(var_names, expressions)
             func_args.extend(undefined_vars)
 
             if indices:
 
                 # non-DE update stored in a variable slice
                 for idx, expr, target_var in zip(indices, expressions, var_names):
-                    expr_str = self._expr_to_str(expr)
-                    code_gen.add_code_line(f"{target_var}[{idx}] = {expr_str}")
+                    code_gen.add_code_line(f"{target_var}[{idx}] = {expr}")
 
             else:
 
                 # non-DE update stored in a single variable
                 for target_var, expr in zip(var_names, expressions):
-                    expr_str = self._expr_to_str(expr)
-                    if type(target_var) is not str:
-                        target_var = self._expr_to_str(target_var)
-                    code_gen.add_code_line(f"{target_var} = {expr_str}")
+                    code_gen.add_code_line(f"{target_var} = {expr}")
 
         code_gen.add_linebreak()
 
-        return func_args, code_gen
+        return func_args, defined_vars, code_gen
 
     def _process_var_update(self, var: str, update: str) -> tuple:
 
@@ -882,13 +885,13 @@ def sort_equations(lhs_vars: list, rhs_expressions: list) -> tuple:
     vars_new, expressions_new, defined_vars, all_vars = [], [], [], []
     lhs_vars_old, expressions_old = lhs_vars.copy(), rhs_expressions.copy()
 
-    # retrieve clean, un-indexed lhs var names
+    # first, collect all variables that do not appear in any other equations
     while lhs_vars_old:
         for var, expr in zip(lhs_vars, rhs_expressions):
             appears_in_rhs = False
             v_tmp, indexed = extract_var(var)
             for expr_tmp in rhs_expressions:
-                if var_in_expression(v_tmp, str(expr_tmp)):
+                if var_in_expression(v_tmp, expr_tmp):
                     appears_in_rhs = True
                     break
             if not appears_in_rhs:
@@ -897,27 +900,54 @@ def sort_equations(lhs_vars: list, rhs_expressions: list) -> tuple:
                 vars_new.append(var)
                 expressions_new.append(expr)
                 expressions_old.pop(idx)
-            if not indexed and v_tmp not in defined_vars:
-                defined_vars.append(v_tmp)
-            all_vars.append(v_tmp)
+                if not indexed and v_tmp not in defined_vars:
+                    defined_vars.append(v_tmp)
+
+            if v_tmp not in all_vars:
+                all_vars.append(v_tmp)
 
         if lhs_vars and lhs_vars == lhs_vars_old:
-            v_tmp, indexed = extract_var(lhs_vars[0])
-            for idx, expr_tmp in enumerate(rhs_expressions):
-                if not var_in_expression(v_tmp, str(expr_tmp)):
+            break
+        else:
+            lhs_vars = lhs_vars_old
+            rhs_expressions = expressions_old
+
+    # next, collect all other variables
+    stuck = False
+    while lhs_vars_old:
+        v_tmp, indexed = extract_var(lhs_vars[0])
+        found = False
+        for idx, (lhs_var, expr_tmp) in enumerate(zip(lhs_vars, rhs_expressions)):
+            var, indexed = extract_var(lhs_var)
+            if var_in_expression(v_tmp, expr_tmp):
+                if not var_in_expression(v_tmp, lhs_var):
+                    found = True
                     break
-            var = lhs_vars_old.pop(idx)
-            vars_new.append(var)
+                elif stuck:
+                    indexed = True
+                    found = True
+                    break
+            elif var_in_expression(v_tmp, lhs_var) and (stuck or indexed):
+                found = True
+                indexed = True
+                break
+        if found:
+            lhs_var = lhs_vars_old.pop(idx)
+            vars_new.append(lhs_var)
             expr = expressions_old.pop(idx)
             expressions_new.append(expr)
-            if not indexed and v_tmp not in defined_vars:
-                defined_vars.append(v_tmp)
-            all_vars.append(v_tmp)
+            if not indexed and var not in defined_vars:
+                defined_vars.append(var)
+            stuck = False
+        elif stuck:
+            raise ValueError('Unable to find a well-defined order of the non-differential equations in the system.')
+        else:
+            stuck = True
 
         lhs_vars = lhs_vars_old
         rhs_expressions = expressions_old
 
-    return vars_new[::-1], expressions_new[::-1], [v for v in all_vars if v not in defined_vars]
+    return vars_new[::-1], expressions_new[::-1], [v for v in all_vars if v not in defined_vars], defined_vars
 
 
 

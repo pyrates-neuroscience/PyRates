@@ -1179,6 +1179,9 @@ def is_diff_eq(eq: str) -> bool:
 
 def var_in_expression(var: str, expr: str) -> bool:
 
+    if var == expr:
+        return True
+
     # define follow-up operations/signs that are allowed to follow directly after term in eq
     allowed_follow_ops = '+=*/^<>=!.%@[]():, '
 

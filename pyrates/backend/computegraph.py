@@ -238,10 +238,15 @@ class ComputeGraph(MultiDiGraph):
         expr_args = []
         try:
             expr = self.nodes[n]['expr']
-            expr_info = [(self.nodes[inp]['symbol'], self.node_to_expr(inp, **kwargs)) for inp in self.predecessors(n)]
-            for expr_old, (args, expr_new) in expr_info:
-                expr = expr.replace(expr_old, expr_new)
-                expr_args.extend(args)
+            expr_info = {self.nodes[inp]['symbol']: self.node_to_expr(inp, **kwargs) for inp in self.predecessors(n)}
+            for expr_old in expr.args:
+                try:
+                    args, expr_new = expr_info[expr_old]
+                    expr = expr.replace(expr_old, expr_new)
+                    expr_args.extend(args)
+                except KeyError:
+                    if expr_old.is_symbol:
+                        expr.replace(expr_old, None)
             for expr_old, expr_new in kwargs.items():
                 expr = expr.replace(Function(expr_old), Function(expr_new))
             return expr_args, expr
