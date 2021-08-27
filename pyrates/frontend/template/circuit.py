@@ -37,7 +37,7 @@ arguments. For more detailed descriptions, see the respective docstrings.
 import gc
 from typing import List, Union, Dict, Optional
 from copy import deepcopy
-from pandas import DataFrame
+from pandas import DataFrame, MultiIndex
 import numpy as np
 
 # pyrates internal imports
@@ -212,18 +212,42 @@ class CircuitTemplate(AbstractBaseTemplate):
                               profile=profile, **kwargs)
 
         # apply indices to output variables
-        for key, idx in output_map.items():
-            outputs[key] = np.squeeze(outputs[key][:, idx])
+        outputs_final = {}
+        for key, out_info in output_map.items():
+            if type(out_info) is dict:
+                outputs_final[key] = {key2: np.squeeze(outputs.pop(key2)[:, idx]) for key2, idx in out_info.items()}
+            else:
+                outputs_final[key] = np.squeeze(outputs.pop(key)[:, out_info])
         time_vec = outputs.pop('time')
 
-        # create data frame
+        # interpolate data if necessary
         if sampling_step_size and not all(np.diff(time_vec, 1) - sampling_step_size < step_size * 0.01):
             n = int(np.round(simulation_time / sampling_step_size, decimals=0))
             new_times = np.linspace(step_size, simulation_time, n + 1)
-            for key, val in outputs.items():
-                outputs[key] = np.interp(new_times, time_vec, val)
+            for key, val in outputs_final.items():
+                if type(val) is dict:
+                    for key2, v in val.items():
+                        outputs_final[key][key2] = np.interp(new_times, time_vec, v)
+                else:
+                    outputs_final[key] = np.interp(new_times, time_vec, val)
             time_vec = new_times
-        results = DataFrame(outputs, index=time_vec)
+
+        # create multi-index dataframe
+        data = []
+        columns = []
+        multi_index = False
+        for key, out in outputs_final.items():
+            if type(out) is dict:
+                multi_index = True
+                for key2, v in out.items():
+                    columns.append((key, key2))
+                    data.append(v)
+            else:
+                columns.append(key)
+                data.append(out)
+        if multi_index:
+            columns = MultiIndex.from_tuples(columns)
+        results = DataFrame(data=np.asarray(data).T, columns=columns, index=time_vec)
 
         if clear:
             net.clear()
@@ -758,18 +782,28 @@ class CircuitTemplate(AbstractBaseTemplate):
 
                 # get all requested node variables
                 target_nodes = self.get_nodes(out_nodes, var_identifier=(out_op, out_var))
-                if len(target_nodes) > 1:
-                    raise ValueError(f'Requested output with key {key} refers to multiple variables in the network. '
-                                     f'For such outputs, key-value assignments via dictionaries are not supported. '
-                                     f'Please provide the outputs of the form of {out} within a list instead.')
-                elif len(target_nodes) < 1:
+                if len(target_nodes) < 1:
                     raise ValueError(f'Requested output variable {out} does not exist in this circuit.')
 
-                # extract index for single output node
-                backend_op = self._get_op_identifier(f"{target_nodes[0]}/{out_op}")
-                idx = indices[target_nodes[0]]
-                out_map[key] = [idx]
-                out_vars[key] = f"{backend_op}/{out_var}"
+                if len(target_nodes) == 1:
+
+                    # extract index for single output node
+                    backend_op = self._get_op_identifier(f"{target_nodes[0]}/{out_op}")
+                    idx = indices[target_nodes[0]]
+                    out_map[key] = [idx]
+                    out_vars[key] = f"{backend_op}/{out_var}"
+
+                else:
+
+                    # extract index for multiple output nodes
+                    out_map[key] = {}
+                    for t in target_nodes:
+                        backend_op = self._get_op_identifier(f"{t}/{out_op}")
+                        idx = indices[t]
+                        key2 = f"{t}/{out_op}/{out_var}"
+                        out_map[key][key2] = [idx]
+                        out_vars[key2] = f"{backend_op}/{out_var}"
+
         else:
 
             *out_nodes, out_op, out_var = outputs.split('/')

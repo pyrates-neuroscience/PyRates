@@ -479,7 +479,7 @@ def test_2_6_inputs_outputs():
 
     # perform simulation
     n2 = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net14")
-    r2 = n2.run(sim_time, outputs=['all/all/op9/a', 'all/all/op10/a'],
+    r2 = n2.run(sim_time, outputs={'a1': 'all/all/op9/a', 'a2': 'all/all/op10/a'},
                 inputs={'all/all/op9/I_ext': inp, 'all/all/op10/I_ext': inp2},
                 vectorization=True, step_size=dt, backend=backend, solver='scipy', clear=True)
 
