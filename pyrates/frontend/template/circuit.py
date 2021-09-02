@@ -133,7 +133,8 @@ class CircuitTemplate(AbstractBaseTemplate):
         else:
             edges = self.edges
 
-        return self.__class__(name=name, path=path, description=description,circuits=circuits, nodes=nodes, edges=edges)
+        return self.__class__(name=name, path=path, description=description, circuits=circuits, nodes=nodes, edges=edges
+                              )
 
     def update_var(self, node_vars: dict = None, edge_vars: list = None):
         """
@@ -515,7 +516,7 @@ class CircuitTemplate(AbstractBaseTemplate):
                         nodes.extend(self.get_nodes(node_identifier=f"{n}/all", var_identifier=var_identifier))
                     return nodes
                 return self._get_nodes_with_var(var_identifier, nodes=list(net.keys()))
-            raise ValueError(f'Node with label {node_identifier[0]} could not be found in CircuitTemplate {self.name}.')
+            return []
 
         else:
 
@@ -782,8 +783,6 @@ class CircuitTemplate(AbstractBaseTemplate):
 
                 # get all requested node variables
                 target_nodes = self.get_nodes(out_nodes, var_identifier=(out_op, out_var))
-                if len(target_nodes) < 1:
-                    raise ValueError(f'Requested output variable {out} does not exist in this circuit.')
 
                 if len(target_nodes) == 1:
 
@@ -793,7 +792,7 @@ class CircuitTemplate(AbstractBaseTemplate):
                     out_map[key] = [idx]
                     out_vars[key] = f"{backend_op}/{out_var}"
 
-                else:
+                elif target_nodes:
 
                     # extract index for multiple output nodes
                     out_map[key] = {}

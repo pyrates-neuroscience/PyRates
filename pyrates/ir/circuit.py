@@ -127,7 +127,7 @@ class CircuitIR(AbstractBaseIR):
         # finalize edge transmission operators
         if verbose:
             print("\t(2) Preprocessing edge transmission operations...")
-        self._preprocess_edge_operations(dde_approx=kwargs.pop('dde_approx', 0.0),
+        self._preprocess_edge_operations(dde_approx=kwargs.pop('dde_approx', 0),
                                          matrix_sparseness=kwargs.pop('matrix_sparseness', 0.05))
         if verbose:
             print("\t\t...finished.")
@@ -506,7 +506,7 @@ class CircuitIR(AbstractBaseIR):
         if path not in self:
             raise PyRatesException(f"Could not find object with path `{path}`.")
 
-    def _preprocess_edge_operations(self, dde_approx: float = 0.0, **kwargs):
+    def _preprocess_edge_operations(self, dde_approx: int = 0, **kwargs):
         """Restructures network graph to collapse nodes and edges that share the same operator graphs. Variable values
         get an additional vector dimension. References to the respective index is saved in the internal `label_map`."""
 
@@ -517,8 +517,6 @@ class CircuitIR(AbstractBaseIR):
 
             node_outputs = self.graph.out_edges(node_name, keys=True)
             node_outputs = self._sort_edges(node_outputs, 'source_var', data_included=False)
-            node_inputs = self.graph.in_edges(node_name, keys=True, data=True)
-            node_inputs = self._sort_edges(node_inputs, 'target_var', data_included=True)
 
             # loop over ouput variables of node
             for i, (out_var, edges) in enumerate(node_outputs.items()):
@@ -532,20 +530,6 @@ class CircuitIR(AbstractBaseIR):
                     self._add_edge_buffer(node_name, op_name, var_name, edges=edges, delays=delays,
                                           nodes=nodes, spreads=spreads,
                                           dde_approx=dde_approx)
-
-            # loop over input variables of node
-            # for i, (in_var, edges) in enumerate(node_inputs.items()):
-            #
-            #     n_inputs = len(edges)
-            #     op_name, var_name = in_var.split('/')
-            #
-            #     # combine node inputs that map to the same variable
-            #     for j in range(n_inputs):
-            #
-            #         # add synaptic input collector to the input variables if necessary
-            #         if n_inputs > 1:
-            #             # TODO: can this be removed? Its just an identity equation....
-            #             self._add_edge_input_collector(node_name, op_name, var_name, idx=j, edge=edges[j])
 
         # create the final equations and variables for each edge
         for source, targets in self.graph.adjacency():
@@ -993,7 +977,7 @@ class CircuitIR(AbstractBaseIR):
         return edges_new
 
     def _add_edge_buffer(self, node: str, op: str, var: str, edges: list, delays: list, nodes: list,
-                         spreads: Optional[list] = None, dde_approx: float = 0.0) -> None:
+                         spreads: Optional[list] = None, dde_approx: int = 0) -> None:
         """Adds a buffer variable to an edge.
 
         Parameters
@@ -1079,13 +1063,13 @@ class CircuitIR(AbstractBaseIR):
                 idx_apply = len(idx) != len(orders_tmp)
                 val = rates_tmp[idx] if idx_apply else rates_tmp
                 var_shape = (len(val),) if val.shape else ()
-                if i == 0 and idx != [0] and target_shape != len(idx):
+                if i == 0 and idx != [0] and (sum(target_shape) != len(idx) or any(np.diff(order_idx) != 1)):
                     var_prev_idx = f"index({var_prev}, source_idx)"
                     var_dict["source_idx"] = {'vtype': 'constant',
                                               'dtype': 'int32',
                                               'shape': (len(source_idx_tmp[idx]),),
                                               'value': source_idx_tmp[idx]}
-                elif idx_apply:
+                elif i != 0 and idx_apply:
                     var_prev_idx = get_indexed_var_str(var_prev, idx_str)
                 else:
                     var_prev_idx = var_prev

@@ -483,6 +483,8 @@ class BaseBackend(object):
             func_name = 'rhs_func'
         if not file_name and solver:
             file_name = 'pyrates_rhs_func'
+        if not dts:
+            dts = dt
         self._func_name = func_name
         self._file_name = file_name
 
@@ -493,7 +495,8 @@ class BaseBackend(object):
 
         # simulation specs
         steps = int(np.round(T / dt))
-        state_rec = np.zeros((steps, state_vec.shape[0]))
+        store_steps = int(np.round(T / dts))
+        state_rec = np.zeros((store_steps, state_vec.shape[0]))
         times = np.arange(0, T, dts) if dts else np.arange(0, T, dt)
 
         # perform simulation
@@ -509,8 +512,12 @@ class BaseBackend(object):
             if solver == 'euler':
 
                 # perform integration via standard Euler method
+                store_step = int(np.round(dts/dt))
+                idx = 0
                 for step in range(steps):
-                    state_rec[step, :] = state_vec
+                    if step % store_step == 0:
+                        state_rec[idx, :] = state_vec
+                        idx += 1
                     state_vec += dt * rhs_func(step, state_vec, rhs, *args)
 
             else:
@@ -528,8 +535,12 @@ class BaseBackend(object):
 
             # numerical integration by directly traversing the compute graph at each integration step
             # TODO: add mathematical operation to graph that increases time in steps of dt
+            store_step = int(np.round(dts / dt))
+            idx = 0
             for step in range(steps):
-                state_rec[step, :] = state_vec
+                if step % store_step == 0:
+                    state_rec[idx, :] = state_vec
+                    idx += 1
                 state_vec += dt * self.execute_graph()
 
         # reduce state recordings to requested state variables
@@ -913,39 +924,41 @@ def sort_equations(lhs_vars: list, rhs_expressions: list) -> tuple:
             rhs_expressions = expressions_old
 
     # next, collect all other variables
-    stuck = False
-    while lhs_vars_old:
-        v_tmp, indexed = extract_var(lhs_vars[0])
-        found = False
-        for idx, (lhs_var, expr_tmp) in enumerate(zip(lhs_vars, rhs_expressions)):
-            var, indexed = extract_var(lhs_var)
-            if var_in_expression(v_tmp, expr_tmp):
-                if not var_in_expression(v_tmp, lhs_var):
-                    found = True
-                    break
-                elif stuck:
-                    indexed = True
-                    found = True
-                    break
-            elif var_in_expression(v_tmp, lhs_var) and (stuck or indexed):
-                found = True
-                indexed = True
-                break
-        if found:
-            lhs_var = lhs_vars_old.pop(idx)
-            vars_new.append(lhs_var)
-            expr = expressions_old.pop(idx)
-            expressions_new.append(expr)
-            if not indexed and var not in defined_vars:
-                defined_vars.append(var)
-            stuck = False
-        elif stuck:
-            raise ValueError('Unable to find a well-defined order of the non-differential equations in the system.')
-        else:
-            stuck = True
-
-        lhs_vars = lhs_vars_old
-        rhs_expressions = expressions_old
+    vars_new.extend(lhs_vars_old[::-1])
+    expressions_new.extend(expressions_old[::-1])
+    # stuck = False
+    # while lhs_vars_old:
+    #     v_tmp, indexed = extract_var(lhs_vars[0])
+    #     found = False
+    #     for idx, (lhs_var, expr_tmp) in enumerate(zip(lhs_vars, rhs_expressions)):
+    #         var, indexed = extract_var(lhs_var)
+    #         if var_in_expression(v_tmp, expr_tmp):
+    #             if not var_in_expression(v_tmp, lhs_var):
+    #                 found = True
+    #                 break
+    #             elif stuck:
+    #                 indexed = True
+    #                 found = True
+    #                 break
+    #         elif var_in_expression(v_tmp, lhs_var) and (stuck or indexed):
+    #             found = True
+    #             indexed = True
+    #             break
+    #     if found:
+    #         lhs_var = lhs_vars_old.pop(idx)
+    #         vars_new.append(lhs_var)
+    #         expr = expressions_old.pop(idx)
+    #         expressions_new.append(expr)
+    #         if not indexed and var not in defined_vars:
+    #             defined_vars.append(var)
+    #         stuck = False
+    #     elif stuck:
+    #         raise ValueError('Unable to find a well-defined order of the non-differential equations in the system.')
+    #     else:
+    #         stuck = True
+    #
+    #     lhs_vars = lhs_vars_old
+    #     rhs_expressions = expressions_old
 
     return vars_new[::-1], expressions_new[::-1], [v for v in all_vars if v not in defined_vars], defined_vars
 

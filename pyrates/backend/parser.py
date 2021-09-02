@@ -556,6 +556,7 @@ class ExpressionParser(ParserElement):
         lhs, rhs, assign_type = split_equation(expr)
 
         if not assign_type:
+            self.vars['x'] = {'vtype': 'variable', 'value': 0.0, 'dtype': 'float32', 'shape': ()}
             return self._preprocess_expr_str(f"x = {expr}")
 
         # for the left-hand side, check whether it includes a differential operator
@@ -791,11 +792,11 @@ class SympyParser(ExpressionParser):
 
         # extract symbols and operations from equations right-hand side
         self.expr_stack = sympify(self.rhs)
-        if self.expr_stack.is_number:
-            c = f"dummy_constant_{self._constant_counter}"
+        if is_boolean(self.expr_stack) or self.expr_stack.is_number:
             c = f"dummy_constant_{self._constant_counter}"
             expr = f"no_op({c})"
-            self.vars[c] = {'vtype': 'input', 'value': float(self.expr_stack)}
+            self.vars[c] = {'vtype': 'input',
+                            'value': self.expr_stack if is_boolean(self.expr_stack) else float(self.expr_stack)}
             self.expr_stack = sympify(expr)
             SympyParser._constant_counter += 1
         if self.expr_stack.is_symbol:
@@ -1210,3 +1211,7 @@ def get_unique_label(label: str, labels: list) -> str:
         except ValueError:
             label = f"{label}_0"
     return label
+
+
+def is_boolean(v):
+    return type(v) is bool or v.is_Boolean

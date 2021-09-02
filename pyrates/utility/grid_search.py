@@ -1244,7 +1244,7 @@ def adapt_circuit(circuit: Union[CircuitTemplate, str], params: dict, param_map:
     """
 
     if type(circuit) is str:
-        circuit = CircuitTemplate.from_yaml(circuit)
+        circuit = deepcopy(CircuitTemplate.from_yaml(circuit))
 
     node_updates = {}
     edge_updates = []
@@ -1263,14 +1263,12 @@ def adapt_circuit(circuit: Union[CircuitTemplate, str], params: dict, param_map:
                 for source, target in edges:
                     for var in param_map[key]['vars']:
                         edge = circuit.get_edge(source=source, target=target, idx=0)
-                        if var in edge[3]:
-                            edge_updates.append((edge[0], edge[1], {var: val}))
+                        edge_updates.append((edge[0], edge[1], {var: val}))
             else:
                 for source, target, idx in edges:
                     for var in param_map[key]['vars']:
                         edge = circuit.get_edge(source=source, target=target, idx=idx)
-                        if var in edge[3]:
-                            edge_updates.append((edge[0], edge[1], {var: val}))
+                        edge_updates.append((edge[0], edge[1], {var: val}))
 
     return circuit.update_var(node_vars=node_updates, edge_vars=edge_updates)
 
