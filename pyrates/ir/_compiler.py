@@ -38,7 +38,7 @@ from copy import deepcopy
 from warnings import filterwarnings
 
 # pyrates imports
-from pyrates.backend.numpy_backend import NumpyBackend as _NumpyBackend
+from pyrates.backend.base_backend import NumpyBackend as _NumpyBackend
 from pyrates.backend.parser import parse_equation_system, parse_dict
 from pyrates.ir.circuit import CircuitIR
 from pyrates.frontend import CircuitTemplate

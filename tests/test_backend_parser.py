@@ -9,7 +9,7 @@ import pytest
 # pyrates internal imports
 from pyrates.backend.parser import parse_equations
 from pyrates.backend.parser import SympyParser
-from pyrates.backend.numpy_backend import BaseBackend
+from pyrates.backend.base_backend import BaseBackend
 
 # meta infos
 __author__ = "Richard Gast, Daniel Rose"

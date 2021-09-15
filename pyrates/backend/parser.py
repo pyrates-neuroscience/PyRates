@@ -59,7 +59,7 @@ class ExpressionParser(ParserElement):
         Dictionary containing all variables and functions needed to evaluate the expression.
     backend
         Backend instance in which to parse all variables and operations.
-        See `pyrates.backend.numpy_backend.NumpyBackend` for a full documentation of the backends methods and
+        See `pyrates.backend.base_backend.BaseBackend` for a full documentation of the backends methods and
         attributes.
     kwargs
         Additional keyword arguments to be passed to the backend functions.
@@ -735,7 +735,7 @@ class SympyParser(ExpressionParser):
         Dictionary containing all variables and functions needed to evaluate the expression.
     backend
         Backend instance in which to parse all variables and operations.
-        See `pyrates.backend.numpy_backend.NumpyBackend` for a full documentation of the backends methods and
+        See `pyrates.backend.base_backend.BaseBackend` for a full documentation of the backends methods and
         attributes.
     kwargs
         Additional keyword arguments to be passed to the backend functions.

@@ -80,16 +80,16 @@ class CircuitIR(AbstractBaseIR):
         if not backend_kwargs:
             backend_kwargs = {}
         if not backend or backend == 'numpy':
-            from pyrates.backend.numpy_backend import BaseBackend
+            from pyrates.backend.base_backend import BaseBackend
             backend = BaseBackend
         elif backend == 'tensorflow':
             from pyrates.backend.tensorflow_backend import TensorflowBackend
             backend = TensorflowBackend
-            backend_kwargs['squeeze'] = True
+            #backend_kwargs['squeeze'] = True
         elif backend == 'fortran':
             from pyrates.backend.fortran_backend import FortranBackend
             backend = FortranBackend
-            backend_kwargs['squeeze'] = True
+            #backend_kwargs['squeeze'] = True
         else:
             raise ValueError(f'Invalid backend type: {backend}. See documentation for supported backends.')
         backend_kwargs['name'] = label

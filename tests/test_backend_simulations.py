@@ -61,7 +61,7 @@ def test_2_1_operator():
     :method:`add_operator`: Detailed documentation of method for adding operations to instance of `ComputeGraph`.
     """
 
-    backends = ["numpy"]
+    backends = ["tensorflow", "numpy"]
     accuracy = 1e-4
 
     # simulation parameters

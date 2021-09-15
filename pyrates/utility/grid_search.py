@@ -1245,6 +1245,8 @@ def adapt_circuit(circuit: Union[CircuitTemplate, str], params: dict, param_map:
 
     if type(circuit) is str:
         circuit = deepcopy(CircuitTemplate.from_yaml(circuit))
+    else:
+        circuit = deepcopy(circuit)
 
     node_updates = {}
     edge_updates = []

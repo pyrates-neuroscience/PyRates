@@ -29,17 +29,25 @@
 """Wraps tensorflow such that it's low-level functions can be used by PyRates to create and simulate a compute graph.
 """
 
+# pyrates internal imports
+from .funcs import *
+from .base_backend import BaseBackend, BaseVar, CodeGen, sort_equations
+
 # external imports
 from typing import Optional, Dict, Callable, List, Any, Union
 import tensorflow as tf
 
-# pyrates internal imports
-from .funcs import *
-from .numpy_backend import NumpyBackend, BaseVar, PyRatesIndexOp, PyRatesAssignOp, PyRatesOp, CodeGen
-
 # meta infos
 __author__ = "Richard Gast"
 __status__ = "development"
+
+
+# Helper Functions
+##################
+
+#################################
+# classes for backend variables #
+#################################
 
 
 class TensorflowVar(BaseVar, tf.Variable):
@@ -77,139 +85,12 @@ class TensorflowVar(BaseVar, tf.Variable):
             return BaseVar.__subclasscheck__(subclass)
 
 
-class TensorflowOp(PyRatesOp):
-
-    var_class = TensorflowVar
-
-    def _generate_func(self):
-        """Generates a function from operator value and arguments"""
-        func_dict = {}
-        func = CodeGen()
-        func.add_code_line(f"def {self.short_name}(")
-        for arg in self._op_dict['arg_names']:
-            func.add_code_line(f"{arg},")
-        if len(self._op_dict['arg_names']) > 0:
-            func.code[-1] = func.code[-1][:-1]
-        func.add_code_line("):")
-        func.add_linebreak()
-        func.add_indent()
-        func.add_code_line("import tensorflow as tf")
-        func.add_linebreak()
-        func.add_code_line(f"return {self._op_dict['value']}")
-        exec(func.generate(), globals(), func_dict)
-        return func_dict
-
-    def numpy(self):
-        """Evaluates the return values of the PyRates operation.
-        """
-        result = self._callable(*self.args).numpy()
-        self._check_numerics(result, self.name)
-        return result
-
-    @staticmethod
-    def _index(x, y):
-        found, idx, n = False, 0, len(x)
-        while not found and idx < n:
-            elem = x[idx]
-            if str(type(elem)) == str(type(y)):
-                found = elem == y
-            else:
-                pass
-            if found:
-                break
-            idx += 1
-        return idx
+#######################################
+# classes for backend functionalities #
+#######################################
 
 
-class TensorflowAssignOp(PyRatesAssignOp):
-
-    var_class = TensorflowVar
-
-    def _generate_func(self):
-        """Generates a function from operator value and arguments"""
-        func_dict = {}
-        func = CodeGen()
-        func.add_code_line(f"def {self.short_name}(")
-        for arg in self._op_dict['arg_names']:
-            func.add_code_line(f"{arg},")
-        if len(self._op_dict['arg_names']) > 0:
-            func.code[-1] = func.code[-1][:-1]
-        func.add_code_line("):")
-        func.add_linebreak()
-        func.add_indent()
-        func.add_code_line("import tensorflow as tf")
-        func.add_linebreak()
-        func.add_code_line(f"return {self._op_dict['value']}")
-        exec(func.generate(), globals(), func_dict)
-        return func_dict
-
-    def numpy(self):
-        """Evaluates the return values of the PyRates operation.
-        """
-        result = self._callable(*self.args).numpy()
-        self._check_numerics(result, self.name)
-        return result
-
-    @classmethod
-    def _extract_var_idx(cls, op, args, results_args, results_arg_names):
-
-        if "scatter" in op:
-
-            # for tensorflow-like scatter indexing
-            if hasattr(args[2], 'short_name'):
-                key = args[2].short_name
-                if hasattr(args[2], 'value') and not callable(args[2].value):
-                    var_idx = f"{args[2].value},"
-                else:
-                    var_idx = f"{key},"
-            else:
-                key = "__no_name__"
-                var_idx = f"{args[2]},"
-
-            if type(args[2]) is str and len(args) > 3:
-                results_args.append(args[3])
-            else:
-                results_args.append(args[2])
-            results_arg_names.append(key)
-
-            return var_idx, results_args, results_arg_names
-
-        else:
-
-            return super()._extract_var_idx(op, args, results_args, results_arg_names)
-
-
-class TensorflowIndexOp(PyRatesIndexOp):
-
-    var_class = TensorflowVar
-
-    def _generate_func(self):
-        """Generates a function from operator value and arguments"""
-        func_dict = {}
-        func = CodeGen()
-        func.add_code_line(f"def {self.short_name}(")
-        for arg in self._op_dict['arg_names']:
-            func.add_code_line(f"{arg},")
-        if len(self._op_dict['arg_names']) > 0:
-            func.code[-1] = func.code[-1][:-1]
-        func.add_code_line("):")
-        func.add_linebreak()
-        func.add_indent()
-        func.add_code_line("import tensorflow as tf")
-        func.add_linebreak()
-        func.add_code_line(f"return {self._op_dict['value']}")
-        exec(func.generate(), globals(), func_dict)
-        return func_dict
-
-    def numpy(self):
-        """Evaluates the return values of the PyRates operation.
-        """
-        result = self._callable(*self.args).numpy()
-        self._check_numerics(result, self.name)
-        return result
-
-
-class TensorflowBackend(NumpyBackend):
+class TensorflowBackend(BaseBackend):
     """Wrapper to tensorflow. This class provides an interface to all tensorflow functionalities that may be accessed
     via pyrates. All tensorflow variables and operations will be stored in a layered compute graph that can be executed
     to evaluate the (dynamic) behavior of the graph.
@@ -234,6 +115,8 @@ class TensorflowBackend(NumpyBackend):
 
     """
 
+    create_backend_var = TensorflowVar
+
     def __init__(self,
                  ops: Optional[Dict[str, Callable]] = None,
                  dtypes: Optional[Dict[str, object]] = None,
@@ -253,67 +136,30 @@ class TensorflowBackend(NumpyBackend):
         ################################################
 
         # base math operations
-        self.ops.update({"+": {'name': "tensorflow_add", 'call': "tf.add"},
-                         "-": {'name': "tensorflow_subtract", 'call': "tf.subtract"},
-                         "*": {'name': "tensorflow_multiply", 'call': "tf.multiply"},
-                         "/": {'name': "tensorflow_divide", 'call': "tf.math.divide_no_nan"},
-                         "%": {'name': "tensorflow_modulo", 'call': "tf.mod"},
-                         "^": {'name': "tensorflow_power", 'call': "tf.pow"},
-                         "**": {'name': "tensorflow_power", 'call': "tf.pow"},
-                         "@": {'name': "tensorflow_dot", 'call': "tf.matmul"},
-                         ".T": {'name': "tensorflow_transpose", 'call': "tf.transpose"},
-                         ".I": {'name': "tensorflow_invert", 'call': "tf.invert"},
-                         ">": {'name': "tensorflow_greater", 'call': "tf.greater"},
-                         "<": {'name': "tensorflow_less", 'call': "tf.less"},
-                         "==": {'name': "tensorflow_equal", 'call': "tf.equal"},
-                         "!=": {'name': "tensorflow_not_equal", 'call': "tf.not_equal"},
-                         ">=": {'name': "tensorflow_greater_equal", 'call': "tf.greater_equal"},
-                         "<=": {'name': "tensorflow_less_equal", 'call': "tf.less_equal"},
-                         "=": {'name': "assign", 'call': "assign"},
-                         "+=": {'name': "assign_add", 'call': "assign_add"},
-                         "-=": {'name': "assign_subtract", 'call': "assign_sub"},
-                         "update": {'name': "tensorflow_update", 'call': "scatter_nd_update"},
-                         "update_add": {'name': "tensorflow_update_add", 'call': "scatter_nd_add"},
-                         "update_sub": {'name': "tensorflow_update_sub", 'call': "scatter_nd_sub"},
-                         "neg": {'name': "negative", 'call': "neg_one"},
-                         "sin": {'name': "tensorflow_sin", 'call': "tf.sin"},
-                         "cos": {'name': "tensorflow_cos", 'call': "tf.cos"},
-                         "tan": {'name': "tensorflow_tan", 'call': "tf.tan"},
-                         "atan": {'name': "tensorflow_atan", 'call': "tf.arctan"},
-                         "abs": {'name': "tensorflow_abs", 'call': "tf.abs"},
-                         "sqrt": {'name': "tensorflow_sqrt", 'call': "tf.sqrt"},
-                         "sq": {'name': "tensorflow_square", 'call': "tf.square"},
-                         "exp": {'name': "tensorflow_exp", 'call': "tf.exp"},
-                         "max": {'name': "tensorflow_max", 'call': "tf.max"},
-                         "min": {'name': "tensorflow_min", 'call': "tf.min"},
-                         "argmax": {'name': "tensorflow_transpose", 'call': "tf.argmax"},
-                         "argmin": {'name': "tensorflow_argmin", 'call': "tf.argmin"},
-                         "round": {'name': "tensorflow_round", 'call': "tf.round"},
-                         "sum": {'name': "tensorflow_sum", 'call': "tf.reduce_sum"},
-                         "mean": {'name': "tensorflow_mean", 'call': "tf.reduce_mean"},
-                         "concat": {'name': "tensorflow_concatenate", 'call': "tf.concat"},
-                         "reshape": {'name': "tensorflow_reshape", 'call': "tf.reshape"},
-                         "shape": {'name': "tensorflow_shape", 'call': "tf.shape"},
-                         "dtype": {'name': "tensorflow_dtype", 'call': "tf.dtype"},
-                         'squeeze': {'name': "tensorflow_squeeze", 'call': "tf.squeeze"},
-                         'expand': {'name': 'tensorflow_expand', 'call': "tf.expand_dims"},
-                         "roll": {'name': "tensorflow_roll", 'call': "tf.roll"},
-                         "cast": {'name': "tensorflow_cast", 'call': "tf.cast"},
-                         "randn": {'name': "tensorflow_randn", 'call': "tf.randn"},
-                         "ones": {'name': "tensorflow_ones", 'call': "tf.ones"},
-                         "zeros": {'name': "tensorflow_zeros", 'call': "tf.zeros"},
-                         "range": {'name': "tensorflow_arange", 'call': "tf.arange"},
-                         "softmax": {'name': "tensorflow_softmax", 'call': "tf.softmax"},
-                         "sigmoid": {'name': "tensorflow_sigmoid", 'call': "tf.sigmoid"},
-                         "tanh": {'name': "tensorflow_tanh", 'call': "tf.tanh"},
-                         "index": {'name': "pyrates_index", 'call': "pyrates_index"},
-                         "gather": {'name': "tensorflow_gather", 'call': "tf.gather"},
-                         "gather_nd": {'name': "tensorflow_gather_nd", 'call': "tf.gather_nd"},
-                         "mask": {'name': "tensorflow_mask", 'call': "tf.boolean_mask"},
-                         "group": {'name': "tensorflow_group", 'call': "tf.group"},
-                         "stack": {'name': "tensorflow_stack", 'call': "tf.stack"},
-                         "no_op": {'name': "tensorflow_identity", 'call': "tf.identity"},
-                         })
+        self.ops.update({
+                    "max": {'func': tf.reduce_max, 'str': "tf.reduce_max"},
+                    "min": {'func': tf.reduce_min, 'str': "tf.reduce_min"},
+                    "argmax": {'func': tf.argmax, 'str': "tf.argmax"},
+                    "argmin": {'func': tf.argmin, 'str': "tf.argmin"},
+                    "round": {'func': tf.round, 'str': "tf.round"},
+                    "sum": {'func': tf.reduce_sum, 'str': "tf.reduce_sum"},
+                    "mean": {'func': tf.reduce_mean, 'str': "tf.reduce_mean"},
+                    "matmul": {'func': tf.matmul, 'str': "tf.matmul"},
+                    "concat": {'func': tf.concat, 'str': "tf.concat"},
+                    "reshape": {'func': tf.reshape, 'str': "tf.reshape"},
+                    "shape": {'func': tf.shape, 'str': "tf.shape"},
+                    'squeeze': {'func': tf.squeeze, 'str': "np.squeeze"},
+                    'expand': {'func': tf.expand_dims, 'str': "tf.expand_dims"},
+                    "roll": {'func': tf.roll, 'str': "tf.roll"},
+                    "cast": {'func': tf.Variable, 'str': "tf.Variable"},
+                    "ones": {'func': tf.ones, 'str': "tf.ones"},
+                    "zeros": {'func': tf.zeros, 'str': "tf.zeros"},
+                    "range": {'func': tf.range, 'str': "tf.range"},
+                    "softmax": {'func': tf.math.softmax, 'str': "tf.math.softmax"},
+                    "sigmoid": {'func': tf.math.sigmoid, 'str': "tf.math.sigmoid"},
+                    "tanh": {'func': tf.tanh, 'str': "tf.tanh"},
+                    "exp": {'func': tf.exp, 'str': "tf.exp"},
+                    })
 
         # base data types
         self.dtypes = {"float16": tf.float16,
@@ -330,122 +176,17 @@ class TensorflowBackend(NumpyBackend):
                        "bool": tf.bool
                        }
 
-    def compile(self, build_dir: Optional[str] = None, decorator: Optional[Callable] = tf.function, **kwargs) -> tuple:
-        """Compile the graph layers/operations. Creates python files containing the functions in each layer.
+        self.type = 'tensorflow'
 
-        Parameters
-        ----------
-        build_dir
-            Directory in which to create the file structure for the simulation.
-        decorator
-        kwargs
-
-        Returns
-        -------
-        tuple
-            Contains tuples of layer run functions and their respective arguments.
-
-        """
-        return super().compile(build_dir=build_dir, decorator=decorator, **kwargs)
-
-    def broadcast(self, op1: Any, op2: Any, **kwargs) -> tuple:
-
-        # match data types
-        if not self._compare_dtypes(op1, op2):
-            op1, op2 = self._match_dtypes(op1, op2)
-
-        # broadcast shapes
-        return super().broadcast(op1, op2, **kwargs)
-
-    def get_var(self, name):
-        """Retrieve variable from graph.
-
-        Parameters
-        ----------
-        name
-            Identifier of the variable.
-
-        Returns
-        -------
-        BaseVar
-            Variable from graph.
-
-        """
-        try:
-            return self.vars[name]
-        except KeyError as e:
-            if ":" in name:
-                idx = name.index(':')
-                return self.vars[name[:idx]]
-            for var in self.vars:
-                if f"{name}:" in var:
-                    return self.vars[var]
-            else:
-                raise e
-
-    def stack_vars(self, vars, **kwargs):
-        var_count = {}
-        for var in vars:
-            if hasattr(var, 'short_name'):
-                if var.short_name in var_count:
-                    var.short_name += f'_{var_count[var.short_name]}'
-                else:
-                    var_count[var.short_name] = 0
-        return self.add_op('stack', vars)
-
-    def add_input_layer(self, inputs: list, T: float, continuous=False) -> BaseVar:
-        if continuous:
-            raise ValueError('Invalid input structure. The tensorflow backend can only be used with fixed step-size '
-                             'solvers and thus only supports inputs with discrete time steps. Either change the '
-                             'backend or set `continuous` to False.')
-        for i in range(len(inputs)):
-            inputs[i] = (np.asarray(inputs[i][0], dtype=inputs[i][1].dtype.as_numpy_dtype), inputs[i][1], inputs[i][2])
-        return super().add_input_layer(inputs=inputs, T=T, continuous=False)
-
-    def apply_idx(self, var: Any, idx: Any, update: Optional[Any] = None, update_type: str = None, *args) -> Any:
-        """Applies index to a variable. IF update is passed, variable is updated at positions indicated by index.
-
-        Parameters
-        ----------
-        var
-            Variable to index/update
-        idx
-            Index to variable
-        update
-            Update to variable entries
-        update_type
-            Type of lhs update (e.g. `=` or `+=`)
-
-        Returns
-        -------
-        Any
-            Updated/indexed variable.
-
-        """
-
-        if type(idx) is str:
-
-            idx_tmp = idx.split(',')
-            n_indices = len(idx_tmp)
-            if n_indices > 1 and args:
-
-                # create boolean mask as index
-                indices = []
-                for i, idx in enumerate(idx_tmp):
-                    if idx == ':':
-                        indices.append(list(range(var.shape[i])))
-                    elif len(args) > i and hasattr(args[i], 'numpy'):
-                        indices.append(args[i].numpy())
-                    else:
-                        indices.append([int(idx)])
-
-                idx_var = np.zeros(tuple(var.shape), dtype=np.int32)
-                idx_var[tuple(indices)] = 1
-                idx_var = self.add_var('constant', name=f"{var.name.split(':')[0]}_idx", value=idx_var != 0)
-                return super().apply_idx(var, idx_var, update, update_type)
-
-        # standard indexing
-        return super().apply_idx(var, idx, update, update_type, *args)
+    def run(self, T: float, dt: float, dts: float = None, outputs: dict = None, solver: str = None,
+            in_place: bool = True, func_name: str = None, file_name: str = None, compile_kwargs: dict = None, **kwargs
+            ) -> dict:
+        if not compile_kwargs:
+            compile_kwargs = dict()
+        # TODO: enable usage of tf.function decorator
+        # TODO: make sure that naming schemes are not messed up by tensorflow
+        #compile_kwargs['decorator'] = tf.function
+        return super().run(T, dt, dts, outputs, solver, in_place, func_name, file_name, compile_kwargs, **kwargs)
 
     def _integrate(self, rhs_func, func_args, T, dt, dts, t, output_indices):
 
@@ -493,73 +234,6 @@ class TensorflowBackend(NumpyBackend):
 
         return results
 
-    def _create_var(self, vtype, dtype, shape, value, name, squeeze=True):
-        var, name = TensorflowVar(vtype=vtype, dtype=dtype, shape=shape, value=value, name=name, backend=self,
-                                  squeeze=squeeze)
-        if ':' in name:
-            name = name.split(':')[0]
-        return var, name
-
-    def _create_op(self, op, name, *args):
-        if op in ["=", "+=", "-=", "*=", "/="]:
-            if len(args) > 2 and (hasattr(args[2], 'shape') or type(args[2]) is list):
-                if op == "=":
-                    op = "update"
-                elif op == "+=":
-                    op = "update_add"
-                else:
-                    op = "update_sub"
-                if type(args[2]) is list:
-                    args = list(args)
-                    args[2] = tf.constant(args[2])
-                    args = self._process_update_args(*tuple(args))
-            return TensorflowAssignOp(self.ops[op]['call'], self.ops[op]['name'], name, *args)
-        if op is "index":
-            if hasattr(args[1], 'dtype') and 'bool' in str(args[1].dtype):
-                return TensorflowOp(self.ops['mask']['call'], self.ops['mask']['name'], name, *args)
-            if (hasattr(args[1], 'shape') and len(args[1].shape)) or type(args[1]) in (list, tuple):
-                try:
-                    return TensorflowOp(self.ops['gather']['call'], self.ops['gather']['name'], name, *args)
-                except (ValueError, IndexError):
-                    args = self._process_idx_args(*args)
-                    return TensorflowOp(self.ops['gather_nd']['call'], self.ops['gather_nd']['name'], name, *args)
-            return TensorflowIndexOp(self.ops[op]['call'], self.ops[op]['name'], name, *args)
-        if op is "cast":
-            args = list(args)
-            for dtype in self.dtypes:
-                if dtype in str(args[1]):
-                    args[1] = f"tf.{dtype}"
-                    break
-            args = tuple(args)
-        return TensorflowOp(self.ops[op]['call'], self.ops[op]['name'], name, *args)
-
-    def _process_idx_args(self, var, idx):
-        """Preprocesses the index to a variable.
-        """
-
-        shape = var.shape
-
-        # match shape of index to shape
-        ###############################
-
-        if len(idx.shape) < 2:
-            idx = self.add_op('reshape', idx, tuple(idx.shape) + (1,))
-
-        shape_diff = len(shape) - idx.shape[1]
-        if shape_diff < 0:
-            raise ValueError(f'Invalid index shape. Operation has shape {shape}, but received an index of '
-                             f'length {idx.shape[1]}')
-
-        # manage shape of idx
-        if shape_diff > 0:
-            indices = []
-            indices.append(idx)
-            for i in range(shape_diff):
-                indices.append(self.add_op('zeros', tuple(idx.shape), idx.dtype))
-            idx = self.add_op('concat', indices, 1)
-
-        return var, idx
-
     def _match_dtypes(self, op1: Any, op2: Any) -> tuple:
         """Match data types of two operators/variables.
         """
@@ -604,11 +278,6 @@ class TensorflowBackend(NumpyBackend):
 
             # cast op2 to dtype of op1 referred from its type string
             return super()._match_dtypes(op1, op2)
-
-    def _is_state_var(self, key):
-        if ':' not in key and f"{key}:0" in self.state_vars:
-            return f"{key}:0", True
-        return super()._is_state_var(key)
 
     @staticmethod
     def _compare_shapes(op1: Any, op2: Any) -> bool:
@@ -660,3 +329,88 @@ class TensorflowBackend(NumpyBackend):
                 return dtype1 == dtype2
             else:
                 return False
+
+    @staticmethod
+    def get_var_shape(v: BaseVar):
+        if not v.shape or not tuple(v.shape):
+            v = np.reshape(v, (1,))
+        return v.shape[0]
+
+    def _generate_update_equations(self, code_gen: CodeGen, nodes: dict, rhs_var: str = None, indices: list = None,
+                                   funcs: dict = None):
+
+        # collect right-hand side expression and all input variables to these expressions
+        func_args, expressions, var_names, defined_vars = [], [], [], []
+        for node, update in nodes.items():
+
+            # collect expression and variables of right-hand side of equation
+            expr_args, expr = self.graph.node_to_expr(update, **funcs)
+            func_args.extend(expr_args)
+            expressions.append(self._expr_to_str(expr))
+
+            # process left-hand side of equation
+            var = self.get_var(node)
+            if 'expr' in var:
+                # process indexing of left-hand side variable
+                idx_args, lhs = self.graph.node_to_expr(node, **funcs)
+                func_args.extend(idx_args)
+                lhs_var = self._expr_to_str(lhs)
+            else:
+                # process normal update of left-hand side variable
+                lhs_var = var['symbol'].name
+            var_names.append(lhs_var)
+
+        # add the left-hand side assignments of the collected right-hand side expressions to the code generator
+        if rhs_var:
+
+            # differential equation (DE) update
+            if indices:
+
+                # DE updates stored in a state-vector
+                for idx, expr in zip(indices, expressions):
+                    code_gen.add_code_line(f"{rhs_var}.scatter_nd_update([{idx}], [{expr}])")
+
+            else:
+
+                if len(nodes) > 1:
+                    raise ValueError('Received a request to update a variable via multiple right-hand side expressions.'
+                                     )
+
+                # DE update stored in a single variable
+                code_gen.add_code_line(f"{rhs_var} = {expressions[0]}")
+
+            # add rhs var to function arguments
+            func_args = [rhs_var] + func_args
+
+        else:
+
+            # non-differential equation update
+
+            var_names, expressions, undefined_vars, defined_vars = sort_equations(var_names, expressions)
+            func_args.extend(undefined_vars)
+
+            if indices:
+
+                # non-DE update stored in a variable slice
+                for idx, expr, target_var in zip(indices, expressions, var_names):
+                    code_gen.add_code_line(f"{target_var}.scatter_nd_update([{idx}], [{expr}])")
+
+            else:
+
+                # non-DE update stored in a single variable
+                for target_var, expr in zip(var_names, expressions):
+                    code_gen.add_code_line(f"{target_var} = {expr}")
+
+        code_gen.add_linebreak()
+
+        return func_args, defined_vars, code_gen
+
+    @staticmethod
+    def _euler_integration(steps, store_step, state_vec, state_rec, dt, rhs_func, rhs, *args):
+        idx = 0
+        for step in range(steps):
+            if step % store_step == 0:
+                state_rec[idx, :] = state_vec.numpy()
+                idx += 1
+            state_vec.assign_add(dt * rhs_func(step, state_vec, rhs, *args))
+        return state_rec

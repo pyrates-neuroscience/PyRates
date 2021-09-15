@@ -38,7 +38,7 @@ import numpy as np
 from numpy import f2py
 
 # pyrates internal imports
-from .numpy_backend import NumpyBackend, PyRatesAssignOp, PyRatesIndexOp, PyRatesOp, CodeGen, extract_lhs_var
+from .base_backend import NumpyBackend, PyRatesAssignOp, PyRatesIndexOp, PyRatesOp, CodeGen, extract_lhs_var
 
 # meta infos
 __author__ = "Richard Gast"
