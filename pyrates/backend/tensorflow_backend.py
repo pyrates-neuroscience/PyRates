@@ -30,7 +30,7 @@
 """
 
 # pyrates internal imports
-from .funcs import *
+from .base_funcs import *
 from .base_backend import BaseBackend, BaseVar, CodeGen, sort_equations
 
 # external imports

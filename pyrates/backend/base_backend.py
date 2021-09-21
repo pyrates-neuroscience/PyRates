@@ -43,8 +43,8 @@ Currently supported backends:
 """
 
 # pyrates internal imports
-from .funcs import *
-from .parser import CodeGen, var_in_expression, extract_var
+from .base_funcs import *
+from .parser import var_in_expression, extract_var
 from .computegraph import ComputeGraph
 
 # external imports
@@ -56,8 +56,52 @@ import warnings
 import numpy as np
 
 
-# Helper Functions
-##################
+# Helper Functions and Classes
+##############################
+
+
+class CodeGen:
+    """Generates python code. Can add code lines, line-breaks, indents and remove indents.
+    """
+
+    def __init__(self):
+        self.code = []
+        self.lvl = 0
+
+    def generate(self):
+        """Generates a single code string from its history of code additions.
+        """
+        return ''.join(self.code)
+
+    def add_code_line(self, code_str):
+        """Add code line string to code.
+        """
+        code_str = code_str.split('\n')
+        for code in code_str:
+            self.code.append("\t" * self.lvl + code + '\n')
+
+    def add_linebreak(self):
+        """Add a line-break to the code.
+        """
+        self.code.append("\n")
+
+    def add_indent(self):
+        """Add an indent to the code.
+        """
+        self.lvl += 1
+
+    def remove_indent(self):
+        """Remove an indent to the code.
+        """
+        if self.lvl == 0:
+            raise(SyntaxError("Error in generation of network function file: A net negative indentation was requested.")
+                  )
+        self.lvl -= 1
+
+    def clear(self):
+        """Deletes all code lines from the memory of the generator.
+        """
+        self.code.clear()
 
 
 def sort_equations(lhs_vars: list, rhs_expressions: list) -> tuple:
@@ -413,6 +457,7 @@ class BaseBackend(object):
         self._build_dir = None
         self._func_name = None
         self._file_name = None
+        self._code_gen = kwargs.pop('code_gen', CodeGen())
 
         # create build dir
         self._orig_dir = os.getcwd()
@@ -659,6 +704,9 @@ class BaseBackend(object):
         if self._file_name in sys.modules:
             del sys.modules[self._file_name]
 
+        # clear code generator
+        self._code_gen.clear()
+
     def _compile(self, in_place: bool = True, func_name: str = None, file_name: str = None, **kwargs) -> dict:
 
         # finalize compute graph
@@ -693,7 +741,7 @@ class BaseBackend(object):
             if not func_name:
                 func_name = 'rhs_func'
 
-            code_gen = CodeGen()
+            code_gen = self._code_gen
 
             # generate function body with all equations and assignments
             func_args, code_gen_tmp = self._graph_to_str(rhs_indices=indices, state_var=state_var_key,
@@ -701,8 +749,8 @@ class BaseBackend(object):
             func_body = code_gen_tmp.generate()
 
             # generate function head
-            func_args, code_gen = self._generate_func_head(code_gen=code_gen, state_var=state_var_key,
-                                                           func_args=func_args, func_name=func_name,
+            func_args, code_gen = self._generate_func_head(func_name=func_name, code_gen=code_gen,
+                                                           state_var=state_var_key, func_args=func_args,
                                                            imports=self._imports)
 
             # add lines from function body after function head
@@ -727,7 +775,7 @@ class BaseBackend(object):
 
         # preparations
         if code_gen is None:
-            code_gen = CodeGen()
+            code_gen = self._code_gen
         backend_funcs = {key: val['str'] for key, val in self.ops.items()}
         code_gen.add_linebreak()
 
@@ -851,11 +899,9 @@ class BaseBackend(object):
             " match.")
 
     @staticmethod
-    def _generate_func_head(func_name: str, code_gen: CodeGen = None, state_var: str = None, func_args: list = None,
+    def _generate_func_head(func_name: str, code_gen: CodeGen, state_var: str = None, func_args: list = None,
                             imports: list = None):
 
-        if code_gen is None:
-            code_gen = CodeGen()
         if not func_args:
             func_args = []
         state_vars = ['t', state_var]
@@ -877,10 +923,7 @@ class BaseBackend(object):
         return func_args, code_gen
 
     @staticmethod
-    def _generate_func_tail(code_gen: CodeGen = None, rhs_var: str = None):
-
-        if code_gen is None:
-            code_gen = CodeGen()
+    def _generate_func_tail(code_gen: CodeGen, rhs_var: str = None):
 
         code_gen.add_code_line(f"return {rhs_var}")
         code_gen.remove_indent()

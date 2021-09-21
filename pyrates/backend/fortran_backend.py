@@ -29,16 +29,16 @@
 """Wraps tensorflow such that it's low-level functions can be used by PyRates to create and simulate a compute graph.
 """
 
+# pyrates internal imports
+from .base_backend import BaseBackend, CodeGen
+from .fortran_funcs import *
+
 # external imports
 from typing import Optional, Dict, Callable, List, Any, Union
 import os
 import sys
-from shutil import rmtree
-import numpy as np
 from numpy import f2py
-
-# pyrates internal imports
-from .base_backend import NumpyBackend, PyRatesAssignOp, PyRatesIndexOp, PyRatesOp, CodeGen, extract_lhs_var
+import numpy as np
 
 # meta infos
 __author__ = "Richard Gast"
@@ -47,55 +47,7 @@ __status__ = "development"
 module_counter = 0
 
 
-class FortranOp(PyRatesOp):
-
-    def __init__(self, op: str, short_name: str, name, *args, **kwargs) -> None:
-        self.build_dir = kwargs.pop('build_dir', '')
-        super().__init__(op, short_name, name, *args, **kwargs)
-
-    def _generate_func(self):
-        return generate_func(self)
-
-    @classmethod
-    def _process_args(cls, args, results, constants_to_num=False):
-        return super()._process_args(args, results, constants_to_num=constants_to_num)
-
-
-class FortranIndexOp(PyRatesIndexOp):
-
-    def __init__(self, op: str, short_name: str, name, *args, **kwargs) -> None:
-        self.build_dir = kwargs.pop('build_dir', '')
-        super().__init__(op, short_name, name, *args, **kwargs)
-
-    def _generate_func(self):
-        return generate_func(self)
-
-
-class FortranAssignOp(PyRatesAssignOp):
-
-    def __init__(self, op: str, short_name: str, name, *args, **kwargs) -> None:
-        self.build_dir = kwargs.pop('build_dir', '')
-        super().__init__(op, short_name, name, *args, **kwargs)
-
-    def _generate_func(self, return_key='y_delta'):
-        try:
-            idx = self._op_dict['arg_names'].index(return_key)
-        except ValueError:
-            return_key = extract_lhs_var(self._op_dict['value'])
-            idx = self._op_dict['arg_names'].index(return_key)
-        ndim = self._op_dict['args'][idx].shape
-        return generate_func(self, return_key=return_key, omit_assign=True, return_dim=ndim, return_intent='out')
-
-    def numpy(self):
-        result = self._callable(*self.args[1:])
-        self._check_numerics(result, self.name)
-        return result
-
-
-class FortranBackend(NumpyBackend):
-
-    idx_l, idx_r = "(", ")"
-    idx_start = 1
+class FortranBackend(BaseBackend):
 
     def __init__(self,
                  ops: Optional[Dict[str, str]] = None,
@@ -175,15 +127,155 @@ class FortranBackend(NumpyBackend):
                  "interpolate_1d": {'name': "pyrates_interpolate_1d", 'call': ""},
                  "interpolate_nd": {'name': "pyrates_interpolate_nd", 'call': ""},
                  }
+        ops_f = {"max": {'func': fmax, 'str': "max"},
+                 "min": {'func': fmin, 'str': "min"},
+                 "sum": {'func': fsum, 'str': "sum"},
+                 "mean": {'func': fmean, 'str': "fmean"},
+                 "matmul": {'func': fmatmul, 'str': "matmul"},
+                 # "concat": {'func': np.concatenate, 'str': "np.concatenate"},
+                 # "reshape": {'func': np.reshape, 'str': "np.reshape"},
+                 # "append": {'func': np.append, 'str': "np.append"},
+                 # "shape": {'func': np.shape, 'str': "np.shape"},
+                 # "dtype": {'func': np.dtype, 'str': "np.dtype"},
+                 # 'squeeze': {'func': np.squeeze, 'str': "np.squeeze"},
+                 # 'expand': {'func': np.expand_dims, 'str': "np.expand_dims"},
+                 # "roll": {'func': np.roll, 'str': "np.roll"},
+                 # "cast": {'func': np.asarray, 'str': "np.asarray"},
+                 # "randn": {'func': np.random.randn, 'str': "np.randn"},
+                 # "ones": {'func': np.ones, 'str': "np.ones"},
+                 # "zeros": {'func': np.zeros, 'str': "np.zeros"},
+                 # "range": {'func': np.arange, 'str': "np.arange"},
+                 # "softmax": {'func': pr_softmax, 'str': "pr_softmax"},
+                 # "sigmoid": {'func': pr_sigmoid, 'str': "pr_sigmoid"},
+                 # "tanh": {'func': np.tanh, 'str': "np.tanh"},
+                 # "exp": {'func': np.exp, 'str': "exp"},
+                 # "no_op": {'func': pr_identity, 'str': "pr_identity"},
+                 # "interp": {'func': pr_interp, 'str': "pr_interp"},
+                 # "interpolate_1d": {'func': pr_interp_1d, 'str': "pr_interp_1d"},
+                 # "interpolate_nd": {'func': pr_interp_nd, 'str': "pr_interp_nd"},
+                 # "index": {'func': pr_base_index, 'str': "pr_base_index"},
+                 # "index_axis": {'func': pr_axis_index, 'str': "pr_axis_index"},
+                 # "index_2d": {'func': pr_2d_index, 'str': "pr_2d_index"},
+                 # "index_range": {'func': pr_range_index, 'str': "pr_range_index"},
+                 }
         if ops:
             ops_f.update(ops)
         self.pyauto_compat = auto_compat
+        # TODO: in pyauto compatibility mode, the run function has to be defined differently. Most importantly,
+        #  all function parameters except the continuation parameter have to enter the function via a single list.
+        #  This works only for scalar parameters. Thus, other parameters should be saved to the file and loaded instead of imports
+        #  above the function definition.
         super().__init__(ops=ops_f, dtypes=dtypes, name=name, float_default_type=float_default_type,
-                         imports=imports, build_dir=build_dir)
+                         imports=imports, build_dir=build_dir, code_gen=FortranGen)
         self._imports = []
         self.npar = 0
         self.ndim = 0
         self._auto_files_generated = False
+
+    def _generate_func_head(self, func_name: str, code_gen: CodeGen, state_var: str = None, func_args: list = None,
+                            imports: list = None):
+
+        # TODO: adjust function generation methods such that fortran/auto functions are generated
+        if not func_args:
+            func_args = []
+        state_vars = ['t', state_var]
+        _, indices = np.unique(func_args, return_index=True)
+        func_args = state_vars + [func_args[idx] for idx in np.sort(indices)]
+
+        if imports:
+
+            # add imports at beginning of file
+            for imp in imports:
+                code_gen.add_code_line(imp)
+            code_gen.add_linebreak()
+
+        # add function header
+        code_gen.add_linebreak()
+        code_gen.add_code_line(f"subroutine {func_name}({','.join(func_args)})")
+        code_gen.add_indent()
+        func_gen.add_code_line("implicit none")
+        func_gen.add_linebreak()
+        for arg in func_args:
+            val = self.get_var(arg)
+            dtype = 'double precision' if 'float' in val['dtype'] else 'integer'
+            intent = 'in,out' if arg == 'state_vec_update' else 'in'
+            dim = ','.join(val['shape'])
+            func_gen.add_code_line(f"{dtype}, intent({intent}) :: {var}({dim})")
+            func_gen.add_linebreak()
+
+        return func_args, code_gen
+
+    @staticmethod
+    def _generate_func_tail(code_gen: CodeGen, rhs_var: str = None):
+
+        code_gen.add_code_line(f"end subroutine")
+        code_gen.remove_indent()
+
+        return code_gen
+
+    @staticmethod
+    def _generate_func(func_name: str, func_str: str, file_name: str = None, build_dir: str = None,
+                       decorator: Any = None, **kwargs):
+
+        if file_name:
+
+            # save rhs function to file
+            if build_dir:
+                file_name = f'{build_dir}/{file_name}'
+            f2py.compile(func_gen.generate(), modulename='rhs_func', extension='.f90', source_fn=f'{file_name}.f90',
+                         verbose=False)
+
+        else:
+
+            # generate function from string
+            f2py.compile(func_gen.generate(), modulename='rhs_func', extension='.f90', verbose=False)
+
+        # import function from temporary file
+        exec(f"from rhs_func import {func_name}", globals())
+        rhs_eval = globals().pop(func_name)
+
+        # apply function decorator
+        if decorator:
+            rhs_eval = decorator(rhs_eval, **kwargs)
+
+        return rhs_eval
+
+    @classmethod
+    def _expr_to_str(cls, expr: Any) -> str:
+        expr_str = str(expr)
+        for arg in expr.args:
+            expr_str = expr_str.replace(str(arg), cls._expr_to_str(arg))
+        while 'pr_base_index(' in expr_str:
+            # replace `index` calls with brackets-based indexing
+            start = expr_str.find('pr_base_index(')
+            end = expr_str[start:].find(')') + 1
+            expr_str = expr_str.replace(expr_str[start:start + end], f"{expr.args[0]}({expr.args[1]})")
+        while 'pr_2d_index(' in expr_str:
+            # replace `index` calls with brackets-based indexing
+            start = expr_str.find('pr_2d_index(')
+            end = expr_str[start:].find(')') + 1
+            expr_str = expr_str.replace(expr_str[start:start + end], f"{expr.args[0]}({expr.args[1]}, {expr.args[2]})")
+        while 'pr_range_index(' in expr_str:
+            # replace `index` calls with brackets-based indexing
+            start = expr_str.find('pr_range_index(')
+            end = expr_str[start:].find(')') + 1
+            expr_str = expr_str.replace(expr_str[start:start + end], f"{expr.args[0]}({expr.args[1]}:{expr.args[2]})")
+        while 'pr_axis_index(' in expr_str:
+            # replace `index` calls with brackets-based indexing
+            start = expr_str.find('pr_axis_index(')
+            end = expr_str[start:].find(')') + 1
+            if len(expr.args) == 1:
+                expr_str = expr_str.replace(expr_str[start:start + end], f"{expr.args[0]}(:)")
+            else:
+                idx = f','.join([':' for _ in range(expr.args[2])])
+                idx = f'{idx},{expr.args[1]}'
+                expr_str = expr_str.replace(expr_str[start:start + end], f"{expr.args[0]}({idx})")
+        while 'pr_identity(' in expr_str:
+            # replace `no_op` calls with first argument to the function call
+            start = expr_str.find('pr_identity(')
+            end = expr_str[start:].find(')') + 1
+            expr_str = expr_str.replace(expr_str[start:start + end], f"{expr.args[0]}")
+        return expr_str
 
     def compile(self, build_dir: Optional[str] = None, decorator: Optional[Callable] = None, **kwargs) -> tuple:
         """Compile the graph layers/operations. Creates python files containing the functions in each layer.
@@ -611,63 +703,6 @@ class FortranBackend(NumpyBackend):
             return times, [results[v] for v in out_vars]
 
         return super()._solve(rhs_func, func_args, T, dt, dts, t, solver, output_indices, **kwargs)
-
-    def _create_op(self, op, name, *args):
-        if not self.ops[op]['call']:
-            raise NotImplementedError(f"The operator `{op}` is not implemented for this backend ({self.name}). "
-                                      f"Please consider passing the required operation to the backend initialization "
-                                      f"or choose another backend.")
-        if op in ["=", "+=", "-=", "*=", "/="]:
-            if len(args) > 2 and hasattr(args[2], 'shape') and len(args[2].shape) > 1 and \
-                    'bool' not in str(type(args[2])):
-                args_tmp = list(args)
-                if not hasattr(args_tmp[2], 'short_name'):
-                    idx = self.add_var(vtype='state_var', name='idx', value=args_tmp[2])
-                else:
-                    idx = args_tmp[2]
-                var, upd, idx = self._process_update_args_old(args[0], args[1], idx)
-                idx_str = ",".join([f"{idx.short_name}[:,{i}]" for i in range(idx.shape[1])])
-                args = (var, upd, idx_str, idx)
-            return FortranAssignOp(self.ops[op]['call'], self.ops[op]['name'], name, *args, idx_l=self.idx_l,
-                                   idx_r=self.idx_r, build_dir=self._build_dir)
-        elif op is "index":
-            return FortranIndexOp(self.ops[op]['call'], self.ops[op]['name'], name, *args, idx_l=self.idx_l,
-                                  idx_r=self.idx_r, build_dir=self._build_dir)
-        else:
-            if op is "cast":
-                args = list(args)
-                for dtype in self.dtypes:
-                    if dtype in str(args[1]):
-                        args[1] = f"np.{dtype}"
-                        break
-                args = tuple(args)
-            return FortranOp(self.ops[op]['call'], self.ops[op]['name'], name, *args, build_dir=self._build_dir)
-
-    def _process_vars(self):
-        """
-
-        Returns
-        -------
-
-        """
-        state_vars, constants, var_map = [], [], {}
-        s_idx, c_idx, s_len = 0, 0, 0
-        for key, var in self.vars.items():
-            key, state_var = self._is_state_var(key)
-            if state_var:
-                state_vars.append((key, var))
-                var_map[key] = ('state_var', (s_idx, s_len))
-                s_idx += 1
-                s_len += 1
-            elif var.vtype == 'constant' or (var.short_name not in self.lhs_vars and key != 'y'):
-                if c_idx == 10:
-                    for _ in range(4):
-                        constants.append(())
-                    c_idx = 14
-                constants.append((key, var))
-                var_map[key] = ('constant', c_idx+self.idx_start)
-                c_idx += 1
-        return state_vars, constants, var_map
 
     @staticmethod
     def _compare_shapes(op1: Any, op2: Any, index=False) -> bool:

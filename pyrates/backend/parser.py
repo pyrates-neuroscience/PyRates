@@ -906,45 +906,6 @@ class SympyParser(ExpressionParser):
 ################################
 
 
-class CodeGen:
-    """Generates python code. Can add code lines, line-breaks, indents and remove indents.
-    """
-
-    def __init__(self):
-        self.code = []
-        self.lvl = 0
-
-    def generate(self):
-        """Generates a single code string from its history of code additions.
-        """
-        return ''.join(self.code)
-
-    def add_code_line(self, code_str):
-        """Add code line string to code.
-        """
-        code_str = code_str.split('\n')
-        for code in code_str:
-            self.code.append("\t" * self.lvl + code + '\n')
-
-    def add_linebreak(self):
-        """Add a line-break to the code.
-        """
-        self.code.append("\n")
-
-    def add_indent(self):
-        """Add an indent to the code.
-        """
-        self.lvl += 1
-
-    def remove_indent(self):
-        """Remove an indent to the code.
-        """
-        if self.lvl == 0:
-            raise(SyntaxError("Error in generation of network function file: A net negative indentation was requested.")
-                  )
-        self.lvl -= 1
-
-
 def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwargs) -> dict:
     """Parses a system (list) of equations into the backend. Transforms differential equations into the appropriate set
     of right-hand side evaluations that can be solved later on.
