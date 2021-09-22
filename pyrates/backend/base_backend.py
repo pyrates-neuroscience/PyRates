@@ -446,7 +446,7 @@ class BaseBackend(object):
         self._var_map = dict()
         self._float_def = self.dtypes[float_default_type]
         self.name = name
-        self._imports = ["from numpy import *", "from pyrates.backend.funcs import *"]
+        self._imports = ["from numpy import *", "from pyrates.backend.base_funcs import *"]
         if imports:
             for imp in imports:
                 if imp not in self._imports:
@@ -744,9 +744,9 @@ class BaseBackend(object):
             code_gen = self._code_gen
 
             # generate function body with all equations and assignments
-            func_args, code_gen_tmp = self._graph_to_str(rhs_indices=indices, state_var=state_var_key,
-                                                         rhs_var=rhs_var_key)
-            func_body = code_gen_tmp.generate()
+            func_args, code_gen = self._graph_to_str(rhs_indices=indices, state_var=state_var_key, rhs_var=rhs_var_key)
+            func_body = code_gen.generate()
+            code_gen.clear()
 
             # generate function head
             func_args, code_gen = self._generate_func_head(func_name=func_name, code_gen=code_gen,
