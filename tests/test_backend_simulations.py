@@ -61,7 +61,7 @@ def test_2_1_operator():
     :method:`add_operator`: Detailed documentation of method for adding operations to instance of `ComputeGraph`.
     """
 
-    backends = ["tensorflow", "numpy"]
+    backends = ["fortran", "numpy"]
     accuracy = 1e-4
 
     # simulation parameters
@@ -82,7 +82,7 @@ def test_2_1_operator():
 
         # simulate operator behavior
         results = net.run(simulation_time=sim_time, step_size=dt, outputs={'a': 'pop0/op0/a'}, vectorize=True,
-                          backend=b, clear=True)
+                          backend=b, clear=True, apply_kwargs={'backend_kwargs': {'name': 'net_0'}})
 
         # generate target values
         update0_1 = lambda x: x * 0.5
@@ -104,7 +104,7 @@ def test_2_1_operator():
 
         # simulate operator behavior
         results = net.run(sim_time, step_size=dt, inputs={'pop0/op1/u': inp}, outputs={'a': 'pop0/op1/a'},
-                          vectorize=True, backend=b, clear=True)
+                          vectorize=True, backend=b, clear=True, apply_kwargs={'backend_kwargs': {'name': 'net_1'}})
 
         # calculate operator behavior from hand
         update1 = lambda x, y: x + dt * (y - x)
@@ -120,7 +120,7 @@ def test_2_1_operator():
 
         net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net2")
         results = net.run(sim_time, outputs={'a': 'pop0/op2/a'}, step_size=dt, vectorization=True, backend=b,
-                          clear=True)
+                          clear=True, apply_kwargs={'backend_kwargs': {'name': 'net_2'}})
 
         # calculate operator behavior from hand
         update2 = lambda x: 1. / (1. + np.exp(-x))
@@ -137,7 +137,8 @@ def test_2_1_operator():
 
         net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net3")
         results = net.run(sim_time, outputs={'b': 'pop0/op3/b'}, inputs={'pop0/op3/u': inp}, out_dir="/tmp/log",
-                          step_size=dt, vectorization=True, backend=b, clear=True)
+                          step_size=dt, vectorization=True, backend=b, clear=True,
+                          apply_kwargs={'backend_kwargs': {'name': 'net_3'}})
 
         # calculate operator behavior from hand
         update3_0 = lambda a, b, u: a + dt * (-10. * a + b ** 2 + u)

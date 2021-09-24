@@ -30,11 +30,15 @@
 """
 
 # pyrates internal imports
+import gc
+
 from .base_backend import BaseBackend, CodeGen
-from .fortran_funcs import *
+from .fortran_funcs import get_fortran_func
+from .computegraph import Function
+from .base_funcs import *
 
 # external imports
-from typing import Optional, Dict, Callable, List, Any, Union
+from typing import Optional, Dict, Callable, List, Any
 import os
 import sys
 from numpy import f2py
@@ -61,121 +65,99 @@ class FortranBackend(BaseBackend):
         """Instantiates numpy backend, i.e. a compute graph with numpy operations.
         """
 
-        # define operations and datatypes of the backend
-        ################################################
+        # define fortran operations
+        ops_f = {
+            "max": {'func': np.maximum, 'str': "max"},
+            "min": {'func': np.minimum, 'str': "min"},
+            "argmax": {'func': np.argmax, 'str': "maxloc"},
+            "argmin": {'func': np.argmin, 'str': "minloc"},
+            "round": {'func': np.round, 'str': "nint"},
+            "sum": {'func': np.sum, 'str': "sum"},
+            "mean": {'func': np.mean, 'str': "import:fmean"},
+            "matmul": {'func': np.matmul, 'str': "matmul"},
+            "reshape": {'func': np.reshape, 'str': "reshape"},
+            "shape": {'func': np.shape, 'str': "shape"},
+            "roll": {'func': np.roll, 'str': "cshift"},
+            "softmax": {'func': pr_softmax, 'str': "import:fsoftmax"},
+            "sigmoid": {'func': pr_sigmoid, 'str': "import:fsigmoid"},
+            "tanh": {'func': np.tanh, 'str': "tanh"},
+            "sinh": {'func': np.sinh, 'str': "sinh"},
+            "cosh": {'func': np.cosh, 'str': "cosh"},
+            "arctan": {'func': np.arctan, 'str': "atan"},
+            "arcsin": {'func': np.arcsin, 'str': "asin"},
+            "arccos": {'func': np.arccos, 'str': "acos"},
+            "sin": {'func': np.sin, 'str': "sin"},
+            "cos": {'func': np.cos, 'str': "cos"},
+            "tan": {'func': np.tan, 'str': "tan"},
+            "exp": {'func': np.exp, 'str': "exp"},
+            "no_op": {'func': pr_identity, 'str': "pr_identity"},
+        }
+        if not ops:
+            ops = {}
+        ops.update(ops_f)
 
-        # base math operations
-        ops_f = {"+": {'name': "fortran_add", 'call': "+"},
-                 "-": {'name': "fortran_subtract", 'call': "-"},
-                 "*": {'name': "fortran_multiply", 'call': "*"},
-                 "/": {'name': "fortran_divide", 'call': "/"},
-                 "%": {'name': "fortran_modulo", 'call': "MODULO"},
-                 "^": {'name': "fortran_power", 'call': "**"},
-                 "**": {'name': "fortran_power_float", 'call': "**"},
-                 "@": {'name': "fortrandot", 'call': ""},
-                 ".T": {'name': "fortrantranspose", 'call': ""},
-                 ".I": {'name': "fortraninvert", 'call': ""},
-                 ">": {'name': "fortrangreater", 'call': ">"},
-                 "<": {'name': "fortranless", 'call': "<"},
-                 "==": {'name': "fortranequal", 'call': "=="},
-                 "!=": {'name': "fortran_not_equal", 'call': "!="},
-                 ">=": {'name': "fortran_greater_equal", 'call': ">="},
-                 "<=": {'name': "fortran_less_equal", 'call': "<="},
-                 "=": {'name': "assign", 'call': "="},
-                 "+=": {'name': "assign_add", 'call': ""},
-                 "-=": {'name': "assign_subtract", 'call': ""},
-                 "*=": {'name': "assign_multiply", 'call': ""},
-                 "/=": {'name': "assign_divide", 'call': ""},
-                 "neg": {'name': "negative", 'call': "-"},
-                 "sin": {'name': "fortran_sin", 'call': "SIN"},
-                 "cos": {'name': "fortran_cos", 'call': "COS"},
-                 "tan": {'name': "fortran_tan", 'call': "TAN"},
-                 "atan": {'name': "fortran_atan", 'call': "ATAN"},
-                 "abs": {'name': "fortran_abs", 'call': "ABS"},
-                 "sqrt": {'name': "fortran_sqrt", 'call': "SQRT"},
-                 "sq": {'name': "fortran_square", 'call': ""},
-                 "exp": {'name': "fortran_exp", 'call': "EXP"},
-                 "max": {'name': "fortran_max", 'call': "MAX"},
-                 "min": {'name': "fortran_min", 'call': "MIN"},
-                 "argmax": {'name': "fortran_transpose", 'call': "ARGMAX"},
-                 "argmin": {'name': "fortran_argmin", 'call': "ARGMIN"},
-                 "round": {'name': "fortran_round", 'call': ""},
-                 "sum": {'name': "fortran_sum", 'call': "SUM"},
-                 "mean": {'name': "fortran_mean", 'call': ""},
-                 "concat": {'name': "fortran_concatenate", 'call': ""},
-                 "reshape": {'name': "fortran_reshape", 'call': ""},
-                 "append": {'name': "fortran_append", 'call': ""},
-                 "shape": {'name': "fortran_shape", 'call': ""},
-                 "dtype": {'name': "fortran_dtype", 'call': ""},
-                 'squeeze': {'name': "fortran_squeeze", 'call': ""},
-                 'expand': {'name': 'fortran_expand', 'call': ""},
-                 "roll": {'name': "fortran_roll", 'call': ""},
-                 "cast": {'name': "fortran_cast", 'call': ""},
-                 "randn": {'name': "fortran_randn", 'call': ""},
-                 "ones": {'name': "fortran_ones", 'call': ""},
-                 "zeros": {'name': "fortran_zeros", 'call': ""},
-                 "range": {'name': "fortran_arange", 'call': ""},
-                 "softmax": {'name': "pyrates_softmax", 'call': ""},
-                 "sigmoid": {'name': "pyrates_sigmoid", 'call': ""},
-                 "tanh": {'name': "fortran_tanh", 'call': "TANH"},
-                 "index": {'name': "pyrates_index", 'call': "pyrates_index"},
-                 "mask": {'name': "pyrates_mask", 'call': ""},
-                 "group": {'name': "pyrates_group", 'call': ""},
-                 "asarray": {'name': "fortran_asarray", 'call': ""},
-                 "no_op": {'name': "pyrates_identity", 'call': "no_op"},
-                 "interpolate": {'name': "pyrates_interpolate", 'call': ""},
-                 "interpolate_1d": {'name': "pyrates_interpolate_1d", 'call': ""},
-                 "interpolate_nd": {'name': "pyrates_interpolate_nd", 'call': ""},
-                 }
-        ops_f = {"max": {'func': fmax, 'str': "max"},
-                 "min": {'func': fmin, 'str': "min"},
-                 "sum": {'func': fsum, 'str': "sum"},
-                 "mean": {'func': fmean, 'str': "fmean"},
-                 "matmul": {'func': fmatmul, 'str': "matmul"},
-                 # "concat": {'func': np.concatenate, 'str': "np.concatenate"},
-                 # "reshape": {'func': np.reshape, 'str': "np.reshape"},
-                 # "append": {'func': np.append, 'str': "np.append"},
-                 # "shape": {'func': np.shape, 'str': "np.shape"},
-                 # "dtype": {'func': np.dtype, 'str': "np.dtype"},
-                 # 'squeeze': {'func': np.squeeze, 'str': "np.squeeze"},
-                 # 'expand': {'func': np.expand_dims, 'str': "np.expand_dims"},
-                 # "roll": {'func': np.roll, 'str': "np.roll"},
-                 # "cast": {'func': np.asarray, 'str': "np.asarray"},
-                 # "randn": {'func': np.random.randn, 'str': "np.randn"},
-                 # "ones": {'func': np.ones, 'str': "np.ones"},
-                 # "zeros": {'func': np.zeros, 'str': "np.zeros"},
-                 # "range": {'func': np.arange, 'str': "np.arange"},
-                 # "softmax": {'func': pr_softmax, 'str': "pr_softmax"},
-                 # "sigmoid": {'func': pr_sigmoid, 'str': "pr_sigmoid"},
-                 # "tanh": {'func': np.tanh, 'str': "np.tanh"},
-                 # "exp": {'func': np.exp, 'str': "exp"},
-                 # "no_op": {'func': pr_identity, 'str': "pr_identity"},
-                 # "interp": {'func': pr_interp, 'str': "pr_interp"},
-                 # "interpolate_1d": {'func': pr_interp_1d, 'str': "pr_interp_1d"},
-                 # "interpolate_nd": {'func': pr_interp_nd, 'str': "pr_interp_nd"},
-                 # "index": {'func': pr_base_index, 'str': "pr_base_index"},
-                 # "index_axis": {'func': pr_axis_index, 'str': "pr_axis_index"},
-                 # "index_2d": {'func': pr_2d_index, 'str': "pr_2d_index"},
-                 # "index_range": {'func': pr_range_index, 'str': "pr_range_index"},
-                 }
-        if ops:
-            ops_f.update(ops)
-        self.pyauto_compat = auto_compat
         # TODO: in pyauto compatibility mode, the run function has to be defined differently. Most importantly,
         #  all function parameters except the continuation parameter have to enter the function via a single list.
         #  This works only for scalar parameters. Thus, other parameters should be saved to the file and loaded instead of imports
         #  above the function definition.
-        super().__init__(ops=ops_f, dtypes=dtypes, name=name, float_default_type=float_default_type,
-                         imports=imports, build_dir=build_dir, code_gen=FortranGen)
+        super().__init__(ops=ops, dtypes=dtypes, name=name, float_default_type=float_default_type,
+                         imports=imports, build_dir=build_dir, code_gen=FortranGen())
+
         self._imports = []
         self.npar = 0
         self.ndim = 0
         self._auto_files_generated = False
+        self._idx = "()"
+        self._file_ending = ".f90"
+        self._start_idx = 1
+        self._op_calls = {
+            'mean': {'shapes': [], 'names': []}
+        }
+
+    def _graph_to_str(self, code_gen: CodeGen = None, rhs_indices: list = None, state_var: str = None,
+                      rhs_var: str = None, backend_funcs: dict = None):
+
+        # go through graph nodes and replace function calls with pyrates-specific fortran functions where necessary
+        for node in self.graph.nodes:
+            for op in self._op_calls:
+                if op in node:
+                    val = self.graph.eval_node(node)
+                    shape = val.shape if hasattr(val, 'shape') else ""
+                    fstr, fcall = get_fortran_func(op, out_shape=shape)
+                    if shape not in self._op_calls[op]['shapes']:
+                        self._imports.append(fstr)
+                        self._op_calls[op]['shapes'].append(shape)
+                        if self._op_calls[op]['names']:
+                            counter = int(self._op_calls[op]['names'][-1].split('_')[-1])
+                        else:
+                            counter = 0
+                        fcall = f"{fcall}_{counter + 1}"
+                        self._op_calls[op]['names'].append(fcall)
+                    else:
+                        idx = self._op_calls[op]['shapes'].index(shape)
+                        fcall = self._op_calls[op]['names'][idx]
+                    val['expr'] = val['expr'].replace(Function(val['symbol']), Function(fcall))
+
+        # add variable declarations for all state variables that will be extracted from state vector
+        if not code_gen:
+            code_gen = self._code_gen
+        if rhs_indices:
+            for idx, var in zip(rhs_indices, self.graph.var_updates['DEs']):
+                dtype, _, shape = self._get_var_declaration_info(var)
+                code_gen.add_code_line(f"{dtype} :: {var}{shape}")
+
+        # add variable declarations for all state variables that will be extracted from state vector
+        for var in self.graph.var_updates['non-DEs']:
+            dtype, _, shape = self._get_var_declaration_info(var)
+            code_gen.add_code_line(f"{dtype} :: {var}{shape}")
+
+        # call parent method
+        return super()._graph_to_str(code_gen=code_gen, rhs_indices=rhs_indices, state_var=state_var, rhs_var=rhs_var,
+                                     backend_funcs=backend_funcs)
 
     def _generate_func_head(self, func_name: str, code_gen: CodeGen, state_var: str = None, func_args: list = None,
                             imports: list = None):
 
-        # TODO: adjust function generation methods such that fortran/auto functions are generated
         if not func_args:
             func_args = []
         state_vars = ['t', state_var]
@@ -192,46 +174,31 @@ class FortranBackend(BaseBackend):
         # add function header
         code_gen.add_linebreak()
         code_gen.add_code_line(f"subroutine {func_name}({','.join(func_args)})")
-        code_gen.add_indent()
-        func_gen.add_code_line("implicit none")
-        func_gen.add_linebreak()
+        code_gen.add_linebreak()
+        code_gen.add_code_line("implicit none")
+        code_gen.add_linebreak()
         for arg in func_args:
-            val = self.get_var(arg)
-            dtype = 'double precision' if 'float' in val['dtype'] else 'integer'
-            intent = 'in,out' if arg == 'state_vec_update' else 'in'
-            dim = ','.join(val['shape'])
-            func_gen.add_code_line(f"{dtype}, intent({intent}) :: {var}({dim})")
-            func_gen.add_linebreak()
+            dtype, intent, shape = self._get_var_declaration_info(arg)
+            code_gen.add_code_line(f"{dtype}, intent({intent}) :: {arg}{shape}")
 
         return func_args, code_gen
 
-    @staticmethod
-    def _generate_func_tail(code_gen: CodeGen, rhs_var: str = None):
-
-        code_gen.add_code_line(f"end subroutine")
-        code_gen.remove_indent()
-
-        return code_gen
-
-    @staticmethod
-    def _generate_func(func_name: str, func_str: str, file_name: str = None, build_dir: str = None,
+    def _generate_func(self, func_str: str, func_name: str = None, file_name: str = None, build_dir: str = None,
                        decorator: Any = None, **kwargs):
 
-        if file_name:
+        if not file_name:
+            file_name = self._file_name
+        if not build_dir:
+            build_dir = f'{self._orig_dir}/{self._build_dir}' if self._build_dir else self._orig_dir
+        if not func_name:
+            func_name = self._func_name
 
-            # save rhs function to file
-            if build_dir:
-                file_name = f'{build_dir}/{file_name}'
-            f2py.compile(func_gen.generate(), modulename='rhs_func', extension='.f90', source_fn=f'{file_name}.f90',
-                         verbose=False)
-
-        else:
-
-            # generate function from string
-            f2py.compile(func_gen.generate(), modulename='rhs_func', extension='.f90', verbose=False)
+        # save rhs function to file
+        f2py.compile(func_str, modulename=file_name, extension=self._file_ending,
+                     source_fn=f'{build_dir}/{file_name}{self._file_ending}', verbose=False)
 
         # import function from temporary file
-        exec(f"from rhs_func import {func_name}", globals())
+        exec(f"from {file_name} import {func_name}", globals())
         rhs_eval = globals().pop(func_name)
 
         # apply function decorator
@@ -240,42 +207,29 @@ class FortranBackend(BaseBackend):
 
         return rhs_eval
 
-    @classmethod
-    def _expr_to_str(cls, expr: Any) -> str:
-        expr_str = str(expr)
-        for arg in expr.args:
-            expr_str = expr_str.replace(str(arg), cls._expr_to_str(arg))
-        while 'pr_base_index(' in expr_str:
-            # replace `index` calls with brackets-based indexing
-            start = expr_str.find('pr_base_index(')
-            end = expr_str[start:].find(')') + 1
-            expr_str = expr_str.replace(expr_str[start:start + end], f"{expr.args[0]}({expr.args[1]})")
-        while 'pr_2d_index(' in expr_str:
-            # replace `index` calls with brackets-based indexing
-            start = expr_str.find('pr_2d_index(')
-            end = expr_str[start:].find(')') + 1
-            expr_str = expr_str.replace(expr_str[start:start + end], f"{expr.args[0]}({expr.args[1]}, {expr.args[2]})")
-        while 'pr_range_index(' in expr_str:
-            # replace `index` calls with brackets-based indexing
-            start = expr_str.find('pr_range_index(')
-            end = expr_str[start:].find(')') + 1
-            expr_str = expr_str.replace(expr_str[start:start + end], f"{expr.args[0]}({expr.args[1]}:{expr.args[2]})")
-        while 'pr_axis_index(' in expr_str:
-            # replace `index` calls with brackets-based indexing
-            start = expr_str.find('pr_axis_index(')
-            end = expr_str[start:].find(')') + 1
-            if len(expr.args) == 1:
-                expr_str = expr_str.replace(expr_str[start:start + end], f"{expr.args[0]}(:)")
+    def _get_var_declaration_info(self, var: str) -> tuple:
+        try:
+            val = self.get_var(var)['value']
+            dtype = 'double precision' if 'float' in str(val.dtype) else 'integer'
+            intent = 'inout' if var == 'state_vec_update' else 'in'
+            if val.shape:
+                shape = f'{val.shape}'
+                if shape[-2] == ',':
+                    shape = shape[:-2] + shape[-1]
             else:
-                idx = f','.join([':' for _ in range(expr.args[2])])
-                idx = f'{idx},{expr.args[1]}'
-                expr_str = expr_str.replace(expr_str[start:start + end], f"{expr.args[0]}({idx})")
-        while 'pr_identity(' in expr_str:
-            # replace `no_op` calls with first argument to the function call
-            start = expr_str.find('pr_identity(')
-            end = expr_str[start:].find(')') + 1
-            expr_str = expr_str.replace(expr_str[start:start + end], f"{expr.args[0]}")
-        return expr_str
+                shape = '' if 'state_vec' not in var else '(1)'
+        except KeyError:
+            dtype = 'double precision'
+            intent = 'in'
+            shape = ''
+        return dtype, intent, shape
+
+    @staticmethod
+    def _generate_func_tail(code_gen: CodeGen, rhs_var: str = None):
+
+        code_gen.add_code_line(f"end subroutine")
+
+        return code_gen
 
     def compile(self, build_dir: Optional[str] = None, decorator: Optional[Callable] = None, **kwargs) -> tuple:
         """Compile the graph layers/operations. Creates python files containing the functions in each layer.
@@ -650,9 +604,13 @@ class FortranBackend(BaseBackend):
         """Removes all layers, variables and operations from graph. Deletes build directory.
         """
 
-        wdir = super().clear()
+        # call parent method
+        super().clear()
+
+        # delete fortran-specific temporary files
+        wdir = f"{self._orig_dir}/{self._build_dir}" if self._build_dir else self._orig_dir
         for f in [f for f in os.listdir(wdir)
-                  if "cpython" in f and ("rhs_func" in f or "pyrates_func" in f) and f[-3:] == ".so" ]:
+                  if "cpython" in f and (self._func_name in f or self._file_name in f) and f[-3:] == ".so"]:
             os.remove(f"{wdir}/{f}")
 
     def _solve(self, rhs_func, func_args, T, dt, dts, t, solver, output_indices, **kwargs):
@@ -742,30 +700,28 @@ class FortranBackend(BaseBackend):
 
 class FortranGen(CodeGen):
 
+    n = 70
+
     def add_code_line(self, code_str):
         """Add code line string to code.
         """
-        if self.code:
-            idx = -1
-            while self.code[idx] != '\n' and abs(idx) < len(self.code):
-                idx -= 1
-            code_line = ''.join([self.code.pop(i) for i in range(idx+1, 0)]) + code_str
-        else:
-            code_line = code_str
-        if "&" not in code_line:
-            code_line = code_line.replace('\t', '')
-            code_line = "\t" * self.lvl + code_line
-        n = 60
-        if len(code_line) > n:
-            idx = self._find_first_op(code_line, start=0, stop=n)
-            self.code.append(f"{code_line[0:idx]}")
-            while idx < len(code_line):
-                self.add_linebreak()
-                idx_new = self._find_first_op(code_line, start=idx, stop=idx+n)
-                self.code.append(f"     & {code_line[idx:idx+idx_new]}")
-                idx += idx_new
-        else:
-            self.code.append(code_line)
+        code_str = code_str.split('\n')
+        for code in code_str:
+            if '&' not in code:
+                code = code.replace('\t', '')
+                code = '\t' * self.lvl + code + '\n'
+            elif '\n' not in code:
+                code = code + '\n'
+            if len(code) > self.n:
+                idx = self._find_first_op(code, start=0, stop=self.n)
+                self.code.append(f'{code[0:idx]}&')
+                while idx < len(code):
+                    self.add_linebreak()
+                    idx_new = self._find_first_op(code, start=idx, stop=idx+self.n)
+                    self.code.append(f"     & {code[idx:idx+idx_new]}")
+                    idx += idx_new
+            else:
+                self.code.append(code)
 
     @staticmethod
     def _find_first_op(code, start, stop):

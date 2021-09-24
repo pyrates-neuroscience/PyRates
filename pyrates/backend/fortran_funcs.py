@@ -1,75 +1,70 @@
-from numpy.f2py import compile
+from typing import Union
 
-# equivalent to np.maximum()
-fmax = """
-\tsubroutine fmax(x, dim, x_max)
-\timplicit none
-\tdouble precision, dimension(:), intent(in) :: x
-\tinteger, intent(in) :: dim
-\tdouble precision, intent(out) :: x_max
-\tx_max = maxval(x, dim)
-\treturn
-\tend subroutine fmax
-"""
-compile(fmax, modulename="fortran_maximum", verbose=False)
-exec(f"from fortran_maximum import fmax", globals())
-fmax = globals().pop('fmax')
 
-# equivalent to np.minimum()
-fmin = """
-\tsubroutine fmin(x, dim, x_min)
-\timplicit none
-\tdouble precision, dimension(:), intent(in) :: x
-\tinteger, intent(in) :: dim
-\tdouble precision, intent(out) :: x_min
-\tx_min = minval(x, dim)
-\treturn
-\tend subroutine fmin
-"""
-compile(fmin, modulename="fortran_minimum", verbose=False)
-exec(f"from fortran_minimum import fmin", globals())
-fmin = globals().pop('fmin')
+def get_fmean(out_shape: Union[tuple, str]):
+    func = f"""
+    \tfunction fmean(x,dim)
+    \tdouble precision :: fmean{out_shape}
+    \tdouble precision:: x(:)
+    \tinteger, optional :: dim
+    \tinteger :: d
+    \tif (present(dim)) then
+    \t  d = dim
+    \t  fmean = sum(x,d) / sum(shape(x))
+    \telse
+    \t  fmean = sum(x) / sum(shape(x))
+    \tendif
+    \tend function
+    """
+    return func
 
-# equivalent to np.sum()
-fsum = """
-\tsubroutine fsum(x, dim, x_sum)
-\timplicit none
-\tdouble precision, dimension(:), intent(in) :: x
-\tinteger, intent(in) :: dim
-\tdouble precision, intent(out) :: x_sum
-\tx_sum = sum(x, dim)
-\treturn
-\tend subroutine fsum
-"""
-compile(fsum, modulename="fortran_sum", verbose=False)
-exec(f"from fortran_sum import fsum", globals())
-fsum = globals().pop('fsum')
 
-# equivalent to np.mean()
-fmean = """
-\tsubroutine fmean(x, dim, x_mean)
-\timplicit none
-\tdouble precision, dimension(:), intent(in) :: x
-\tinteger, intent(in) :: dim
-\tdouble precision, intent(out) :: x_mean
-\tx_mean = sum(x, dim) / sum(shape(x))
-\treturn
-\tend subroutine fmean
-"""
-compile(fmean, modulename="fortran_mean", verbose=False)
-exec(f"from fortran_mean import fmean", globals())
-fmean = globals().pop('fmean')
+def get_fsoftmax(out_shape: Union[tuple, str]):
+    func = f"""
+    \tfunction fsoftmax(x,dim)
+    \tdouble precision :: fsoftmax{out_shape}
+    \tdouble precision :: x(:), xsum
+    \tinteger, optional :: dim
+    \tinteger :: d, n, s
+    \ts = shape(x)
+    \tdo n=1:s
+    \t  fsoftmax(n) = exp(x(n))
+    \tend do
+    \tif (present(dim)) then
+    \t  d = dim
+    \t  xsum = sum(x,d)
+    \telse
+    \t  xsum = sum(x)
+    \tendif
+    \tdo n=1:s
+    \t  fsoftmax(n) = fsoftmax(n) / xsum
+    \tend do
+    \tend function
+    """
+    return func
 
-# equivalent to np.matmul()
-fmatmul = """
-\tsubroutine fmatmul(x, y, z)
-\timplicit none
-\tdouble precision, dimension(:,:), intent(in) :: x, y
-\tdouble precision, dimension(:,:), intent(out) :: z
-\tz = matmul(x, y)
-\treturn
-\tend subroutine fmatmul
-"""
-compile(fmatmul, modulename="fortran_matmul", verbose=False)
-exec(f"from fortran_matmul import fmatmul", globals())
-fmatmul = globals().pop('fmatmul')
+
+def get_fsigmoid(out_shape: Union[tuple, str]):
+    func = f"""
+    \tfunction fsigmoid(x,scaling, steepness, offset)
+    \tdouble precision :: fsigmoid{out_shape}
+    \tdouble precision :: x(:), scaling, steepness, offset
+    \tinteger :: n, s
+    \ts = shape(x)
+    \tdo n=1:s
+    \t  fsigmoid(n) = scaling / (1 + exp(steepness*(offset-x(n)))
+    \tend do
+    \tend function
+    """
+    return func
+
+
+funcs = {
+    'mean': {'str': get_fmean, 'call': 'fmean'},
+    'softmax': {'str': get_fsoftmax, 'call': 'fsoftmax'},
+    'sigmoid': {'str': get_fsigmoid, 'call': 'fsigmoid'},
+}
+
+
+def get_fortran_func(fname: str, out_shape: Union[tuple, str]) -> tuple:
+    return funcs[fname]['str'](out_shape), funcs[fname]['call']

@@ -43,6 +43,8 @@ Currently supported backends:
 """
 
 # pyrates internal imports
+import gc
+
 from .base_funcs import *
 from .parser import var_in_expression, extract_var
 from .computegraph import ComputeGraph
@@ -409,6 +411,14 @@ class BaseBackend(object):
                     "softmax": {'func': pr_softmax, 'str': "pr_softmax"},
                     "sigmoid": {'func': pr_sigmoid, 'str': "pr_sigmoid"},
                     "tanh": {'func': np.tanh, 'str': "np.tanh"},
+                    "sinh": {'func': np.sinh, 'str': "np.sinh"},
+                    "cosh": {'func': np.cosh, 'str': "np.cosh"},
+                    "arctan": {'func': np.arctan, 'str': "np.arctan"},
+                    "arcsin": {'func': np.arcsin, 'str': "np.arcsin"},
+                    "arccos": {'func': np.arccos, 'str': "np.arccos"},
+                    "sin": {'func': np.sin, 'str': "np.sin"},
+                    "cos": {'func': np.cos, 'str': "np.cos"},
+                    "tan": {'func': np.tan, 'str': "np.tan"},
                     "exp": {'func': np.exp, 'str': "exp"},
                     "no_op": {'func': pr_identity, 'str': "pr_identity"},
                     "interp": {'func': pr_interp, 'str': "pr_interp"},
@@ -455,9 +465,12 @@ class BaseBackend(object):
         self.type = 'numpy'
         self._orig_dir = None
         self._build_dir = None
-        self._func_name = None
-        self._file_name = None
+        self._func_name = 'rhs_func'
+        self._file_name = kwargs.pop('file_name', name)
         self._code_gen = kwargs.pop('code_gen', CodeGen())
+        self._idx = "[]"
+        self._file_ending = ".py"
+        self._start_idx = 0
 
         # create build dir
         self._orig_dir = os.getcwd()
@@ -592,7 +605,7 @@ class BaseBackend(object):
                 return name
             return self.graph.nodes[name]
 
-    def run(self, T: float, dt: float, dts: float = None, outputs: dict = None, solver: str = None,
+    def run(self, T: float, dt: float, dts: float = None, outputs: dict = None, solver: str = 'euler',
             in_place: bool = True, func_name: str = None, file_name: str = None, compile_kwargs: dict = None, **kwargs
             ) -> dict:
 
@@ -602,9 +615,9 @@ class BaseBackend(object):
         if not compile_kwargs:
             compile_kwargs = dict()
         if not func_name and solver:
-            func_name = 'rhs_func'
+            func_name = self._func_name
         if not file_name and solver:
-            file_name = 'pyrates_rhs_func'
+            file_name = self._file_name
         if not dts:
             dts = dt
         self._func_name = func_name
@@ -624,47 +637,35 @@ class BaseBackend(object):
         # perform simulation
         ####################
 
-        if solver:
+        # numerical integration via a system update function generated from the compute graph
+        rhs_func = run_info['func']
+        func_args = run_info['func_args'][3:]
+        args = tuple([self.get_var(arg)['value'] for arg in func_args])
 
-            # numerical integration via a system update function generated from the compute graph
-            rhs_func = run_info['func']
-            func_args = run_info['func_args'][3:]
-            args = tuple([self.get_var(arg)['value'] for arg in func_args])
+        if solver == 'euler':
 
-            if solver == 'euler':
-
-                # perform integration via standard Euler method
-                store_step = int(np.round(dts/dt))
-                state_rec = self._euler_integration(steps, store_step, state_vec, state_rec, dt, rhs_func, rhs, *args)
-
-            else:
-
-                from scipy.integrate import solve_ivp
-
-                # solve via scipy's ode integration function
-                fun = lambda t, y: rhs_func(t, y, rhs, *args)
-                t = 0.0
-                kwargs['t_eval'] = times
-                results = solve_ivp(fun=fun, t_span=(t, T), y0=state_vec, first_step=dt, **kwargs)
-                state_rec = results['y'].T
+            # perform integration via standard Euler method
+            store_step = int(np.round(dts/dt))
+            state_rec = self._euler_integration(steps, store_step, state_vec, state_rec, dt, rhs_func, rhs, *args)
 
         else:
 
-            # numerical integration by directly traversing the compute graph at each integration step
-            # TODO: add mathematical operation to graph that increases time in steps of dt
-            store_step = int(np.round(dts / dt))
-            idx = 0
-            for step in range(steps):
-                if step % store_step == 0:
-                    state_rec[idx, :] = state_vec
-                    idx += 1
-                state_vec += dt * self.execute_graph()
+            from scipy.integrate import solve_ivp
+
+            # solve via scipy's ode integration function
+            def fun(t, y):
+                rhs_func(t, y, rhs, *args)
+                return rhs
+            t = 0.0
+            kwargs['t_eval'] = times
+            results = solve_ivp(fun=fun, t_span=(t, T), y0=state_vec, first_step=dt, **kwargs)
+            state_rec = results['y'].T
 
         # reduce state recordings to requested state variables
         final_results = {}
         for key, var in outputs.items():
             idx = run_info['old_state_vars'].index(var)
-            idx = run_info['vec_indices'][idx]
+            idx = run_info['vec_indices'][idx] - self._start_idx
             if type(idx) is tuple and idx[1] - idx[0] == 1:
                 idx = (idx[0],)
             elif type(idx) is int:
@@ -673,13 +674,6 @@ class BaseBackend(object):
         final_results['time'] = times
 
         return final_results
-
-    def execute_graph(self):
-        """Executes all computations inside the compute graph once.
-        """
-        for v in self.non_state_vars:
-            self.graph.eval_node(self.get_var(v, get_key=True))
-        return np.concatenate([self.graph.eval_node(self.get_var(v, get_key=True)) for v in self.state_vars])
 
     def clear(self) -> None:
         """Deletes build directory and removes all compute graph nodes
@@ -696,13 +690,13 @@ class BaseBackend(object):
             rmtree(f"{self._orig_dir}/{self._build_dir}")
         else:
             try:
-                os.remove(f"{self._orig_dir}/{self._file_name}.py")
+                os.remove(f"{self._orig_dir}/{self._file_name}{self._file_ending}")
             except FileNotFoundError:
                 pass
-        if self._func_name in sys.modules:
-            del sys.modules[self._func_name]
+
         if self._file_name in sys.modules:
             del sys.modules[self._file_name]
+        gc.collect()
 
         # clear code generator
         self._code_gen.clear()
@@ -716,7 +710,7 @@ class BaseBackend(object):
         ###############################################################
 
         vars, indices, updates, old_state_vars = [], [], [], []
-        idx = 0
+        idx = self._start_idx
         for var, update in self.graph.var_updates['DEs'].items():
 
             # extract left-hand side and right-hand side nodes from graph
@@ -739,9 +733,7 @@ class BaseBackend(object):
         if func_name or file_name:
 
             if not func_name:
-                func_name = 'rhs_func'
-
-            code_gen = self._code_gen
+                func_name = self._func_name
 
             # generate function body with all equations and assignments
             func_args, code_gen = self._graph_to_str(rhs_indices=indices, state_var=state_var_key, rhs_var=rhs_var_key)
@@ -763,20 +755,21 @@ class BaseBackend(object):
             func_str = code_gen.generate()
 
             # write function string to file
-            func = self._generate_func(func_name=func_name, file_name=file_name, func_str=func_str,
-                                       build_dir=self._build_dir, **kwargs)
+            func = self._generate_func(func_str, func_name=func_name, file_name=file_name, build_dir=self._build_dir,
+                                       **kwargs)
             return_dict['func'] = func
             return_dict['func_args'] = func_args
 
         return return_dict
 
     def _graph_to_str(self, code_gen: CodeGen = None, rhs_indices: list = None, state_var: str = None,
-                      rhs_var: str = None):
+                      rhs_var: str = None, backend_funcs: dict = None):
 
         # preparations
         if code_gen is None:
             code_gen = self._code_gen
-        backend_funcs = {key: val['str'] for key, val in self.ops.items()}
+        if not backend_funcs:
+            backend_funcs = {key: val['str'] for key, val in self.ops.items()}
         code_gen.add_linebreak()
 
         # extract state variable from state vector if necessary
@@ -785,7 +778,7 @@ class BaseBackend(object):
 
             for idx, var in zip(rhs_indices, self.graph.var_updates['DEs']):
                 idx_str = f'{idx}' if type(idx) is int else f'{idx[0]}:{idx[1]}'
-                code_gen.add_code_line(f"{var} = {state_var}[{idx_str}]")
+                code_gen.add_code_line(f"{var} = {state_var}{self._idx[0]}{idx_str}{self._idx[1]}")
                 rhs_indices_str.append(idx_str)
 
             code_gen.add_linebreak()
@@ -841,7 +834,7 @@ class BaseBackend(object):
 
                 # DE updates stored in a state-vector
                 for idx, expr in zip(indices, expressions):
-                    code_gen.add_code_line(f"{rhs_var}[{idx}] = {expr}")
+                    code_gen.add_code_line(f"{rhs_var}{self._idx[0]}{idx}{self._idx[1]} = {expr}")
 
             else:
 
@@ -866,7 +859,7 @@ class BaseBackend(object):
 
                 # non-DE update stored in a variable slice
                 for idx, expr, target_var in zip(indices, expressions, var_names):
-                    code_gen.add_code_line(f"{target_var}[{idx}] = {expr}")
+                    code_gen.add_code_line(f"{target_var}{self._idx[0]}{idx}{self._idx[1]} = {expr}")
 
             else:
 
@@ -897,6 +890,76 @@ class BaseBackend(object):
         raise ValueError(
             f"Shapes of state variable {var} and its right-hand side update {update_info['expr']} do not"
             " match.")
+
+    def _generate_func(self, func_str: str, func_name: str = None, file_name: str = None, build_dir: str = None,
+                       decorator: Any = None, **kwargs):
+
+        if not file_name:
+            file_name = self._file_name
+        if not build_dir:
+            build_dir = self._build_dir
+        if not func_name:
+            func_name = self._func_name
+
+        # save rhs function to file
+        with open(f'{build_dir}/{file_name}{self._file_ending}', 'w') as f:
+            f.writelines(func_str)
+            f.close()
+
+        # import function from file
+        exec(f"from {file_name} import {func_name}", globals())
+        rhs_eval = globals().pop(func_name)
+
+        # apply function decorator
+        if decorator:
+            rhs_eval = decorator(rhs_eval, **kwargs)
+
+        return rhs_eval
+
+    def _expr_to_str(self, expr: Any) -> str:
+        expr_str = str(expr)
+        for arg in expr.args:
+            expr_str = expr_str.replace(str(arg), self._expr_to_str(arg))
+        while 'pr_base_index(' in expr_str:
+            # replace `index` calls with brackets-based indexing
+            start = expr_str.find('pr_base_index(')
+            end = expr_str[start:].find(')') + 1
+            new_idx = expr.args[1] + self._start_idx
+            expr_str = expr_str.replace(expr_str[start:start+end],
+                                        f"{expr.args[0]}{self._idx[0]}{new_idx}{self._idx[1]}")
+        while 'pr_2d_index(' in expr_str:
+            # replace `index` calls with brackets-based indexing
+            start = expr_str.find('pr_2d_index(')
+            end = expr_str[start:].find(')') + 1
+            new_idx1 = expr.args[1] + self._start_idx
+            new_idx2 = expr.args[2] + self._start_idx
+            expr_str = expr_str.replace(expr_str[start:start + end],
+                                        f"{expr.args[0]}{self._idx[0]}{new_idx1}, {new_idx2}{self._idx[1]}")
+        while 'pr_range_index(' in expr_str:
+            # replace `index` calls with brackets-based indexing
+            start = expr_str.find('pr_range_index(')
+            end = expr_str[start:].find(')') + 1
+            new_idx1 = expr.args[1] + self._start_idx
+            new_idx2 = expr.args[2] + self._start_idx
+            expr_str = expr_str.replace(expr_str[start:start + end],
+                                        f"{expr.args[0]}{self._idx[0]}{new_idx1}:{new_idx2}{self._idx[1]}")
+        while 'pr_axis_index(' in expr_str:
+            # replace `index` calls with brackets-based indexing
+            start = expr_str.find('pr_axis_index(')
+            end = expr_str[start:].find(')') + 1
+            if len(expr.args) == 1:
+                expr_str = expr_str.replace(expr_str[start:start + end], f"{expr.args[0]}{self._idx[0]}:{self._idx[1]}")
+            else:
+                idx = f','.join([':' for _ in range(expr.args[2])])
+                idx = f'{idx},{expr.args[1] + self._start_idx}'
+                expr_str = expr_str.replace(expr_str[start:start + end],
+                                            f"{expr.args[0]}{self._idx[1]}{idx}{self._idx[1]}")
+        while 'pr_identity(' in expr_str:
+            # replace `no_op` calls with first argument to the function call
+            start = expr_str.find('pr_identity(')
+            end = expr_str[start:].find(')') + 1
+            expr_str = expr_str.replace(expr_str[start:start+end], f"{expr.args[0]}")
+        return expr_str
 
     @staticmethod
     def _generate_func_head(func_name: str, code_gen: CodeGen, state_var: str = None, func_args: list = None,
@@ -931,72 +994,6 @@ class BaseBackend(object):
         return code_gen
 
     @staticmethod
-    def _generate_func(file_name: str, func_name: str, func_str: str, build_dir: str, decorator: Any = None,
-                       **kwargs):
-
-        if file_name:
-
-            # save rhs function to file
-            if build_dir:
-                file_name = f'{build_dir}/{file_name}'
-            with open(f'{file_name}.py', 'w') as f:
-                f.writelines(func_str)
-                f.close()
-
-            # import function from file
-            exec(f"from {file_name} import {func_name}", globals())
-            rhs_eval = globals().pop(func_name)
-
-        else:
-
-            # generate function from string
-            exec(func_str, globals())
-            rhs_eval = globals().pop(func_name)
-
-        # apply function decorator
-        if decorator:
-            rhs_eval = decorator(rhs_eval, **kwargs)
-
-        return rhs_eval
-
-    @classmethod
-    def _expr_to_str(cls, expr: Any) -> str:
-        expr_str = str(expr)
-        for arg in expr.args:
-            expr_str = expr_str.replace(str(arg), cls._expr_to_str(arg))
-        while 'pr_base_index(' in expr_str:
-            # replace `index` calls with brackets-based indexing
-            start = expr_str.find('pr_base_index(')
-            end = expr_str[start:].find(')') + 1
-            expr_str = expr_str.replace(expr_str[start:start+end], f"{expr.args[0]}[{expr.args[1]}]")
-        while 'pr_2d_index(' in expr_str:
-            # replace `index` calls with brackets-based indexing
-            start = expr_str.find('pr_2d_index(')
-            end = expr_str[start:].find(')') + 1
-            expr_str = expr_str.replace(expr_str[start:start + end], f"{expr.args[0]}[{expr.args[1]}, {expr.args[2]}]")
-        while 'pr_range_index(' in expr_str:
-            # replace `index` calls with brackets-based indexing
-            start = expr_str.find('pr_range_index(')
-            end = expr_str[start:].find(')') + 1
-            expr_str = expr_str.replace(expr_str[start:start + end], f"{expr.args[0]}[{expr.args[1]}:{expr.args[2]}]")
-        while 'pr_axis_index(' in expr_str:
-            # replace `index` calls with brackets-based indexing
-            start = expr_str.find('pr_axis_index(')
-            end = expr_str[start:].find(')') + 1
-            if len(expr.args) == 1:
-                expr_str = expr_str.replace(expr_str[start:start + end], f"{expr.args[0]}[:]")
-            else:
-                idx = f','.join([':' for _ in range(expr.args[2])])
-                idx = f'{idx},{expr.args[1]}'
-                expr_str = expr_str.replace(expr_str[start:start + end], f"{expr.args[0]}[{idx}]")
-        while 'pr_identity(' in expr_str:
-            # replace `no_op` calls with first argument to the function call
-            start = expr_str.find('pr_identity(')
-            end = expr_str[start:].find(')') + 1
-            expr_str = expr_str.replace(expr_str[start:start+end], f"{expr.args[0]}")
-        return expr_str
-
-    @staticmethod
     def get_var_shape(v):
         if not v.shape:
             v = np.reshape(v, (1,))
@@ -1009,5 +1006,6 @@ class BaseBackend(object):
             if step % store_step == 0:
                 state_rec[idx, :] = state_vec
                 idx += 1
-            state_vec += dt * rhs_func(step, state_vec, rhs, *args)
+            rhs_func(step, state_vec, rhs, *args)
+            state_vec += dt * rhs
         return state_rec
