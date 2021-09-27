@@ -160,7 +160,7 @@ def test_2_2_node():
     :method:`add_node`: Detailed documentation of method for adding nodes to instance of `ComputeGraph`.
     """
 
-    backends = ['numpy']
+    backends = ['fortran', 'numpy']
 
     dt = 1e-1
     sim_time = 10.

@@ -300,6 +300,16 @@ class FortranBackend(BaseBackend):
             shape = ''
         return dtype, intent, shape
 
+    def _expr_to_str(self, expr: Any) -> str:
+        expr_str = super()._expr_to_str(expr=expr)
+        while '((' in expr_str:
+            # replace `index` calls with brackets-based indexing
+            idx_l = expr_str.find('((') + 1
+            idx_r = expr_str[idx_l:].find(')') + 1
+            expr_str = expr_str.replace(expr_str[idx_l:idx_l+idx_r], f"[{expr_str[idx_l+1:idx_l+idx_r-1]}]")
+            expr_str = expr_str.replace("], 0)", "], 1)")
+        return expr_str
+
     def compile(self, build_dir: Optional[str] = None, decorator: Optional[Callable] = None, **kwargs) -> tuple:
         """Compile the graph layers/operations. Creates python files containing the functions in each layer.
 

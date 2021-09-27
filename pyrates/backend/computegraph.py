@@ -144,8 +144,8 @@ class ComputeGraph(MultiDiGraph):
         G._prune()
 
         # broadcast all variable shapes to a common number of dimensions
-        for node in [node for node, out_degree in G.out_degree if out_degree == 0]:
-            G.broadcast_op_inputs(node, squeeze=False)
+        # for node in [node for node, out_degree in G.out_degree if out_degree == 0]:
+        #     G.broadcast_op_inputs(node, squeeze=False)
 
         return G
 
