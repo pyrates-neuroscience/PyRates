@@ -474,7 +474,7 @@ class BaseBackend(object):
 
         # create build dir
         self._orig_dir = os.getcwd()
-        self._build_dir = f"{build_dir}/{self.name}" if build_dir else ""
+        self._build_dir = f"{build_dir}/{self.name}" if build_dir else self._orig_dir
         if build_dir:
             os.makedirs(build_dir, exist_ok=True)
             try:
@@ -686,7 +686,7 @@ class BaseBackend(object):
         self._var_map.clear()
 
         # remove files and directories that have been created during simulation process
-        if self._build_dir:
+        if self._build_dir != self._orig_dir:
             rmtree(f"{self._orig_dir}/{self._build_dir}")
         else:
             try:

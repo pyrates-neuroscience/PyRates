@@ -32,9 +32,8 @@
 # pyrates internal imports
 import gc
 
-from .base_backend import BaseBackend, CodeGen
-from .fortran_funcs import get_fortran_func
-from .computegraph import Function
+from .base_backend import BaseBackend, CodeGen, sort_equations
+from .fortran_funcs import get_fortran_func, fortran_identifiers
 from .base_funcs import *
 
 # external imports
@@ -110,33 +109,10 @@ class FortranBackend(BaseBackend):
         self._idx = "()"
         self._file_ending = ".f90"
         self._start_idx = 1
-        self._op_calls = {
-            'mean': {'shapes': [], 'names': []}
-        }
+        self._op_calls = {key: {'shapes': [], 'names': []} for key in fortran_identifiers}
 
     def _graph_to_str(self, code_gen: CodeGen = None, rhs_indices: list = None, state_var: str = None,
                       rhs_var: str = None, backend_funcs: dict = None):
-
-        # go through graph nodes and replace function calls with pyrates-specific fortran functions where necessary
-        for node in self.graph.nodes:
-            for op in self._op_calls:
-                if op in node:
-                    val = self.graph.eval_node(node)
-                    shape = val.shape if hasattr(val, 'shape') else ""
-                    fstr, fcall = get_fortran_func(op, out_shape=shape)
-                    if shape not in self._op_calls[op]['shapes']:
-                        self._imports.append(fstr)
-                        self._op_calls[op]['shapes'].append(shape)
-                        if self._op_calls[op]['names']:
-                            counter = int(self._op_calls[op]['names'][-1].split('_')[-1])
-                        else:
-                            counter = 0
-                        fcall = f"{fcall}_{counter + 1}"
-                        self._op_calls[op]['names'].append(fcall)
-                    else:
-                        idx = self._op_calls[op]['shapes'].index(shape)
-                        fcall = self._op_calls[op]['names'][idx]
-                    val['expr'] = val['expr'].replace(Function(val['symbol']), Function(fcall))
 
         # add variable declarations for all state variables that will be extracted from state vector
         if not code_gen:
@@ -155,6 +131,94 @@ class FortranBackend(BaseBackend):
         return super()._graph_to_str(code_gen=code_gen, rhs_indices=rhs_indices, state_var=state_var, rhs_var=rhs_var,
                                      backend_funcs=backend_funcs)
 
+    def _generate_update_equations(self, code_gen: CodeGen, nodes: dict, rhs_var: str = None, indices: list = None,
+                                   funcs: dict = None):
+
+        # collect right-hand side expression and all input variables to these expressions
+        func_args, expressions, var_names, defined_vars = [], [], [], []
+        for node, update in nodes.items():
+
+            # collect expression and variables of right-hand side of equation
+            for op in self._op_calls:
+                if op in update:
+                    val = self.graph.eval_node(update)
+                    shape = f"{val.shape}" if hasattr(val, 'shape') and val.shape else ""
+                    if shape not in self._op_calls[op]['shapes']:
+                        self._op_calls[op]['shapes'].append(shape)
+                        if self._op_calls[op]['names']:
+                            counter = int(self._op_calls[op]['names'][-1].split('_')[-1])
+                        else:
+                            counter = 1
+                        fstr, fcall = get_fortran_func(op, out_shape=shape, idx=counter)
+                        self._imports.append(fstr)
+                        self._op_calls[op]['names'].append(fcall)
+                    else:
+                        idx = self._op_calls[op]['shapes'].index(shape)
+                        fcall = self._op_calls[op]['names'][idx]
+                    var = self.get_var(update)
+                    funcs[str(var['symbol'])] = fcall
+                    break
+            expr_args, expr = self.graph.node_to_expr(update, **funcs)
+            func_args.extend(expr_args)
+            expressions.append(self._expr_to_str(expr))
+
+            # process left-hand side of equation
+            var = self.get_var(node)
+            if 'expr' in var:
+                # process indexing of left-hand side variable
+                idx_args, lhs = self.graph.node_to_expr(node, **funcs)
+                func_args.extend(idx_args)
+                lhs_var = self._expr_to_str(lhs)
+            else:
+                # process normal update of left-hand side variable
+                lhs_var = var['symbol'].name
+            var_names.append(lhs_var)
+
+        # add the left-hand side assignments of the collected right-hand side expressions to the code generator
+        if rhs_var:
+
+            # differential equation (DE) update
+            if indices:
+
+                # DE updates stored in a state-vector
+                for idx, expr in zip(indices, expressions):
+                    code_gen.add_code_line(f"{rhs_var}{self._idx[0]}{idx}{self._idx[1]} = {expr}")
+
+            else:
+
+                if len(nodes) > 1:
+                    raise ValueError('Received a request to update a variable via multiple right-hand side expressions.'
+                                     )
+
+                # DE update stored in a single variable
+                code_gen.add_code_line(f"{rhs_var} = {expressions[0]}")
+
+            # add rhs var to function arguments
+            func_args = [rhs_var] + func_args
+
+        else:
+
+            # non-differential equation update
+
+            var_names, expressions, undefined_vars, defined_vars = sort_equations(var_names, expressions)
+            func_args.extend(undefined_vars)
+
+            if indices:
+
+                # non-DE update stored in a variable slice
+                for idx, expr, target_var in zip(indices, expressions, var_names):
+                    code_gen.add_code_line(f"{target_var}{self._idx[0]}{idx}{self._idx[1]} = {expr}")
+
+            else:
+
+                # non-DE update stored in a single variable
+                for target_var, expr in zip(var_names, expressions):
+                    code_gen.add_code_line(f"{target_var} = {expr}")
+
+        code_gen.add_linebreak()
+
+        return func_args, defined_vars, code_gen
+
     def _generate_func_head(self, func_name: str, code_gen: CodeGen, state_var: str = None, func_args: list = None,
                             imports: list = None):
 
@@ -164,14 +228,11 @@ class FortranBackend(BaseBackend):
         _, indices = np.unique(func_args, return_index=True)
         func_args = state_vars + [func_args[idx] for idx in np.sort(indices)]
 
-        if imports:
-
-            # add imports at beginning of file
-            for imp in imports:
-                code_gen.add_code_line(imp)
-            code_gen.add_linebreak()
-
         # add function header
+        code_gen.add_linebreak()
+        code_gen.add_code_line(f"module {self._file_name}")
+        code_gen.add_linebreak()
+        code_gen.add_code_line("contains")
         code_gen.add_linebreak()
         code_gen.add_code_line(f"subroutine {func_name}({','.join(func_args)})")
         code_gen.add_linebreak()
@@ -182,6 +243,20 @@ class FortranBackend(BaseBackend):
             code_gen.add_code_line(f"{dtype}, intent({intent}) :: {arg}{shape}")
 
         return func_args, code_gen
+
+    def _generate_func_tail(self, code_gen: CodeGen, rhs_var: str = None):
+
+        code_gen.add_code_line(f"end subroutine {self._func_name}")
+        code_gen.add_linebreak()
+
+        # add additional function definitions to module
+        for imp in self._imports:
+            code_gen.add_code_line(imp)
+            code_gen.add_linebreak()
+        code_gen.add_linebreak()
+        code_gen.add_code_line(f"end module {self._file_name}")
+
+        return code_gen
 
     def _generate_func(self, func_str: str, func_name: str = None, file_name: str = None, build_dir: str = None,
                        decorator: Any = None, **kwargs):
@@ -198,8 +273,9 @@ class FortranBackend(BaseBackend):
                      source_fn=f'{build_dir}/{file_name}{self._file_ending}', verbose=False)
 
         # import function from temporary file
-        exec(f"from {file_name} import {func_name}", globals())
-        rhs_eval = globals().pop(func_name)
+        exec(f"from {file_name} import {file_name}", globals())
+        exec(f"rhs_eval = {file_name}.{func_name}", globals())
+        rhs_eval = globals().pop('rhs_eval')
 
         # apply function decorator
         if decorator:
@@ -223,13 +299,6 @@ class FortranBackend(BaseBackend):
             intent = 'in'
             shape = ''
         return dtype, intent, shape
-
-    @staticmethod
-    def _generate_func_tail(code_gen: CodeGen, rhs_var: str = None):
-
-        code_gen.add_code_line(f"end subroutine")
-
-        return code_gen
 
     def compile(self, build_dir: Optional[str] = None, decorator: Optional[Callable] = None, **kwargs) -> tuple:
         """Compile the graph layers/operations. Creates python files containing the functions in each layer.
@@ -608,7 +677,7 @@ class FortranBackend(BaseBackend):
         super().clear()
 
         # delete fortran-specific temporary files
-        wdir = f"{self._orig_dir}/{self._build_dir}" if self._build_dir else self._orig_dir
+        wdir = f"{self._orig_dir}/{self._build_dir}" if self._build_dir != self._orig_dir else self._orig_dir
         for f in [f for f in os.listdir(wdir)
                   if "cpython" in f and (self._func_name in f or self._file_name in f) and f[-3:] == ".so"]:
             os.remove(f"{wdir}/{f}")
