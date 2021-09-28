@@ -110,6 +110,7 @@ def sort_equations(lhs_vars: list, rhs_expressions: list) -> tuple:
 
     vars_new, expressions_new, defined_vars, all_vars = [], [], [], []
     lhs_vars_old, expressions_old = lhs_vars.copy(), rhs_expressions.copy()
+    indices_old = np.arange(0, len(lhs_vars)).tolist()
 
     # first, collect all variables that do not appear in any other equations
     while lhs_vars_old:
@@ -141,39 +142,6 @@ def sort_equations(lhs_vars: list, rhs_expressions: list) -> tuple:
     # next, collect all other variables
     vars_new.extend(lhs_vars_old[::-1])
     expressions_new.extend(expressions_old[::-1])
-    # stuck = False
-    # while lhs_vars_old:
-    #     v_tmp, indexed = extract_var(lhs_vars[0])
-    #     found = False
-    #     for idx, (lhs_var, expr_tmp) in enumerate(zip(lhs_vars, rhs_expressions)):
-    #         var, indexed = extract_var(lhs_var)
-    #         if var_in_expression(v_tmp, expr_tmp):
-    #             if not var_in_expression(v_tmp, lhs_var):
-    #                 found = True
-    #                 break
-    #             elif stuck:
-    #                 indexed = True
-    #                 found = True
-    #                 break
-    #         elif var_in_expression(v_tmp, lhs_var) and (stuck or indexed):
-    #             found = True
-    #             indexed = True
-    #             break
-    #     if found:
-    #         lhs_var = lhs_vars_old.pop(idx)
-    #         vars_new.append(lhs_var)
-    #         expr = expressions_old.pop(idx)
-    #         expressions_new.append(expr)
-    #         if not indexed and var not in defined_vars:
-    #             defined_vars.append(var)
-    #         stuck = False
-    #     elif stuck:
-    #         raise ValueError('Unable to find a well-defined order of the non-differential equations in the system.')
-    #     else:
-    #         stuck = True
-    #
-    #     lhs_vars = lhs_vars_old
-    #     rhs_expressions = expressions_old
 
     return vars_new[::-1], expressions_new[::-1], [v for v in all_vars if v not in defined_vars], defined_vars
 
@@ -665,7 +633,7 @@ class BaseBackend(object):
         final_results = {}
         for key, var in outputs.items():
             idx = run_info['old_state_vars'].index(var)
-            idx = run_info['vec_indices'][idx] - self._start_idx
+            idx = run_info['vec_indices'][idx]
             if type(idx) is tuple and idx[1] - idx[0] == 1:
                 idx = (idx[0],)
             elif type(idx) is int:
@@ -710,7 +678,7 @@ class BaseBackend(object):
         ###############################################################
 
         vars, indices, updates, old_state_vars = [], [], [], []
-        idx = self._start_idx
+        idx = 0
         for var, update in self.graph.var_updates['DEs'].items():
 
             # extract left-hand side and right-hand side nodes from graph
@@ -916,10 +884,11 @@ class BaseBackend(object):
 
         return rhs_eval
 
-    def _expr_to_str(self, expr: Any) -> str:
-        expr_str = str(expr)
-        for arg in expr.args:
-            expr_str = expr_str.replace(str(arg), self._expr_to_str(arg))
+    def _expr_to_str(self, expr: Any, expr_str: str = None) -> str:
+        if not expr_str:
+            expr_str = str(expr)
+            for arg in expr.args:
+                expr_str = expr_str.replace(str(arg), self._expr_to_str(arg))
         while 'pr_base_index(' in expr_str:
             # replace `index` calls with brackets-based indexing
             start = expr_str.find('pr_base_index(')
@@ -940,7 +909,7 @@ class BaseBackend(object):
             start = expr_str.find('pr_range_index(')
             end = expr_str[start:].find(')') + 1
             new_idx1 = expr.args[1] + self._start_idx
-            new_idx2 = expr.args[2] + self._start_idx
+            new_idx2 = expr.args[2]
             expr_str = expr_str.replace(expr_str[start:start + end],
                                         f"{expr.args[0]}{self._idx[0]}{new_idx1}:{new_idx2}{self._idx[1]}")
         while 'pr_axis_index(' in expr_str:
@@ -953,7 +922,7 @@ class BaseBackend(object):
                 idx = f','.join([':' for _ in range(expr.args[2])])
                 idx = f'{idx},{expr.args[1] + self._start_idx}'
                 expr_str = expr_str.replace(expr_str[start:start + end],
-                                            f"{expr.args[0]}{self._idx[1]}{idx}{self._idx[1]}")
+                                            f"{expr.args[0]}{self._idx[0]}{idx}{self._idx[1]}")
         while 'pr_identity(' in expr_str:
             # replace `no_op` calls with first argument to the function call
             start = expr_str.find('pr_identity(')

@@ -56,7 +56,7 @@ class FortranBackend(BaseBackend):
                  ops: Optional[Dict[str, str]] = None,
                  dtypes: Optional[Dict[str, object]] = None,
                  name: str = 'net_0',
-                 float_default_type: str = 'float32',
+                 float_default_type: str = 'float64',
                  imports: Optional[List[str]] = None,
                  build_dir: Optional[str] = None,
                  auto_compat: bool = False
@@ -95,6 +95,21 @@ class FortranBackend(BaseBackend):
             ops = {}
         ops.update(ops_f)
 
+        if not dtypes:
+            dtypes = {}
+        dtypes.update({"float16": np.float64,
+                       "float32": np.float64,
+                       "float64": np.float64,
+                       "int16": np.int64,
+                       "int32": np.int64,
+                       "int64": np.int64,
+                       "uint16": np.uint64,
+                       "uint32": np.uint64,
+                       "uint64": np.uint64,
+                       "complex64": np.complex128,
+                       "complex128": np.complex128,
+                       "bool": np.bool})
+
         # TODO: in pyauto compatibility mode, the run function has to be defined differently. Most importantly,
         #  all function parameters except the continuation parameter have to enter the function via a single list.
         #  This works only for scalar parameters. Thus, other parameters should be saved to the file and loaded instead of imports
@@ -110,6 +125,8 @@ class FortranBackend(BaseBackend):
         self._file_ending = ".f90"
         self._start_idx = 1
         self._op_calls = {key: {'shapes': [], 'names': []} for key in fortran_identifiers}
+        self._defined_vars = []
+        self._lhs_vars = []
 
     def _graph_to_str(self, code_gen: CodeGen = None, rhs_indices: list = None, state_var: str = None,
                       rhs_var: str = None, backend_funcs: dict = None):
@@ -117,18 +134,26 @@ class FortranBackend(BaseBackend):
         # add variable declarations for all state variables that will be extracted from state vector
         if not code_gen:
             code_gen = self._code_gen
+        indices_new = []
         if rhs_indices:
-            for idx, var in zip(rhs_indices, self.graph.var_updates['DEs']):
+            for i in range(len(rhs_indices)):
+                idx = rhs_indices[i]
+                indices_new.append(idx + self._start_idx if type(idx) is int else (idx[0] + self._start_idx, idx[1]))
+            for var in self.graph.var_updates['DEs']:
                 dtype, _, shape = self._get_var_declaration_info(var)
-                code_gen.add_code_line(f"{dtype} :: {var}{shape}")
+                if var not in self._defined_vars:
+                    code_gen.add_code_line(f"{dtype} :: {var}{shape}")
+                    self._defined_vars.append(var)
 
         # add variable declarations for all state variables that will be extracted from state vector
         for var in self.graph.var_updates['non-DEs']:
             dtype, _, shape = self._get_var_declaration_info(var)
-            code_gen.add_code_line(f"{dtype} :: {var}{shape}")
+            if var not in self._defined_vars:
+                code_gen.add_code_line(f"{dtype} :: {var}{shape}")
+                self._defined_vars.append(var)
 
         # call parent method
-        return super()._graph_to_str(code_gen=code_gen, rhs_indices=rhs_indices, state_var=state_var, rhs_var=rhs_var,
+        return super()._graph_to_str(code_gen=code_gen, rhs_indices=indices_new, state_var=state_var, rhs_var=rhs_var,
                                      backend_funcs=backend_funcs)
 
     def _generate_update_equations(self, code_gen: CodeGen, nodes: dict, rhs_var: str = None, indices: list = None,
@@ -138,10 +163,11 @@ class FortranBackend(BaseBackend):
         func_args, expressions, var_names, defined_vars = [], [], [], []
         for node, update in nodes.items():
 
+            val = self.graph.eval_node(update)
+
             # collect expression and variables of right-hand side of equation
             for op in self._op_calls:
                 if op in update:
-                    val = self.graph.eval_node(update)
                     shape = f"{val.shape}" if hasattr(val, 'shape') and val.shape else ""
                     if shape not in self._op_calls[op]['shapes']:
                         self._op_calls[op]['shapes'].append(shape)
@@ -158,17 +184,21 @@ class FortranBackend(BaseBackend):
                     var = self.get_var(update)
                     funcs[str(var['symbol'])] = fcall
                     break
+
             expr_args, expr = self.graph.node_to_expr(update, **funcs)
             func_args.extend(expr_args)
-            expressions.append(self._expr_to_str(expr))
+            expressions.append(self._expr_to_str(expr,
+                                                 var_dim=val.shape[0] if hasattr(val, 'shape') and val.shape else 1))
 
             # process left-hand side of equation
             var = self.get_var(node)
+            val = var['value']
             if 'expr' in var:
                 # process indexing of left-hand side variable
                 idx_args, lhs = self.graph.node_to_expr(node, **funcs)
                 func_args.extend(idx_args)
-                lhs_var = self._expr_to_str(lhs)
+                lhs_var = self._expr_to_str(lhs, var_dim=val.shape[0] if hasattr(val, 'shape') and val.shape else 1)
+                self._lhs_vars.append(idx_args[0])
             else:
                 # process normal update of left-hand side variable
                 lhs_var = var['symbol'].name
@@ -199,21 +229,11 @@ class FortranBackend(BaseBackend):
         else:
 
             # non-differential equation update
-
             var_names, expressions, undefined_vars, defined_vars = sort_equations(var_names, expressions)
             func_args.extend(undefined_vars)
 
-            if indices:
-
-                # non-DE update stored in a variable slice
-                for idx, expr, target_var in zip(indices, expressions, var_names):
-                    code_gen.add_code_line(f"{target_var}{self._idx[0]}{idx}{self._idx[1]} = {expr}")
-
-            else:
-
-                # non-DE update stored in a single variable
-                for target_var, expr in zip(var_names, expressions):
-                    code_gen.add_code_line(f"{target_var} = {expr}")
+            for target_var, expr in zip(var_names, expressions):
+                code_gen.add_code_line(f"{target_var} = {expr}")
 
         code_gen.add_linebreak()
 
@@ -240,7 +260,9 @@ class FortranBackend(BaseBackend):
         code_gen.add_linebreak()
         for arg in func_args:
             dtype, intent, shape = self._get_var_declaration_info(arg)
-            code_gen.add_code_line(f"{dtype}, intent({intent}) :: {arg}{shape}")
+            if arg not in self._defined_vars:
+                code_gen.add_code_line(f"{dtype}, intent({intent}) :: {arg}{shape}")
+                self._defined_vars.append(arg)
 
         return func_args, code_gen
 
@@ -287,7 +309,7 @@ class FortranBackend(BaseBackend):
         try:
             val = self.get_var(var)['value']
             dtype = 'double precision' if 'float' in str(val.dtype) else 'integer'
-            intent = 'inout' if var == 'state_vec_update' else 'in'
+            intent = 'inout' if var == 'state_vec_update' or var in self._lhs_vars else 'in'
             if val.shape:
                 shape = f'{val.shape}'
                 if shape[-2] == ',':
@@ -300,15 +322,62 @@ class FortranBackend(BaseBackend):
             shape = ''
         return dtype, intent, shape
 
-    def _expr_to_str(self, expr: Any) -> str:
-        expr_str = super()._expr_to_str(expr=expr)
+    def _expr_to_str(self, expr: Any, expr_str: str = None, var_dim: int = 1) -> str:
+        if not expr_str:
+            expr_str = str(expr)
+            for arg in expr.args:
+                expr_str = expr_str.replace(str(arg), self._expr_to_str(arg))
+        while 'pr_2d_index(' in expr_str:
+            # replace `index` calls with brackets-based indexing
+            start = expr_str.find('pr_2d_index(')
+            end = expr_str[start:].find(')') + 1
+            try:
+                new_idx1 = expr.args[1] + self._start_idx
+                new_idx2 = expr.args[2] + self._start_idx
+                expr_str = expr_str.replace(expr_str[start:start + end],
+                                            f"{expr.args[0]}{self._idx[0]}{new_idx1}, {new_idx2}{self._idx[1]}")
+            except TypeError:
+                raise NotImplementedError('The FortranBackend does not allow for indexing in multiple dimensions via '
+                                          'arrays. Please choose another backend for this type of operation.')
+        while 'pr_axis_index(' in expr_str:
+            # replace `index` calls with brackets-based indexing
+            start = expr_str.find('pr_axis_index(')
+            end = expr_str[start:].find(')') + 1
+            if len(expr.args) == 1 and var_dim == 1:
+                expr_str = expr_str.replace(expr_str[start:start + end], f"{expr.args[0]}{self._idx[0]}:{self._idx[1]}")
+            elif var_dim > 1:
+                idx = ','.join([':' for _ in range(var_dim)])
+                expr_str = expr_str.replace(expr_str[start:start + end],
+                                            f"{expr.args[0]}{self._idx[0]}{idx}{self._idx[1]}")
+            else:
+                idx = f','.join([':' for _ in range(expr.args[2])])
+                idx = f'{idx},{expr.args[1] + self._start_idx}'
+                expr_str = expr_str.replace(expr_str[start:start + end],
+                                            f"{expr.args[0]}{self._idx[0]}{idx}{self._idx[1]}")
         while '((' in expr_str:
             # replace `index` calls with brackets-based indexing
             idx_l = expr_str.find('((') + 1
             idx_r = expr_str[idx_l:].find(')') + 1
             expr_str = expr_str.replace(expr_str[idx_l:idx_l+idx_r], f"[{expr_str[idx_l+1:idx_l+idx_r-1]}]")
             expr_str = expr_str.replace("], 0)", "], 1)")
-        return expr_str
+        return super()._expr_to_str(expr=expr, expr_str=expr_str)
+
+    def _get_unique_var_name(self, var: str) -> str:
+        while not self._is_unique(var):
+            try:
+                v_split = var.split('_')
+                counter = int(v_split.pop(-1))
+                var = f"{'_'.join(v_split)}_{counter + 1}"
+            except TypeError:
+                var = f"{var}_1"
+        return var
+
+    def _is_unique(self, var_name: str) -> bool:
+        try:
+            self.get_var(var_name, get_key=True)
+            return False
+        except KeyError:
+            return True
 
     def compile(self, build_dir: Optional[str] = None, decorator: Optional[Callable] = None, **kwargs) -> tuple:
         """Compile the graph layers/operations. Creates python files containing the functions in each layer.
@@ -791,14 +860,11 @@ class FortranGen(CodeGen):
                 code = '\t' * self.lvl + code + '\n'
             elif '\n' not in code:
                 code = code + '\n'
-            if len(code) > self.n:
+            if len(code) > self.n and code[-2] != '&':
                 idx = self._find_first_op(code, start=0, stop=self.n)
-                self.code.append(f'{code[0:idx]}&')
-                while idx < len(code):
-                    self.add_linebreak()
-                    idx_new = self._find_first_op(code, start=idx, stop=idx+self.n)
-                    self.code.append(f"     & {code[idx:idx+idx_new]}")
-                    idx += idx_new
+                self.add_code_line(f'{code[0:idx]}&')
+                code = f"     & {code[idx:]}"
+                self.add_code_line(code)
             else:
                 self.code.append(code)
 
