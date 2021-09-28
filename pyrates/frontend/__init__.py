@@ -38,6 +38,9 @@ from pyrates.frontend import template
 from pyrates.frontend.fileio import yaml
 from pyrates.frontend.template import CircuitTemplate, NodeTemplate, EdgeTemplate, OperatorTemplate
 
+#external imports
+from typing import Union
+
 
 def clear_frontend_caches(clear_template_cache=True, clear_operator_cache=True):
     """Utility to clear caches in the frontend.
@@ -50,16 +53,26 @@ def clear_frontend_caches(clear_template_cache=True, clear_operator_cache=True):
         toggles whether or not to clear the cache of unique OperatorIR instances
     """
     if clear_template_cache:
-        template.template_cache.clear()
+        template.clear_cache()
 
     if clear_operator_cache:
         OperatorTemplate.cache.clear()
 
 
 # The following function are shorthands that bridge multiple interface steps
-def circuit_from_yaml(path: str, **kwargs):
+def circuit_from_yaml(path: str):
     """Directly return CircuitIR instance from a yaml file."""
-    return CircuitTemplate.from_yaml(path).apply(**kwargs)
+    return CircuitTemplate.from_yaml(path)
+
+
+def simulate(circuit: Union[str, CircuitTemplate], **kwargs):
+    """Directly simulate dynamics of a circuit."""
+    if type(circuit) is str:
+        circuit = circuit_from_yaml(path=circuit)
+    results = circuit.run(**kwargs)
+    if 'clear' in kwargs and kwargs['clear']:
+        clear_frontend_caches()
+    return results
 
 
 def node_from_yaml(path: str):

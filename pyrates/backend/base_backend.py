@@ -110,7 +110,6 @@ def sort_equations(lhs_vars: list, rhs_expressions: list) -> tuple:
 
     vars_new, expressions_new, defined_vars, all_vars = [], [], [], []
     lhs_vars_old, expressions_old = lhs_vars.copy(), rhs_expressions.copy()
-    indices_old = np.arange(0, len(lhs_vars)).tolist()
 
     # first, collect all variables that do not appear in any other equations
     while lhs_vars_old:
@@ -664,7 +663,6 @@ class BaseBackend(object):
 
         if self._file_name in sys.modules:
             del sys.modules[self._file_name]
-        gc.collect()
 
         # clear code generator
         self._code_gen.clear()

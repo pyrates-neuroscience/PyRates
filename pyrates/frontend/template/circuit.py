@@ -49,7 +49,7 @@ from pyrates.frontend.template.node import NodeTemplate
 from pyrates.frontend.template.operator import OperatorTemplate
 from pyrates.ir.circuit import get_unique_label, CircuitIR
 from pyrates.ir.edge import EdgeIR
-from pyrates.ir.node import node_cache, op_cache
+from pyrates.ir.node import clear_ir_caches
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
@@ -652,9 +652,7 @@ class CircuitTemplate(AbstractBaseTemplate):
         Also deletes operator template caches, imports and path variables from working memory."""
         self._ir.clear()
         self._ir = None
-        OperatorTemplate.cache.clear()
-        node_cache.clear()
-        op_cache.clear()
+        clear_ir_caches()
         input_labels.clear()
         gc.collect()
 

@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 # pyrates internal imports
-from pyrates.frontend import CircuitTemplate
+from pyrates.frontend import simulate
 
 # meta infos
 __author__ = "Richard Gast, Daniel Rose"
@@ -75,14 +75,10 @@ def test_2_1_operator():
         # test correct numerical evaluation of operator with two coupled simple, linear equations
         #########################################################################################
 
-        # simulation parameters
-
-        # create net config from YAML file
-        net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net0")
-
         # simulate operator behavior
-        results = net.run(simulation_time=sim_time, step_size=dt, outputs={'a': 'pop0/op0/a'}, vectorize=True,
-                          backend=b, clear=True, apply_kwargs={'backend_kwargs': {'name': 'net_0'}})
+        results = simulate("model_templates.test_resources.test_backend.net0", simulation_time=sim_time, step_size=dt,
+                           outputs={'a': 'pop0/op0/a'}, vectorize=True, backend=b, clear=True,
+                           apply_kwargs={'backend_kwargs': {'name': 'net_0'}})
 
         # generate target values
         update0_1 = lambda x: x * 0.5
@@ -99,12 +95,10 @@ def test_2_1_operator():
         # test correct numerical evaluation of operator with a single differential equation and external input
         ######################################################################################################
 
-        # set up operator in pyrates
-        net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net1")
-
         # simulate operator behavior
-        results = net.run(sim_time, step_size=dt, inputs={'pop0/op1/u': inp}, outputs={'a': 'pop0/op1/a'},
-                          vectorize=True, backend=b, clear=True, apply_kwargs={'backend_kwargs': {'name': 'net_1'}})
+        results = simulate("model_templates.test_resources.test_backend.net1", simulation_time=sim_time, step_size=dt,
+                           inputs={'pop0/op1/u': inp}, outputs={'a': 'pop0/op1/a'}, vectorize=True, backend=b,
+                           clear=True, apply_kwargs={'backend_kwargs': {'name': 'net_1'}})
 
         # calculate operator behavior from hand
         update1 = lambda x, y: x + dt * (y - x)
@@ -118,9 +112,9 @@ def test_2_1_operator():
         # test correct numerical evaluation of operator with two coupled equations (1 ODE, 1 non-DE eq.)
         ################################################################################################
 
-        net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net2")
-        results = net.run(sim_time, outputs={'a': 'pop0/op2/a'}, step_size=dt, vectorization=True, backend=b,
-                          clear=True, apply_kwargs={'backend_kwargs': {'name': 'net_2'}})
+        results = simulate("model_templates.test_resources.test_backend.net2", simulation_time=sim_time,
+                           outputs={'a': 'pop0/op2/a'}, step_size=dt, vectorization=True, backend=b,
+                           clear=True, apply_kwargs={'backend_kwargs': {'name': 'net_2'}})
 
         # calculate operator behavior from hand
         update2 = lambda x: 1. / (1. + np.exp(-x))
@@ -135,10 +129,10 @@ def test_2_1_operator():
         # test correct numerical evaluation of operator with a two coupled DEs
         ######################################################################
 
-        net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net3")
-        results = net.run(sim_time, outputs={'b': 'pop0/op3/b'}, inputs={'pop0/op3/u': inp}, out_dir="/tmp/log",
-                          step_size=dt, vectorization=True, backend=b, clear=True,
-                          apply_kwargs={'backend_kwargs': {'name': 'net_3'}})
+        results = simulate("model_templates.test_resources.test_backend.net3", simulation_time=sim_time,
+                           outputs={'b': 'pop0/op3/b'}, inputs={'pop0/op3/u': inp}, out_dir="/tmp/log",
+                           step_size=dt, vectorization=True, backend=b, clear=True,
+                           apply_kwargs={'backend_kwargs': {'name': 'net_3'}})
 
         # calculate operator behavior from hand
         update3_0 = lambda a, b, u: a + dt * (-10. * a + b ** 2 + u)
@@ -160,7 +154,7 @@ def test_2_2_node():
     :method:`add_node`: Detailed documentation of method for adding nodes to instance of `ComputeGraph`.
     """
 
-    backends = ['fortran', 'numpy']
+    backends = ['numpy', 'fortran']
 
     dt = 1e-1
     sim_time = 10.
@@ -172,12 +166,9 @@ def test_2_2_node():
         # test correct numerical evaluation of node with 2 operators, where op1 projects to op2
         #######################################################################################
 
-        # set up node in pyrates
-        net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net4")
-
         # simulate node behavior
-        results = net.run(sim_time, outputs={'a': 'pop0/op1/a'}, step_size=dt, vectorization=True, backend=b,
-                          clear=True)
+        results = simulate("model_templates.test_resources.test_backend.net4", simulation_time=sim_time,
+                           outputs={'a': 'pop0/op1/a'}, step_size=dt, vectorization=True, backend=b, clear=True)
 
         # calculate node behavior from hand
         update0 = lambda x: x + dt * 2.
@@ -193,11 +184,9 @@ def test_2_2_node():
         # test correct numerical evaluation of node with 2 independent operators
         ########################################################################
 
-        net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net5")
-
         # simulate node behavior
-        results = net.run(sim_time, outputs={'a': 'pop0/op5/a'}, step_size=dt, vectorization=True, backend=b,
-                          clear=True)
+        results = simulate("model_templates.test_resources.test_backend.net5", simulation_time=sim_time,
+                           outputs={'a': 'pop0/op5/a'}, step_size=dt, vectorization=True, backend=b, clear=True)
 
         # calculate node behavior from hand
         targets = np.zeros((sim_steps, 2), dtype=np.float32)
@@ -211,9 +200,8 @@ def test_2_2_node():
         # test correct numerical evaluation of node with 2 independent operators projecting to the same target operator
         ###############################################################################################################
 
-        net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net6")
-        results = net.run(sim_time, outputs={'a': 'pop0/op1/a'}, step_size=dt, vectorization=True, backend=b,
-                          clear=True)
+        results = simulate("model_templates.test_resources.test_backend.net6", simulation_time=sim_time,
+                           outputs={'a': 'pop0/op1/a'}, step_size=dt, vectorization=True, backend=b, clear=True)
 
         # calculate node behavior from hand
         targets = np.zeros((sim_steps, 3), dtype=np.float32)
@@ -229,9 +217,9 @@ def test_2_2_node():
         # test correct numerical evaluation of node with 1 source operator projecting to 2 independent targets
         ######################################################################################################
 
-        net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net7")
-        results = net.run(sim_time, outputs={'a': 'pop0/op1/a', 'b': 'pop0/op3/b'}, step_size=dt, vectorization=True,
-                          backend=b, clear=True)
+        results = simulate("model_templates.test_resources.test_backend.net7", simulation_time=sim_time,
+                           outputs={'a': 'pop0/op1/a', 'b': 'pop0/op3/b'}, step_size=dt, vectorization=True,
+                           backend=b, clear=True)
 
         # calculate node behavior from hand
         targets = np.zeros((sim_steps, 4), dtype=np.float32)
@@ -257,20 +245,18 @@ def test_2_3_edge():
 
     """
 
-    backends = ['fortran', 'numpy']
+    backends = ['numpy', 'fortran']
     accuracy = 1e-4
     dt = 1e-1
     sim_time = 10.
     sim_steps = int(np.round(sim_time/dt))
     inp = np.zeros((sim_steps, 1)) + 0.5
 
+    final_results_comparison = []
     for b in backends:
 
         # test correct numerical evaluation of graph with 1 source projecting unidirectional to 2 target nodes
         ######################################################################################################
-
-        # set up network template in pyrates
-        net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net8")
 
         # calculate edge behavior from hand
         update0 = lambda x, y: x + dt * y * 0.5
@@ -284,8 +270,9 @@ def test_2_3_edge():
             targets[i + 1, 3] = update2(targets[i, 3], targets[i, 0] * 0.5)
 
         # simulate edge behavior
-        results = net.run(sim_time, outputs={'a': 'pop1/op1/a', 'b': 'pop2/op1/a'}, step_size=dt, vectorization=True,
-                          backend=b, clear=True)
+        results = simulate("model_templates.test_resources.test_backend.net8", simulation_time=sim_time,
+                           outputs={'a': 'pop1/op1/a', 'b': 'pop2/op1/a'}, step_size=dt, vectorization=True,
+                           backend=b, clear=True)
 
         diff = np.mean(np.abs(results['a'].values[:] - targets[:, 2])) + \
                np.mean(np.abs(results['b'].values[:] - targets[:, 3]))
@@ -294,9 +281,9 @@ def test_2_3_edge():
         # test correct numerical evaluation of graph with 2 bidirectionaly coupled nodes
         ################################################################################
 
-        net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net9")
-        results = net.run(sim_time, outputs={'a': 'pop0/op1/a', 'b': 'pop1/op7/a'}, inputs={'pop1/op7/inp': inp},
-                          step_size=dt, vectorization=True, backend=b, clear=True)
+        results = simulate("model_templates.test_resources.test_backend.net9", simulation_time=sim_time,
+                           outputs={'a': 'pop0/op1/a', 'b': 'pop1/op7/a'}, inputs={'pop1/op7/inp': inp},
+                           step_size=dt, vectorization=True, backend=b, clear=True)
 
         # calculate edge behavior from hand
         update3 = lambda x, y, z: x + dt * (y + z - x)
@@ -313,9 +300,9 @@ def test_2_3_edge():
         #######################################################################################
 
         try:
-            net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net10")
-            results = net.run(sim_time, outputs={'a': 'pop0/op8/a', 'b': 'pop1/op8/a'}, step_size=dt, vectorization=True,
-                              backend=b, clear=True)
+            results = simulate("model_templates.test_resources.test_backend.net10", simulation_time=sim_time,
+                               outputs={'a': 'pop0/op8/a', 'b': 'pop1/op8/a'}, step_size=dt, vectorization=True,
+                               backend=b, clear=True)
 
             # calculate edge behavior from hand
             delay0 = int(0.5 / dt)
@@ -331,16 +318,22 @@ def test_2_3_edge():
             diff = np.mean(np.abs(results['a'].values[:] - targets[:, 0])) + \
                    np.mean(np.abs(results['b'].values[:] - targets[:, 1]))
             assert diff == pytest.approx(0., rel=accuracy, abs=accuracy)
+
         except NotImplementedError:
             pass
 
         # test correct numerical evaluation of graph with delay distributions
         #####################################################################
 
-        net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net13")
-        results = net.run(sim_time, outputs={'a1': 'p1/op9/a', 'a2': 'p2/op10/a'}, inputs={'p1/op9/I_ext': inp},
-                          vectorization=True, step_size=dt, backend=b, solver='euler', clear=True)
-        # TODO: add manual comparison of network dynamics here
+        results = simulate("model_templates.test_resources.test_backend.net13", simulation_time=sim_time,
+                           outputs={'a1': 'p1/op9/a', 'a2': 'p2/op10/a'}, inputs={'p1/op9/I_ext': inp},
+                           vectorization=True, step_size=dt, backend=b, solver='euler', clear=True)
+        final_results_comparison.append(results.values)
+
+    if len(final_results_comparison) > 1:
+        r0 = final_results_comparison[0]
+        final_comparison = np.mean([r0 - r for r in final_results_comparison[1:]])
+        assert final_comparison == pytest.approx(0.0, rel=accuracy, abs=accuracy)
 
 
 @pytest.mark.skip

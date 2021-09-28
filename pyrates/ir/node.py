@@ -39,6 +39,11 @@ node_cache = {}
 op_cache = {}
 
 
+def clear_ir_caches():
+    node_cache.clear()
+    op_cache.clear()
+
+
 def cache_func(label: str, operators: dict, values: dict = None, template: str = None):
     if operators is None:
         operators = {}

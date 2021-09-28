@@ -690,6 +690,8 @@ class CircuitIR(AbstractBaseIR):
         """Clears the backend graph from all operations and variables.
         """
         self.backend.clear()
+        in_edge_indices.clear()
+        in_edge_vars.clear()
 
     def _parse_op_layers_into_computegraph(self, layers: list, exclude: bool = False,
                                            op_identifier: Optional[str] = None, **kwargs) -> None:
