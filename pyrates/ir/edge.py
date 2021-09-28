@@ -30,7 +30,7 @@
 """
 from typing import List
 
-from pyrates import PyRatesException
+from pyrates.backend import PyRatesException
 from pyrates.ir.node import NodeIR
 from pyrates.ir.operator import OperatorIR
 

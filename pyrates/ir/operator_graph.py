@@ -33,7 +33,7 @@ from typing import Iterator, Dict, List
 import numpy as _np
 from networkx import DiGraph, find_cycle, NetworkXNoCycle
 
-from pyrates import PyRatesException
+from pyrates.backend import PyRatesException
 from pyrates.ir.operator import OperatorIR
 
 __author__ = "Daniel Rose"

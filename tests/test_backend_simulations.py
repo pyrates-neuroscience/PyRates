@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 # pyrates internal imports
-from pyrates.frontend import simulate
+from pyrates import simulate
 
 # meta infos
 __author__ = "Richard Gast, Daniel Rose"
@@ -387,7 +387,7 @@ def test_2_5_solver():
     `NumpyBackend`.
     """
 
-    backend = 'numpy'
+    backends = ['numpy', 'fortran']
 
     # define input
     dt = 1e-3
@@ -395,19 +395,21 @@ def test_2_5_solver():
     sim_steps = int(np.round(sim_time / dt, decimals=0))
     inp = np.zeros((sim_steps, 1)) + 0.5
 
-    # standard euler solver (trusted)
-    net = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net13")
-    net = net.update_template(name='net1')
-    results = net.run(sim_time, outputs={'a1': 'p1/op9/a', 'a2': 'p2/op10/a'}, inputs={'p1/op9/I_ext': inp},
-                      vectorization=True, step_size=dt, backend=backend, solver='euler', clear=True)
+    for b in backends:
 
-    # scipy solver (tested)
-    net2 = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net13")
-    net2 = net2.update_template(name='net2')
-    results2 = net2.run(sim_time, outputs={'a1': 'p1/op9/a', 'a2': 'p2/op10/a'}, inputs={'p1/op9/I_ext': inp},
-                        method='RK23', vectorization=True, step_size=dt, backend=backend, solver='scipy', clear=True)
+        # standard euler solver (trusted)
+        r = simulate("model_templates.test_resources.test_backend.net13", simulation_time=sim_time,
+                     outputs={'a1': 'p1/op9/a', 'a2': 'p2/op10/a'}, inputs={'p1/op9/I_ext': inp},
+                     vectorization=True, step_size=dt, backend=b, solver='euler', clear=True,
+                     apply_kwargs={'backend_kwargs': {'file_name': 'euler_solver'}})
 
-    assert np.mean(results.loc[:, 'a2'].values - results2.loc[:, 'a2'].values) == pytest.approx(0., rel=1e-4, abs=1e-4)
+        # scipy solver (tested)
+        r2 = simulate("model_templates.test_resources.test_backend.net13", simulation_time=sim_time,
+                      outputs={'a1': 'p1/op9/a', 'a2': 'p2/op10/a'}, inputs={'p1/op9/I_ext': inp}, method='RK23',
+                      vectorization=True, step_size=dt, backend=b, solver='scipy', clear=True,
+                      apply_kwargs={'backend_kwargs': {'file_name': 'scipy_solver'}})
+
+        assert np.mean(r.loc[:, 'a2'].values - r2.loc[:, 'a2'].values) == pytest.approx(0., rel=1e-4, abs=1e-4)
 
 
 def test_2_6_inputs_outputs():

@@ -35,5 +35,4 @@ __status__ = "Development"
 __version__ = "0.9.6"
 
 
-class PyRatesException(Exception):
-    pass
+from pyrates.frontend import simulate, circuit_from_yaml

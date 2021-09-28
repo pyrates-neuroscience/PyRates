@@ -36,7 +36,7 @@ import numpy as np
 from copy import deepcopy
 
 # pyrates-internal imports
-from pyrates import PyRatesException
+from pyrates.backend import PyRatesException
 from pyrates.ir.node import NodeIR
 from pyrates.ir.edge import EdgeIR
 from pyrates.ir.abc import AbstractBaseIR

@@ -29,7 +29,7 @@
 from typing import Union, List, Type, Dict
 from copy import deepcopy
 
-from pyrates import PyRatesException
+from pyrates.ir.circuit import PyRatesException
 from pyrates.frontend.template import _complete_template_path
 from pyrates.frontend.template.abc import AbstractBaseTemplate
 from pyrates.frontend.template.operator import OperatorTemplate

@@ -41,13 +41,12 @@ from pandas import DataFrame, MultiIndex
 import numpy as np
 
 # pyrates internal imports
-from pyrates import PyRatesException
 from pyrates.frontend.template._io import _complete_template_path
 from pyrates.frontend.template.abc import AbstractBaseTemplate
 from pyrates.frontend.template.edge import EdgeTemplate
 from pyrates.frontend.template.node import NodeTemplate
 from pyrates.frontend.template.operator import OperatorTemplate
-from pyrates.ir.circuit import get_unique_label, CircuitIR
+from pyrates.ir.circuit import get_unique_label, CircuitIR, PyRatesException
 from pyrates.ir.edge import EdgeIR
 from pyrates.ir.node import clear_ir_caches
 
@@ -902,15 +901,15 @@ def create_input_node(var: str, inp: np.ndarray, continuous: bool, T: float) -> 
     if continuous:
 
         # interpolate input variable if time steps can be variable
-        from scipy.interpolate import interp1d
+        inp = inp.squeeze()
         time = np.linspace(0, T, inp.shape[0])
-        f = interp1d(time, inp, axis=0, copy=False, kind='linear')
-        f.shape = inp.shape[1:]
-        eqs = [f"{var_name} = interp({var}_input,t)"]
+        y_new = np.interp(0.0, time, inp)
+        eqs = [f"{var_name} = interp(time, {var}_input, t)"]
         var_dict = {
-            var_name: {'default': 'output', 'value': f(0.0)},
-            f"{var}_input": {'default': 'input_variable', 'value': f},
-            't': {'default': 'variable', 'value': 0.0}
+            var_name: {'default': 'output', 'value': y_new},
+            f"{var}_input": {'default': 'input_variable', 'value': inp},
+            't': {'default': 'variable', 'value': 0.0},
+            'time': {'default': 'input_variable', 'value': time, 'shape': time.shape}
         }
 
     else:

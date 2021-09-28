@@ -32,7 +32,7 @@ from sys import intern
 from typing import Union
 
 # pyrates internal imports
-from pyrates import PyRatesException
+from pyrates.ir.circuit import PyRatesException
 from pyrates.frontend.template.abc import AbstractBaseTemplate
 
 # meta infos

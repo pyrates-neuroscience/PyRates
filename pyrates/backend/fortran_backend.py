@@ -57,7 +57,7 @@ class FortranBackend(BaseBackend):
                  float_default_type: str = 'float64',
                  imports: Optional[List[str]] = None,
                  build_dir: Optional[str] = None,
-                 auto_compat: bool = False
+                 **kwargs
                  ) -> None:
         """Instantiates numpy backend, i.e. a compute graph with numpy operations.
         """
@@ -87,7 +87,7 @@ class FortranBackend(BaseBackend):
             "cos": {'func': np.cos, 'str': "cos"},
             "tan": {'func': np.tan, 'str': "tan"},
             "exp": {'func': np.exp, 'str': "exp"},
-            "no_op": {'func': pr_identity, 'str': "pr_identity"},
+            "interp": {'func': pr_interp, 'str': "import:finterp"},
         }
         if not ops:
             ops = {}
@@ -113,7 +113,7 @@ class FortranBackend(BaseBackend):
         #  This works only for scalar parameters. Thus, other parameters should be saved to the file and loaded instead of imports
         #  above the function definition.
         super().__init__(ops=ops, dtypes=dtypes, name=name, float_default_type=float_default_type,
-                         imports=imports, build_dir=build_dir, code_gen=FortranGen())
+                         imports=imports, build_dir=build_dir, code_gen=FortranGen(), **kwargs)
 
         self._imports = []
         self.npar = 0
@@ -161,12 +161,14 @@ class FortranBackend(BaseBackend):
         func_args, expressions, var_names, defined_vars = [], [], [], []
         for node, update in nodes.items():
 
-            val = self.graph.eval_node(update)
-
             # collect expression and variables of right-hand side of equation
+            val = self.graph.eval_node(update)
             for op in self._op_calls:
                 if op in update:
-                    shape = f"{val.shape}" if hasattr(val, 'shape') and val.shape else ""
+                    if hasattr(val, 'shape'):
+                        shape = f"{val.shape}" if len(val.shape) > 1 else "(1)"
+                    else:
+                        shape = ""
                     if shape not in self._op_calls[op]['shapes']:
                         self._op_calls[op]['shapes'].append(shape)
                         if self._op_calls[op]['names']:

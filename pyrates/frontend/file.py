@@ -30,7 +30,7 @@
 """
 import importlib
 
-from pyrates import PyRatesException
+from pyrates.ir.circuit import PyRatesException
 from pyrates.frontend.fileio import yaml as _yaml
 
 __author__ = "Daniel Rose"
