@@ -49,7 +49,7 @@ end function fsoftmax_{idx}
 # function for calculating the logistic function of an nd-array
 def get_fsigmoid(idx: int, out_shape: Union[tuple, str]) -> str:
 
-    sigmoid_n = f"s = shape(x)\ndo n=1,s\n  fsigmoid_{idx}(n) = 1 / (1 + exp(-x(n)))\nend do"
+    sigmoid_n = f"s = size(x)\ndo n=1,s\n  fsigmoid_{idx}(n) = 1 / (1 + exp(-x(n)))\nend do"
     sigmoid_0 = f"fsigmoid_{idx} = 1 / (1 + exp(-x))"
 
     func = f"""

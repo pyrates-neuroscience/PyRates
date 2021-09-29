@@ -73,14 +73,14 @@ class CodeGen:
     def generate(self):
         """Generates a single code string from its history of code additions.
         """
-        return ''.join(self.code)
+        return '\n'.join(self.code)
 
     def add_code_line(self, code_str):
         """Add code line string to code.
         """
         code_str = code_str.split('\n')
         for code in code_str:
-            self.code.append("\t" * self.lvl + code + '\n')
+            self.code.append("\t" * self.lvl + code)
 
     def add_linebreak(self):
         """Add a line-break to the code.
@@ -712,7 +712,9 @@ class BaseBackend(object):
                                                            imports=self._imports)
 
             # add lines from function body after function head
+            code_gen.add_linebreak()
             code_gen.add_code_line(func_body)
+            code_gen.add_linebreak()
 
             # generate function tail
             code_gen = self._generate_func_tail(code_gen=code_gen, rhs_var=rhs_var_key)
@@ -736,7 +738,6 @@ class BaseBackend(object):
             code_gen = self._code_gen
         if not backend_funcs:
             backend_funcs = {key: val['str'] for key, val in self.ops.items()}
-        code_gen.add_linebreak()
 
         # extract state variable from state vector if necessary
         rhs_indices_str = []
@@ -753,6 +754,7 @@ class BaseBackend(object):
         func_args2, delete_args1, code_gen = self._generate_update_equations(code_gen,
                                                                              nodes=self.graph.var_updates['non-DEs'],
                                                                              funcs=backend_funcs)
+        code_gen.add_linebreak()
 
         # get equation string and argument list for each DE node at the end of the compute graph hierarchy
         func_args1, delete_args2, code_gen = self._generate_update_equations(code_gen,
@@ -832,8 +834,6 @@ class BaseBackend(object):
                 # non-DE update stored in a single variable
                 for target_var, expr in zip(var_names, expressions):
                     code_gen.add_code_line(f"{target_var} = {expr}")
-
-        code_gen.add_linebreak()
 
         return func_args, defined_vars, code_gen
 

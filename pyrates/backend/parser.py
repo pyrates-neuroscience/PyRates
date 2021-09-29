@@ -1145,7 +1145,7 @@ def var_in_expression(var: str, expr: str) -> bool:
         return True
 
     # define follow-up operations/signs that are allowed to follow directly after term in eq
-    allowed_follow_ops = '+=*/^<>=!.%@[]():, '
+    allowed_follow_ops = '+-=*/^<>=!.%@[]():, '
 
     # find variable in expression
     idx = expr.find(var)

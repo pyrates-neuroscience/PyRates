@@ -37,9 +37,8 @@ from .fortran_funcs import get_fortran_func, fortran_identifiers
 from .base_funcs import *
 
 # external imports
-from typing import Optional, Dict, Callable, List, Any
+from typing import Optional, Dict, Union, List, Any
 import os
-import sys
 from numpy import f2py
 import numpy as np
 
@@ -129,26 +128,38 @@ class FortranBackend(BaseBackend):
     def _graph_to_str(self, code_gen: CodeGen = None, rhs_indices: list = None, state_var: str = None,
                       rhs_var: str = None, backend_funcs: dict = None):
 
-        # add variable declarations for all state variables that will be extracted from state vector
         if not code_gen:
             code_gen = self._code_gen
+
+        # add variable declarations for all state variables that will be extracted from state vector
         indices_new = []
         if rhs_indices:
+
+            # go through each to-be-extracted state variable
             for i in range(len(rhs_indices)):
+
                 idx = rhs_indices[i]
+
+                # re-define the extraction index to account for fortran indexing
                 indices_new.append(idx + self._start_idx if type(idx) is int else (idx[0] + self._start_idx, idx[1]))
+
+            # go through all state-variables
             for var in self.graph.var_updates['DEs']:
+
+                # add variable declarations for fortran subroutine
                 dtype, _, shape = self._get_var_declaration_info(var)
                 if var not in self._defined_vars:
                     code_gen.add_code_line(f"{dtype} :: {var}{shape}")
                     self._defined_vars.append(var)
 
-        # add variable declarations for all state variables that will be extracted from state vector
+        # add variable declarations for all temporary, non-state variables used in the fortran subroutine
         for var in self.graph.var_updates['non-DEs']:
             dtype, _, shape = self._get_var_declaration_info(var)
             if var not in self._defined_vars:
                 code_gen.add_code_line(f"{dtype} :: {var}{shape}")
                 self._defined_vars.append(var)
+
+        code_gen.add_linebreak()
 
         # call parent method
         return super()._graph_to_str(code_gen=code_gen, rhs_indices=indices_new, state_var=state_var, rhs_var=rhs_var,
@@ -161,46 +172,58 @@ class FortranBackend(BaseBackend):
         func_args, expressions, var_names, defined_vars = [], [], [], []
         for node, update in nodes.items():
 
-            # collect expression and variables of right-hand side of equation
-            val = self.graph.eval_node(update)
+            # create pyrates-specific fortran function calls where necessary
+            vshape = self._get_var_shape(update)
             for op in self._op_calls:
-                if op in update:
-                    shape = f"{val.shape}" if hasattr(val, 'shape') and len(val.shape) > 1 else ""
-                    if shape not in self._op_calls[op]['shapes']:
-                        self._op_calls[op]['shapes'].append(shape)
+                if op in str(self.graph.node_to_expr(update)[1]):
+
+                    if vshape not in self._op_calls[op]['shapes']:
+
+                        # create new fortran function with output dimensions matching the variable shape
+                        self._op_calls[op]['shapes'].append(vshape)
                         if self._op_calls[op]['names']:
                             counter = int(self._op_calls[op]['names'][-1].split('_')[-1])
                         else:
                             counter = 1
-                        fstr, fcall = get_fortran_func(op, out_shape=shape, idx=counter)
+                        fstr, fcall = get_fortran_func(op, out_shape=self._var_shape_to_str(vshape), idx=counter)
                         self._imports.append(fstr)
                         self._op_calls[op]['names'].append(fcall)
+
                     else:
-                        idx = self._op_calls[op]['shapes'].index(shape)
+
+                        # retrieve fortran function specified for the shape of this variable
+                        idx = self._op_calls[op]['shapes'].index(vshape)
                         fcall = self._op_calls[op]['names'][idx]
-                    var = self.get_var(update)
-                    funcs[str(var['symbol'])] = fcall
+
+                    # remember the new function definition, so that it can replace the old function call later on
+                    funcs[op] = fcall
                     break
 
+            # collect expression and variables of right-hand side of equation
             expr_args, expr = self.graph.node_to_expr(update, **funcs)
             func_args.extend(expr_args)
-            expressions.append(self._expr_to_str(expr,
-                                                 var_dim=val.shape[0] if hasattr(val, 'shape') and val.shape else 1))
+            expressions.append(self._expr_to_str(expr, var_dim=vshape[0] if vshape else 1))
 
             # process left-hand side of equation
             var = self.get_var(node)
-            val = var['value'] if 'value' in var else self.graph.eval_node(node)
+            vshape = self._get_var_shape(node)
+
             if 'expr' in var:
-                # process indexing of left-hand side variable
+
+                # collect expression and variables of left-hand side indexing operation
                 idx_args, lhs = self.graph.node_to_expr(node, **funcs)
-                lhs_var = self._expr_to_str(lhs, var_dim=val.shape[0] if hasattr(val, 'shape') and val.shape else 1)
+                lhs_var = self._expr_to_str(lhs, var_dim=vshape[0] if vshape else 1)
                 if not idx_args:
                     idx_args.append(lhs_var.split('(')[0])
                 func_args.extend(idx_args)
                 self._lhs_vars.append(idx_args[0])
+
             else:
+
                 # process normal update of left-hand side variable
                 lhs_var = var['symbol'].name
+
+            # collect variable name of left-hand side of equation
             var_names.append(lhs_var)
 
         # add the left-hand side assignments of the collected right-hand side expressions to the code generator
@@ -234,13 +257,12 @@ class FortranBackend(BaseBackend):
             for target_var, expr in zip(var_names, expressions):
                 code_gen.add_code_line(f"{target_var} = {expr}")
 
-        code_gen.add_linebreak()
-
         return func_args, defined_vars, code_gen
 
     def _generate_func_head(self, func_name: str, code_gen: CodeGen, state_var: str = None, func_args: list = None,
                             imports: list = None):
 
+        # pre-process function arguments
         if not func_args:
             func_args = []
         state_vars = ['t', state_var]
@@ -253,10 +275,13 @@ class FortranBackend(BaseBackend):
         code_gen.add_linebreak()
         code_gen.add_code_line("contains")
         code_gen.add_linebreak()
+        code_gen.add_linebreak()
         code_gen.add_code_line(f"subroutine {func_name}({','.join(func_args)})")
         code_gen.add_linebreak()
         code_gen.add_code_line("implicit none")
         code_gen.add_linebreak()
+
+        # add function argument declarations
         for arg in func_args:
             dtype, intent, shape = self._get_var_declaration_info(arg)
             if arg not in self._defined_vars:
@@ -267,14 +292,18 @@ class FortranBackend(BaseBackend):
 
     def _generate_func_tail(self, code_gen: CodeGen, rhs_var: str = None):
 
+        # end the subroutine
         code_gen.add_code_line(f"end subroutine {self._func_name}")
+        code_gen.add_linebreak()
         code_gen.add_linebreak()
 
         # add additional function definitions to module
         for imp in self._imports:
             code_gen.add_code_line(imp)
             code_gen.add_linebreak()
-        code_gen.add_linebreak()
+            code_gen.add_linebreak()
+
+        # end the module
         code_gen.add_code_line(f"end module {self._file_name}")
 
         return code_gen
@@ -282,6 +311,7 @@ class FortranBackend(BaseBackend):
     def _generate_func(self, func_str: str, func_name: str = None, file_name: str = None, build_dir: str = None,
                        decorator: Any = None, **kwargs):
 
+        # preparations
         if not file_name:
             file_name = self._file_name
         if not build_dir:
@@ -309,12 +339,9 @@ class FortranBackend(BaseBackend):
             val = self.get_var(var)['value']
             dtype = 'double precision' if 'float' in str(val.dtype) else 'integer'
             intent = 'inout' if var == 'state_vec_update' or var in self._lhs_vars else 'in'
-            if val.shape:
-                shape = f'{val.shape}'
-                if shape[-2] == ',':
-                    shape = shape[:-2] + shape[-1]
-            else:
-                shape = '' if 'state_vec' not in var else '(1)'
+            shape = self._var_shape_to_str(var)
+            if not shape and 'state_vec' in var:
+                shape = '(1)'
         except KeyError:
             dtype = 'double precision'
             intent = 'in'
@@ -377,6 +404,25 @@ class FortranBackend(BaseBackend):
             return False
         except KeyError:
             return True
+
+    def _get_var_shape(self, var: str) -> tuple:
+        v = self.get_var(var)
+        try:
+            return v['value'].shape
+        except KeyError:
+            v = self.graph.eval_node(var)
+            try:
+                return v.shape
+            except AttributeError:
+                return ()
+
+    def _var_shape_to_str(self, v: Union[str, tuple]):
+        if type(v) is str:
+            v = self._get_var_shape(v)
+        s = f"{v}" if sum(v) > 1 else ""
+        if len(s) > 3 and s[-2] == ',':
+            s = s[:-2] + s[-1]
+        return s
 
     # def compile(self, build_dir: Optional[str] = None, decorator: Optional[Callable] = None, **kwargs) -> tuple:
     #     """Compile the graph layers/operations. Creates python files containing the functions in each layer.
@@ -850,27 +896,23 @@ class FortranGen(CodeGen):
     n1 = 62
     n2 = 72
     linebreak_start = "     & "
-    linebreak_end = "&\n"
+    linebreak_end = "&"
 
     def add_code_line(self, code_str):
         """Add code line string to code.
         """
-        code_str = code_str.split('\n')
-        for code in code_str:
-            if code:
-                if self.linebreak_end not in code:
-                    code = code.replace('\t', '')
-                    code = '\t' * self.lvl + code
-                if '\n' not in code:
-                    code = code + '\n'
-                if self.break_line(code):
-                    idx = self._find_first_op(code, start=len(self.linebreak_start),
-                                              stop=self.n2 - len(self.linebreak_end))
-                    self.add_code_line(f'{code[0:idx]}{self.linebreak_end}')
-                    code = f"{self.linebreak_start}{code[idx:]}"
-                    self.add_code_line(code)
-                else:
-                    self.code.append(code)
+        for code in code_str.split('\n'):
+            if self.linebreak_end not in code:
+                code = code.replace('\t', '')
+                code = '\t' * self.lvl + code
+            if self.break_line(code):
+                idx = self._find_first_op(code, start=len(self.linebreak_start),
+                                          stop=self.n2 - len(self.linebreak_end))
+                self.add_code_line(f'{code[0:idx]}{self.linebreak_end}')
+                code = f"{self.linebreak_start}{code[idx:]}"
+                self.add_code_line(code)
+            else:
+                self.code.append(code)
 
     def break_line(self, code: str):
         n = len(code)

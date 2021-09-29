@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 # pyrates internal imports
-from pyrates.frontend import CircuitTemplate
+from pyrates import simulate
 
 # meta infos
 __author__ = "Richard Gast"
@@ -60,20 +60,23 @@ def test_3_1_jansenrit():
     dt = 1e-4
     dts = 1e-2
 
-    # compare single operator JRC implementation with multi-node JRC implementation
-    ###############################################################################
+    backends = ['numpy', 'fortran']
+    for b in backends:
 
-    # single operator JRC
-    jrc1 = CircuitTemplate.from_yaml("model_templates.jansen_rit.simple_jansenrit.JRC_simple")
-    r1 = jrc1.run(T, outputs={'EIN': 'JRC/JRC_op/PSP_ein'}, backend='numpy', step_size=dt, solver='scipy',
-                  sampling_step_size=dts, clear=True)
+        # compare single operator JRC implementation with multi-node JRC implementation
+        ###############################################################################
 
-    # multi-node JRC
-    jrc2 = CircuitTemplate.from_yaml("model_templates.jansen_rit.simple_jansenrit.JRC")
-    r2 = jrc2.run(T, outputs={'EIN': 'EIN/RPO_e/PSP'}, backend='numpy', step_size=dt, solver='scipy',
-                  sampling_step_size=dts, clear=True)
+        # single operator JRC
+        r1 = simulate("model_templates.jansen_rit.simple_jansenrit.JRC_simple", simulation_time=T,
+                      outputs={'EIN': 'JRC/JRC_op/PSP_ein'}, backend=b, step_size=dt, solver='scipy',
+                      sampling_step_size=dts, clear=True, apply_kwargs={'backend_kwargs': {'file_name': 'jrc1'}})
 
-    assert np.mean(r1.values.flatten() - r2.values.flatten()) == pytest.approx(0., rel=1e-4, abs=1e-4)
+        # multi-node JRC
+        r2 = simulate("model_templates.jansen_rit.simple_jansenrit.JRC", simulation_time=T,
+                      outputs={'EIN': 'EIN/RPO_e/PSP'}, backend=b, step_size=dt, solver='scipy',
+                      sampling_step_size=dts, clear=True, apply_kwargs={'backend_kwargs': {'file_name': 'jrc2'}})
+
+        assert np.mean(r1.values.flatten() - r2.values.flatten()) == pytest.approx(0., rel=1e-4, abs=1e-4)
 
 
 def test_3_2_montbrio():
@@ -89,22 +92,24 @@ def test_3_2_montbrio():
     inp = np.zeros((int(np.round(T/dt)),))
     inp[in_start:in_start+in_dur] = 5.0
 
-    # assess correct behavior of the model around the bi-stable regime
-    ##################################################################
+    backends = ['numpy', 'fortran']
+    for b in backends:
 
-    # set up circuit
-    m1 = CircuitTemplate.from_yaml("model_templates.montbrio.simple_montbrio.QIF_exc")
+        # assess correct behavior of the model around the bi-stable regime
+        ##################################################################
 
-    # perform simulation
-    r1 = m1.run(T, sampling_step_size=dts, inputs={"p/Op_e/inp": inp}, outputs={"r": "p/Op_e/r"},
-                vectorization=True, backend='numpy', solver='scipy', step_size=dt, clear=True)
+        # perform simulation
+        r1 = simulate("model_templates.montbrio.simple_montbrio.QIF_exc", simulation_time=T, sampling_step_size=dts,
+                      inputs={"p/Op_e/inp": inp}, outputs={"r": "p/Op_e/r"}, method='RK45', rtol=1e-6, atol=1e-5,
+                      vectorization=True, backend=b, solver='scipy', step_size=dt, clear=True,
+                      apply_kwargs={'backend_kwargs': {'file_name': 'm1'}})
 
-    # test firing rate relationships at pre-defined times
-    times = [25.0, 49.0, 79.0]
-    indices = [np.argmin(np.abs(t - r1.index)) for t in times]
-    assert r1.iloc[indices[0], 0] < r1.iloc[indices[1], 0]
-    assert r1.iloc[indices[0], 0] < r1.iloc[indices[2], 0]
-    assert r1.iloc[indices[1], 0] > r1.iloc[indices[2], 0]
+        # test firing rate relationships at pre-defined times
+        times = [25.0, 49.0, 79.0]
+        indices = [np.argmin(np.abs(t - r1.index)) for t in times]
+        assert r1.iloc[indices[0], 0] < r1.iloc[indices[1], 0]
+        assert r1.iloc[indices[0], 0] < r1.iloc[indices[2], 0]
+        assert r1.iloc[indices[1], 0] > r1.iloc[indices[2], 0]
 
 
 def test_3_3_wilson_cowan():
@@ -123,45 +128,47 @@ def test_3_3_wilson_cowan():
     inp = np.zeros((int(np.round(T / dt)),))
     inp[in_start:in_start + in_dur] = 5.0
 
-    # set up circuit
-    wc1 = CircuitTemplate.from_yaml("model_templates.wilson_cowan.simple_wilsoncowan.WC_simple")
+    backends = ['numpy', 'fortran']
+    for b in backends:
 
-    # perform simulation
-    r1 = wc1.run(T, sampling_step_size=dts, inputs={"E/Op_rate/I_ext": inp}, outputs={"R_e": "E/Op_rate/r"},
-                 vectorization=True, backend='numpy', solver='scipy', step_size=dt, clear=True)
+        # perform simulation
+        r1 = simulate("model_templates.wilson_cowan.simple_wilsoncowan.WC_simple", simulation_time=T,
+                      sampling_step_size=dts, inputs={"E/Op_rate/I_ext": inp}, outputs={"R_e": "E/Op_rate/r"},
+                      vectorization=True, backend=b, solver='scipy', step_size=dt, clear=True,
+                      apply_kwargs={'backend_kwargs': {'file_name': 'wc1'}}, method='RK45', rtol=1e-5, atol=1e-5)
 
-    # test firing rate relationships at pre-defined times
-    times = [29.0, 49.0, 79.0]
-    indices = [np.argmin(np.abs(t - r1.index)) for t in times]
-    assert r1.iloc[indices[0], 0] < r1.iloc[indices[1], 0]
-    assert r1.iloc[indices[0], 0] - r1.iloc[indices[2], 0] == pytest.approx(0., rel=1e-4, abs=1e-4)
+        # test firing rate relationships at pre-defined times
+        times = [29.0, 49.0, 79.0]
+        indices = [np.argmin(np.abs(t - r1.index)) for t in times]
+        assert r1.iloc[indices[0], 0] < r1.iloc[indices[1], 0]
+        assert r1.iloc[indices[0], 0] - r1.iloc[indices[2], 0] == pytest.approx(0., rel=1e-4, abs=1e-4)
 
-    # repeat for model with short-term plasticity
-    #############################################
+        # repeat for model with short-term plasticity
+        #############################################
 
-    # TODO: re-enable edge operators
+        # TODO: re-enable edge operators
 
-    T = 220.0
-    dt = 5e-3
-    dts = 1e-2
-
-    in_start = int(np.round(30.0 / dt))
-    in_dur = int(np.round(20.0 / dt))
-    inp = np.zeros((int(np.round(T / dt)),))
-    inp[in_start:in_start + in_dur] = 5.0
-
-    # set up circuit
-    wc2 = CircuitTemplate.from_yaml("model_templates.wilson_cowan.simple_wilsoncowan.WC_stp")
-
-    # perform simulation
-    r2 = wc2.run(T, sampling_step_size=dts, inputs={"E/E_op/I_ext": inp}, outputs={"V_e": "E/E_op/v"},
-                 vectorization=True, backend='numpy', solver='scipy', step_size=dt, clear=True)
-
-    # test firing rate relationships at pre-defined times
-    times = [29.0, 49.0, 219.0]
-    indices = [np.argmin(np.abs(t - r2.index)) for t in times]
-    assert r2.iloc[indices[0], 0] < r2.iloc[indices[1], 0]
-    assert r2.iloc[indices[0], 0] - r2.iloc[indices[2], 0] == pytest.approx(0., rel=1e-3, abs=1e-3)
+        # T = 220.0
+        # dt = 5e-3
+        # dts = 1e-2
+        #
+        # in_start = int(np.round(30.0 / dt))
+        # in_dur = int(np.round(20.0 / dt))
+        # inp = np.zeros((int(np.round(T / dt)),))
+        # inp[in_start:in_start + in_dur] = 5.0
+        #
+        # # set up circuit
+        # wc2 = CircuitTemplate.from_yaml("model_templates.wilson_cowan.simple_wilsoncowan.WC_stp")
+        #
+        # # perform simulation
+        # r2 = wc2.run(T, sampling_step_size=dts, inputs={"E/E_op/I_ext": inp}, outputs={"V_e": "E/E_op/v"},
+        #              vectorization=True, backend='numpy', solver='scipy', step_size=dt, clear=True)
+        #
+        # # test firing rate relationships at pre-defined times
+        # times = [29.0, 49.0, 219.0]
+        # indices = [np.argmin(np.abs(t - r2.index)) for t in times]
+        # assert r2.iloc[indices[0], 0] < r2.iloc[indices[1], 0]
+        # assert r2.iloc[indices[0], 0] - r2.iloc[indices[2], 0] == pytest.approx(0., rel=1e-3, abs=1e-3)
 
 
 def test_3_4_kuramoto():

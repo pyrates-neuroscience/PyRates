@@ -3,7 +3,7 @@
 
 PRO:
   base: OperatorTemplate
-  equations: ["m_out = m_max / (1. + E^(r*(PSP + V_thr)))"]
+  equations: ["m_out = m_max / (1. + exp(r*(V_thr - PSP)))"]
   variables:
     m_out:
       default: output
@@ -12,7 +12,7 @@ PRO:
     m_max:
       default: 5.
     r:
-      default: -560.
+      default: 560.
     V_thr:
       default: 6e-3
 
@@ -24,11 +24,10 @@ JRC_op:
     - 'd/dt * PSP_iin = PSP_t_iin'
     - 'd/dt * PSP_t_iin =  h_e*c/(ei_ratio*tau_e) * m_out - (1./tau_e)^2. * PSP_iin - (2./tau_e) * PSP_t_iin'
     - 'd/dt * PSP_pc_e = PSP_t_pc_e'
-    - 'd/dt * PSP_t_pc_e =  h_e/tau_e * (c*0.8*sigmoid(PSP_ein, m_max, r, V_thr) + c*m_in/io_ratio + u) - (1./tau_e)^2. * PSP_pc_e - (2./tau_e) * PSP_t_pc_e'
+    - 'd/dt * PSP_t_pc_e =  h_e/tau_e * (c*0.8*m_max*sigmoid(r*(PSP_ein-V_thr)) + c*m_in/io_ratio + u) - (1./tau_e)^2. * PSP_pc_e - (2./tau_e) * PSP_t_pc_e'
     - 'd/dt * PSP_pc_i = PSP_t_pc_i'
-    - 'd/dt * PSP_t_pc_i =  h_i*c/(ei_ratio*tau_i) * sigmoid(PSP_iin, m_max, r, V_thr) - (1./tau_i)^2. * PSP_pc_i - (2./tau_i) * PSP_t_pc_i'
-    - 'PSP_pc = PSP_pc_e - PSP_pc_i'
-    - 'm_out = sigmoid(PSP_pc, m_max, r, V_thr)'
+    - 'd/dt * PSP_t_pc_i =  h_i*c/(ei_ratio*tau_i) * m_max*sigmoid(r*(PSP_iin-V_thr)) - (1./tau_i)^2. * PSP_pc_i - (2./tau_i) * PSP_t_pc_i'
+    - 'm_out = m_max*sigmoid(r*(PSP_pc_e - PSP_pc_i - V_thr))'
   variables:
     m_out:
       default: output
@@ -47,8 +46,6 @@ JRC_op:
     PSP_iin:
       default: variable
     PSP_t_iin:
-      default: variable
-    PSP_pc:
       default: variable
     PSP_pc_e:
       default: variable
@@ -73,7 +70,7 @@ JRC_op:
     io_ratio:
       default: 3.0
     u:
-      default: input
+      default: 220.0
 
 
 JRC_driven_op:
@@ -84,12 +81,11 @@ JRC_driven_op:
     - 'd/dt * PSP_iin = PSP_t_iin'
     - 'd/dt * PSP_t_iin =  h_e*c/(ei_ratio*tau_e) * m_out - (1./tau_e)^2. * PSP_iin - (2./tau_e) * PSP_t_iin'
     - 'd/dt * PSP_pc_e = PSP_t_pc_e'
-    - 'd/dt * PSP_t_pc_e =  h_e/tau_e * (c*0.8*sigmoid(PSP_ein, m_max, r, V_thr) + c*m_in/io_ratio + u) - (1./tau_e)^2. * PSP_pc_e - (2./tau_e) * PSP_t_pc_e'
+    - 'd/dt * PSP_t_pc_e =  h_e/tau_e * (c*0.8*m_max*sigmoid(r*(PSP_ein - V_thr)) + c*m_in/io_ratio + u) - (1./tau_e)^2. * PSP_pc_e - (2./tau_e) * PSP_t_pc_e'
     - 'd/dt * PSP_pc_i = PSP_t_pc_i'
-    - 'd/dt * PSP_t_pc_i =  h_i*c/(ei_ratio*tau_i) * sigmoid(PSP_iin, m_max, r, V_thr) - (1./tau_i)^2. * PSP_pc_i - (2./tau_i) * PSP_t_pc_i'
+    - 'd/dt * PSP_t_pc_i =  h_i*c/(ei_ratio*tau_i) * m_max*sigmoid(r*(PSP_iin - V_thr)) - (1./tau_i)^2. * PSP_pc_i - (2./tau_i) * PSP_t_pc_i'
     - 'd/dt * I_ext = alpha*cos(2*pi*omega*t)'
-    - 'PSP_pc = PSP_pc_e - PSP_pc_i + I_ext'
-    - 'm_out = sigmoid(PSP_pc, m_max, r, V_thr)'
+    - 'm_out = m_max*sigmoid(r*(PSP_pc_e + I_ext - PSP_pc_i - V_thr))'
   variables:
     m_out:
       default: output
@@ -108,8 +104,6 @@ JRC_driven_op:
     PSP_iin:
       default: variable
     PSP_t_iin:
-      default: variable
-    PSP_pc:
       default: variable
     PSP_pc_e:
       default: variable
