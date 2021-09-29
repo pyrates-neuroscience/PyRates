@@ -165,10 +165,7 @@ class FortranBackend(BaseBackend):
             val = self.graph.eval_node(update)
             for op in self._op_calls:
                 if op in update:
-                    if hasattr(val, 'shape'):
-                        shape = f"{val.shape}" if len(val.shape) > 1 else "(1)"
-                    else:
-                        shape = ""
+                    shape = f"{val.shape}" if hasattr(val, 'shape') and len(val.shape) > 1 else ""
                     if shape not in self._op_calls[op]['shapes']:
                         self._op_calls[op]['shapes'].append(shape)
                         if self._op_calls[op]['names']:
@@ -196,8 +193,10 @@ class FortranBackend(BaseBackend):
             if 'expr' in var:
                 # process indexing of left-hand side variable
                 idx_args, lhs = self.graph.node_to_expr(node, **funcs)
-                func_args.extend(idx_args)
                 lhs_var = self._expr_to_str(lhs, var_dim=val.shape[0] if hasattr(val, 'shape') and val.shape else 1)
+                if not idx_args:
+                    idx_args.append(lhs_var.split('(')[0])
+                func_args.extend(idx_args)
                 self._lhs_vars.append(idx_args[0])
             else:
                 # process normal update of left-hand side variable
@@ -848,25 +847,50 @@ class FortranBackend(BaseBackend):
 
 class FortranGen(CodeGen):
 
-    n = 70
+    n1 = 62
+    n2 = 72
+    linebreak_start = "     & "
+    linebreak_end = "&\n"
 
     def add_code_line(self, code_str):
         """Add code line string to code.
         """
         code_str = code_str.split('\n')
         for code in code_str:
-            if '&' not in code:
-                code = code.replace('\t', '')
-                code = '\t' * self.lvl + code + '\n'
-            elif '\n' not in code:
-                code = code + '\n'
-            if len(code) > self.n and code[-2] != '&':
-                idx = self._find_first_op(code, start=0, stop=self.n)
-                self.add_code_line(f'{code[0:idx]}&')
-                code = f"     & {code[idx:]}"
-                self.add_code_line(code)
-            else:
-                self.code.append(code)
+            if code:
+                if self.linebreak_end not in code:
+                    code = code.replace('\t', '')
+                    code = '\t' * self.lvl + code
+                if '\n' not in code:
+                    code = code + '\n'
+                if self.break_line(code):
+                    idx = self._find_first_op(code, start=len(self.linebreak_start),
+                                              stop=self.n2 - len(self.linebreak_end))
+                    self.add_code_line(f'{code[0:idx]}{self.linebreak_end}')
+                    code = f"{self.linebreak_start}{code[idx:]}"
+                    self.add_code_line(code)
+                else:
+                    self.code.append(code)
+
+    def break_line(self, code: str):
+        n = len(code)
+        if n > self.n2:
+            return True
+        if n > self.n1:
+            if self.linebreak_start in code:
+                if self.linebreak_end in code[len(self.linebreak_start):]:
+                    if n - len(self.linebreak_start) - len(self.linebreak_end) < self.n2:
+                        return False
+                    return True
+                if n - len(self.linebreak_start) < self.n2:
+                    return False
+                return True
+            if self.linebreak_end in code:
+                if n - len(self.linebreak_end) < self.n2:
+                    return False
+                return True
+            return False
+        return False
 
     @staticmethod
     def _find_first_op(code, start, stop):
@@ -875,15 +899,15 @@ class FortranGen(CodeGen):
             ops = ["+", "-", "*", "/", "**", "^", "%", "<", ">", "==", "!=", "<=", ">="]
             indices = [code_tmp.index(op) for op in ops if op in code_tmp]
             if indices and max(indices) > 0:
-                return max(indices)
+                return max(indices) + start
             idx = start
             for break_sign in [',', ')', ' ']:
                 if break_sign in code_tmp:
                     idx_tmp = len(code_tmp) - code_tmp[::-1].index(break_sign)
                     if len(code_tmp)-idx_tmp < len(code_tmp)-idx:
                         idx = idx_tmp
-            return idx
-        return stop
+            return idx + start
+        return stop + start
 
 
 # def generate_func(self, return_key='f', omit_assign=False, return_dim=None, return_intent='out'):
