@@ -273,6 +273,8 @@ class FortranBackend(BaseBackend):
         code_gen.add_linebreak()
         code_gen.add_code_line(f"module {self._file_name}")
         code_gen.add_linebreak()
+        code_gen.add_code_line("double precision :: PI = 4.0*atan(1.0)")
+        code_gen.add_linebreak()
         code_gen.add_code_line("contains")
         code_gen.add_linebreak()
         code_gen.add_linebreak()

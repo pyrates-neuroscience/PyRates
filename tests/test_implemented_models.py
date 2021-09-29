@@ -100,7 +100,7 @@ def test_3_2_montbrio():
 
         # perform simulation
         r1 = simulate("model_templates.montbrio.simple_montbrio.QIF_exc", simulation_time=T, sampling_step_size=dts,
-                      inputs={"p/Op_e/inp": inp}, outputs={"r": "p/Op_e/r"}, method='RK45', rtol=1e-6, atol=1e-5,
+                      inputs={"p/Op_e/inp": inp}, outputs={"r": "p/Op_e/r"}, method='RK23',
                       vectorization=True, backend=b, solver='scipy', step_size=dt, clear=True,
                       apply_kwargs={'backend_kwargs': {'file_name': 'm1'}})
 
@@ -135,7 +135,7 @@ def test_3_3_wilson_cowan():
         r1 = simulate("model_templates.wilson_cowan.simple_wilsoncowan.WC_simple", simulation_time=T,
                       sampling_step_size=dts, inputs={"E/Op_rate/I_ext": inp}, outputs={"R_e": "E/Op_rate/r"},
                       vectorization=True, backend=b, solver='scipy', step_size=dt, clear=True,
-                      apply_kwargs={'backend_kwargs': {'file_name': 'wc1'}}, method='RK45', rtol=1e-5, atol=1e-5)
+                      apply_kwargs={'backend_kwargs': {'file_name': 'wc1'}}, method='RK23')
 
         # test firing rate relationships at pre-defined times
         times = [29.0, 49.0, 79.0]
