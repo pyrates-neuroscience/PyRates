@@ -254,8 +254,8 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         return results
 
-    def apply(self, adaptive_steps: bool, label: str = None, node_values: dict = None, edge_values: dict = None,
-              vectorize: bool = True, verbose: bool = True, **kwargs):
+    def apply(self, adaptive_steps: bool = None, label: str = None, node_values: dict = None, edge_values: dict = None,
+              verbose: bool = True, **kwargs) -> tuple:
         """Create a Circuit graph instance based on the template
 
 
@@ -273,12 +273,12 @@ class CircuitTemplate(AbstractBaseTemplate):
             (optional) Dictionary containing source and target variable pairs as items and value dictionaries as values
             (e.g. {('source/op1/var1', 'target/op1/var2'): {'weight': 0.3, 'delay': 1.0}}). Can be used to overwrite
             default values defined in template.
-        vectorize
         verbose
+            If true, updates about the backend translation process will be given.
 
         Returns
         -------
-
+        tuple
         """
 
         if not label:

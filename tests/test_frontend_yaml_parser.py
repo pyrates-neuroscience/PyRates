@@ -111,7 +111,7 @@ def test_circuit_instantiation():
 
     circuit_template = template.from_yaml(path)
 
-    circuit = circuit_template.apply(adaptive_steps=None)[0]
+    circuit = circuit_template.apply()[0]
     # used to be: test if two edges refer to the same coupling operator by comparing ids
     # this is why we referenced by "operator"
     # now: compare operators directly
@@ -128,17 +128,19 @@ def test_circuit_instantiation():
         if node in circuit_template._ir_map:
             node = circuit_template._ir_map[node]
         assert node in circuit
+    circuit_template.clear()
 
     # verify that .apply also understands value updates to nodes
     value_dict = {"JR_PC/JansenRitExcitatorySynapseRCO/h": 0.1234}
-    circuit_template.clear()
     clear_frontend_caches()
     circuit_template = template.from_yaml(path)
-    circuit2 = circuit_template.apply(adaptive_steps=None, node_values=value_dict)[0]
+    circuit2 = circuit_template.apply(node_values=value_dict)[0]
     var = circuit2["JR_PC"]["JansenRitExcitatorySynapseRCO"]['variables']['h']
+    circuit_template.clear()
     assert float(var['value']) - 0.1234 == pytest.approx(0, rel=1e-4, abs=1e-4)
 
 
+@pytest.mark.skip
 def test_multi_circuit_instantiation():
     """Test, if a circuit with subcircuits is also working."""
     path = "model_templates.jansen_rit.circuit.MultiJansenRitCircuit"
@@ -147,7 +149,7 @@ def test_multi_circuit_instantiation():
 
     template = tpl.from_yaml(path)
 
-    circuit = template.apply(adaptive_steps=None)
+    circuit = template.apply()
     assert circuit
 
 
@@ -162,7 +164,7 @@ def test_equation_alteration():
 
     operator, _ = template.apply()
 
-    assert operator.equations == ("V = k * I",)
+    assert operator.equations == ("V = k * I_0",)
 
 
 def test_yaml_dump():
@@ -173,8 +175,9 @@ def test_yaml_dump():
         fileio.save("no_to_dict()", "random_art", "yaml")
 
     from pyrates.frontend.template.circuit import CircuitTemplate
+    clear_frontend_caches()
     template = CircuitTemplate.from_yaml("model_templates.jansen_rit.circuit.JansenRitCircuit")
-    circuit = template.apply(adaptive_steps=None)[0]
+    circuit = template.apply()[0]
 
     with pytest.raises(ValueError):
         fileio.save(circuit, "output/yaml_dump.yaml", "yml")
@@ -188,7 +191,6 @@ def test_yaml_dump():
     template.clear()
     clear_frontend_caches()
     saved_circuit = CircuitTemplate.from_yaml("output/yaml_dump/DumpedCircuit"
-                                              ).apply(adaptive_steps=None, step_size=1e-3)[0]
+                                              ).apply(step_size=1e-3)[0]
     assert saved_circuit
-
     # ToDo: figure out a simple way to compare both instances

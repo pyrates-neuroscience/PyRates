@@ -171,7 +171,7 @@ class OperatorTemplate(AbstractBaseTemplate):
 
 def check_vname(v: str, dtype: str):
 
-    disallowed_names = ['state_vec', 'state_vec_update', 'source_idx', 'target_idx']
+    disallowed_names = ['state_vec', 'state_vec_update', 'source_idx', 'target_idx', 'I', 'i', 'pi']
     disallowed_name_parts = ['_buffer', '_delays', '_maxdelay', '_idx']
 
     if v == 't' and dtype != 'state_var':

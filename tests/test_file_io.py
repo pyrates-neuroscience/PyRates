@@ -57,7 +57,7 @@ def test_pickle_template():
 
     save(template, out_file, filetype='pickle')
     # to update the reference dump, uncomment the following
-    # pickle.dump(template, test_file)
+    # save(template, test_file, filetype='pickle')
 
     compare_files(out_file, test_file)
 
@@ -83,9 +83,10 @@ def test_yaml_template():
     test_file = os.path.join(get_parent_directory(), "resources", f"jansen_rit_template.{ext}")
 
     save(template, out_file, filetype='yaml', template_name='jrc1')
-    compare_files(out_file, test_file)
     # to update the reference dump, uncomment the following
-    # pickle.dump(template, test_file)
+    # save(template, test_file, filetype='yaml', template_name='jrc1')
+
+    compare_files(out_file, test_file)
 
     template = circuit_from_yaml(out_file)
     assert template

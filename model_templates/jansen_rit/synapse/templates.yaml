@@ -20,8 +20,8 @@ ExponentialSynapseRCO:
   base: model_templates.jansen_rit.synapse.synapse.RateToCurrentOperator
 
   equations:
-    - 'd/dt * I = I_t'
-    - 'd/dt * I_t =  h/tau * m_in - (1./tau)^2 * I - 2. * 1./tau * I_t'
+    - 'd/dt * I_0 = I_t'
+    - 'd/dt * I_t =  h/tau * m_in - (1./tau)^2 * I_0 - 2. * 1./tau * I_t'
 
   # solution for external input: backend as separate connection --> additional vector entry on synapse
   # TODO: implement external input operator

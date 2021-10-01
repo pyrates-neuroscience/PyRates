@@ -171,6 +171,7 @@ def test_3_3_wilson_cowan():
         # assert r2.iloc[indices[0], 0] - r2.iloc[indices[2], 0] == pytest.approx(0., rel=1e-3, abs=1e-3)
 
 
+@pytest.mark.skip
 def test_3_4_kuramoto():
     """Tests accurate behavior of kuramoto oscillator model.
     """

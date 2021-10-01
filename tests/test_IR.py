@@ -30,50 +30,31 @@
 
 import pytest
 
-__author__ = "Daniel Rose"
+__author__ = "Daniel Rose, Richard Gast"
 __status__ = "Development"
 
 
 def test_ir_vectorization():
-    """Test, if apply() functions all work properly"""
+    """Test, if apply() function works properly"""
 
     path = "model_templates.jansen_rit.circuit.JansenRitCircuit"
-    from pyrates.frontend.template.circuit import CircuitTemplate
     from pyrates.ir.circuit import CircuitIR
-
-    template = CircuitTemplate.from_yaml(path)
-
-    circuit = template.apply()  # type: CircuitIR
-    circuit2 = circuit.optimize_graph_in_place()
-
-    # these should actually be the same
-    assert circuit is circuit2
-
-    # ensure only vector nodes exist
-    for node in circuit.nodes:
-        assert node.startswith("vector_")
-
-    # for source, target, key in circuit.edges:
-    #     if "node" in source:
-    #         assert "coupling" in target
-    #     else:
-    #         assert "coupling" in source and "node" in target
-
-    # for source, target, data in circuit2.edges(data=True):
-    #     # check that no operators are left in the edges of the rearranged circuit
-    #     assert len(data["edge_ir"].op_graph) == 0
-
-    # check that operator from previous edges is indeed in target nodes
-    # original_edge = circuit.edges[(source, target, 0)]["edge_ir"]
-    # original_op = list(original_edge.op_graph.nodes)[0]
-    # assert f"{original_op}.0" in circuit2[target]
-
-
-@pytest.mark.xfail
-def test_ir_compilation():
-    path = "model_templates.jansen_rit.circuit.JansenRitCircuit"
-    from pyrates.ir.circuit import CircuitIR
+    from pyrates.frontend import clear_frontend_caches
+    clear_frontend_caches()
 
     circuit = CircuitIR.from_yaml(path)
 
-    circuit._compile()
+    # ensure that the interneuron nodes of the JRC have been vectorized
+    assert any([node['node'].length > 1 for _, node in circuit._ir.nodes.items()])
+    circuit.clear()
+
+
+def test_ir_compilation():
+    path = "model_templates.jansen_rit.circuit.JansenRitCircuit"
+    from pyrates.ir.circuit import CircuitIR
+    from pyrates.frontend import clear_frontend_caches
+    clear_frontend_caches()
+
+    circuit = CircuitIR.from_yaml(path)
+    circuit._ir.backend._compile()
+    circuit.clear()

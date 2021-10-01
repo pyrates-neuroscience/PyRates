@@ -54,8 +54,8 @@ class CircuitIR(AbstractBaseIR):
     """Custom graph data structure that represents a backend of nodes and edges with associated equations
     and variables."""
 
-    __slots__ = ["label", "label_map", "graph", "sub_circuits", "vectorized",  "backend", "step_size", "solver",
-                 "_edge_idx_counter", "_adaptive_steps", "_t"]
+    __slots__ = ["label", "label_map", "graph", "sub_circuits",  "backend", "step_size", "_edge_idx_counter",
+                 "_adaptive_steps", "_t"]
 
     def __init__(self, label: str = "circuit", nodes: Dict[str, NodeIR] = None, edges: list = None,
                  template: str = None, adaptive_steps: bool = False, step_size: float = None, verbose: bool = True,
@@ -85,11 +85,9 @@ class CircuitIR(AbstractBaseIR):
         elif backend == 'tensorflow':
             from pyrates.backend.tensorflow_backend import TensorflowBackend
             backend = TensorflowBackend
-            #backend_kwargs['squeeze'] = True
         elif backend == 'fortran':
             from pyrates.backend.fortran_backend import FortranBackend
             backend = FortranBackend
-            #backend_kwargs['squeeze'] = True
         else:
             raise ValueError(f'Invalid backend type: {backend}. See documentation for supported backends.')
         backend_kwargs['name'] = label
@@ -370,9 +368,11 @@ class CircuitIR(AbstractBaseIR):
         return from_circuit(self)
 
     @staticmethod
-    def from_yaml(path):
+    def from_yaml(path, **kwargs):
         from pyrates.frontend import circuit_from_yaml
-        return circuit_from_yaml(path)
+        c = circuit_from_yaml(path)
+        c.apply(**kwargs)
+        return c
 
     @property
     def nodes(self):

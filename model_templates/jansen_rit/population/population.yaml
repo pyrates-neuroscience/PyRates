@@ -7,7 +7,7 @@ CurrentToPotentialOperator:
     membrane voltage in the neural population."
   base: OperatorTemplate
   equations:
-    "L_m * V = k * I"
+    "L_m * V = k * I_0"
   variables:
     L_m:
       description: Generic linear differential operator
@@ -27,7 +27,7 @@ CurrentToPotentialOperator:
       description: Mean somatic membrane potential
       unit: V
       default: output
-    I:
+    I_0:
       name: synaptic_current
       description: >
         Electric current across synaptic membrane reflecting synaptic
