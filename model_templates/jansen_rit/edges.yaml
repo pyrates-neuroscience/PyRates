@@ -14,7 +14,6 @@ LCEdge:
   base: pyrates.frontend.template.edge.BaseEdge
   operators:
     - LinearCouplingOperator
-  label: LCAxon
 
 
 

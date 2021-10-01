@@ -235,7 +235,6 @@ class CircuitIR(AbstractBaseIR):
         -------
         """
 
-        edge_list = []
         for (source, target, edge_dict) in edges:
             self.add_edge(source, target,  # edge_unique_key,
                           **edge_dict, **attr)
@@ -837,8 +836,9 @@ class CircuitIR(AbstractBaseIR):
     def _collect_delays_from_edges(self, edges):
         means, stds, nodes = [], [], []
         for s, t, e in edges:
-            d = self.edges[s, t, e]['delay'].copy() if type(self.edges[s, t, e]['delay']) is list else \
-                self.edges[s, t, e]['delay']
+            d = self.edges[s, t, e]['delay']
+            if type(d) is list:
+                d = [1 if d_tmp is None else d_tmp for d_tmp in d]
             v = self.edges[s, t, e].pop('spread', [0])
             if v is None or np.sum(v) == 0:
                 v = [0] * len(self.edges[s, t, e]['target_idx'])
@@ -868,10 +868,6 @@ class CircuitIR(AbstractBaseIR):
         return means, stds, nodes, add_delay
 
     def _process_delays(self, d, discretize=True):
-        if self.step_size is None and self.solver == 'scipy':
-            raise ValueError('Step-size not passed for setting up edge delays. If delays are added to any '
-                             'network edge, please pass the simulation `step-size` to the `compile` '
-                             'method.')
         if type(d) is list:
             d = np.asarray(d).squeeze()
             d = [self._preprocess_delay(d_tmp, discretize=discretize) for d_tmp in d] if d.shape else \

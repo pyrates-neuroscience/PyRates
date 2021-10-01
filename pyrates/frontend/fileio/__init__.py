@@ -4,7 +4,7 @@ from typing import Optional
 FILEIOMODES = ["pickle", "yaml"]
 
 
-def dump(_obj: object, filename: str, filetype: str, template_name: Optional[str] = None, **kwargs):
+def save(_obj: object, filename: str, filetype: str, template_name: Optional[str] = None, **kwargs):
     """Save an object to file.
 
     Parameters
@@ -36,8 +36,11 @@ def dump(_obj: object, filename: str, filetype: str, template_name: Optional[str
         try:
             _dict = _obj.to_dict()  # type: dict
         except AttributeError:
-            raise AttributeError(f"The object {_obj} does not have a `to_dict` method. Please choose a different target"
-                                 f" filetype than 'yaml'.")
+            try:
+                _dict = dict(dict(nodes=_obj.nodes, edges=_obj.edges, base='CircuitTemplate'))
+            except AttributeError:
+                raise AttributeError(f"The object {_obj} does not have a `to_dict` method and is no instance of "
+                                     f"`CircuitTemplate`. Please choose a different target filetype than 'yaml'.")
 
         # make sure the directory exists
         from pyrates.utility.filestorage import create_directory

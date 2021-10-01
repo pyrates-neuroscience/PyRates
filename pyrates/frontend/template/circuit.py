@@ -189,8 +189,8 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         if not apply_kwargs:
             apply_kwargs = {}
-        net._ir, net._ir_map, ir_indices = net.apply(adaptive_steps=adaptive_steps, verbose=verbose, backend=backend,
-                                                     step_size=step_size, **apply_kwargs)
+        _, _, ir_indices = net.apply(adaptive_steps=adaptive_steps, verbose=verbose, backend=backend,
+                                     step_size=step_size, **apply_kwargs)
 
         # perform simulation via the graph representation
         #################################################
@@ -468,16 +468,23 @@ class CircuitTemplate(AbstractBaseTemplate):
                 edge_dict["extra_sources"] = extra_sources
             if source_idx:
                 edge_dict['source_idx'] = source_idx
+                if type(edge_dict['weight']) is float:
+                    edge_dict['weight'] = [edge_dict['weight']] * len(edge_dict['source_idx'])
             if target_idx:
                 edge_dict['target_idx'] = target_idx
+                if type(edge_dict['weight']) is float:
+                    edge_dict['weight'] = [edge_dict['weight']] * len(edge_dict['target_idx'])
 
             edges.append((source, target,  # edge_unique_key,
                           edge_dict
                           ))
 
         # instantiate an intermediate representation of the circuit template
-        return CircuitIR(label, nodes=nodes, edges=edges, verbose=verbose, adaptive_steps=adaptive_steps,
-                         **kwargs), label_map, indices
+        self._ir = CircuitIR(label, nodes=nodes, edges=edges, verbose=verbose, adaptive_steps=adaptive_steps,
+                             **kwargs)
+        self._ir_map = label_map
+
+        return self._ir, self._ir_map, indices
 
     def get_nodes(self, node_identifier: Union[str, list, tuple], var_identifier: Optional[tuple] = None) -> list:
         """Extracts nodes from the CircuitTemplate that match the provided identifier.

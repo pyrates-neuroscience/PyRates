@@ -27,11 +27,13 @@
 # 
 # Richard Gast and Daniel Rose et. al. in preparation
 from pyrates.frontend.template.operator_graph import OperatorGraphTemplate
-from pyrates.ir.edge import EdgeIR
+from pyrates.ir.node import cache_func
 
 
 class EdgeTemplate(OperatorGraphTemplate):
     """Generic template for an edge in the computational backend graph. A single edge may encompass several
     different operators. One template defines a typical structure of a given edge type."""
 
-    target_ir = EdgeIR
+    @staticmethod
+    def target_ir(label: str, operators: dict, values: dict = None, template: str = None):
+        return cache_func(label, operators, values, template)

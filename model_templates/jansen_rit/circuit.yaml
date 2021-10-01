@@ -17,7 +17,6 @@ JansenRitCircuit:
        generation in a mathematical model of coupled cortical columns."
        Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
   base: pyrates.frontend.template.circuit.BaseCircuit
-  label: JRcircuit
   nodes:
     JR_PC: model_templates.jansen_rit.population.templates.JansenRitPC
     JR_IIN: model_templates.jansen_rit.population.templates.JansenRitIN
@@ -44,7 +43,6 @@ MultiJansenRitCircuit:
        generation in a mathematical model of coupled cortical columns."
        Biological Cybernetics, vol. 73(4), pp. 357-366, 1995.
   base: pyrates.frontend.template.circuit.BaseCircuit
-  label: MultiJRC
   circuits:
     JRC0: JansenRitCircuit
     JRC1: JansenRitCircuit

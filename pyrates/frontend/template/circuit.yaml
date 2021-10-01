@@ -6,5 +6,4 @@ BaseCircuit:
   circuits: null # dictionary with circuit labels as keys and sub-circuit templates as values
   nodes: null  # dictionary with node labels as keys and node templates as values
   edges: null  # list of edges with entries [source, target, coupling label, coupling arguments]
-  label: circuit  # default label of circuit template to be used if no other label is given
 

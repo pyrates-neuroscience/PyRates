@@ -38,60 +38,54 @@ def get_parent_directory():
     return pathlib.Path(__file__).parent.absolute()
 
 
-def test_pickle_ir():
-    pass
-
-    path = "model_templates.jansen_rit.circuit.JansenRitCircuit"
-    from pyrates.frontend.template.circuit import CircuitTemplate
-    from pyrates.ir.circuit import CircuitIR
-    from pyrates.frontend.fileio import pickle
-
-    template = CircuitTemplate.from_yaml(path)
-
-    # try to pickle non-vectorized circuit
-    circuit = template.apply()  # type: CircuitIR
-    filename1 = os.path.join(get_parent_directory(), "output", "jansen_rit_ir.p")
-    circuit.to_file(filename=filename1, filetype="pickle")
-
-    # compare to reference pickle
-    # compare_files("output/jansen_rit_ir.p", "resources/jansen_rit_ir.p")  # currently does not work
-    circuit2 = CircuitIR.from_file(filename1, filetype="pickle")
-
-    # ToDo: compare circuit IR instances at runtime
-
-    # try to pickle vectorized circuit
-    circuit.optimize_graph_in_place()
-    filename2 = os.path.join(get_parent_directory(), "output", "jansen_rit_ir_vectorized.p")
-    circuit.to_file(filename=filename2, filetype="pickle")
-
-    # compare to reference pickle
-    # compare_files("output/jansen_rit_ir_vectorized.p", "resources/jansen_rit_ir_vectorized.p")
-    # currently does not work
-
-    circuit3 = CircuitIR.from_file(filename2, filetype="pickle")
-
-    # ToDo: compare vectorized circuit IR instances at runtime
-
-
 def test_pickle_template():
     path = "model_templates.jansen_rit.circuit.JansenRitCircuit"
     from pyrates.frontend.template import from_yaml, clear_cache
     clear_cache()
+
     template = from_yaml(path)
+
     # include pickle protocol number in file name for version interoperability
     from pickle import HIGHEST_PROTOCOL
     ext = f"p{HIGHEST_PROTOCOL}"
+
     # configure filenames
     out_file = os.path.join(get_parent_directory(), "output", f"jansen_rit_template.{ext}")
     test_file = os.path.join(get_parent_directory(), "resources", f"jansen_rit_template.{ext}")
 
-    from pyrates.frontend.fileio import pickle
+    from pyrates import save, circuit_from_pickle
 
-    pickle.dump(template, out_file)
+    save(template, out_file, filetype='pickle')
     # to update the reference dump, uncomment the following
     # pickle.dump(template, test_file)
 
     compare_files(out_file, test_file)
 
-    template = pickle.load(out_file)
+    template = circuit_from_pickle(out_file)
+    assert template
+
+
+@pytest.mark.skip
+def test_yaml_template():
+    path = "model_templates.jansen_rit.circuit.JansenRitCircuit"
+    from pyrates.frontend.template import clear_cache
+    from pyrates import save, circuit_from_yaml
+    clear_cache()
+
+    template = circuit_from_yaml(path)
+
+    # include pickle protocol number in file name for version interoperability
+    from pickle import HIGHEST_PROTOCOL
+    ext = f"p{HIGHEST_PROTOCOL}"
+
+    # configure filenames
+    out_file = os.path.join(get_parent_directory(), "output", f"jansen_rit_template.{ext}")
+    test_file = os.path.join(get_parent_directory(), "resources", f"jansen_rit_template.{ext}")
+
+    save(template, out_file, filetype='yaml', template_name='jrc1')
+    compare_files(out_file, test_file)
+    # to update the reference dump, uncomment the following
+    # pickle.dump(template, test_file)
+
+    template = circuit_from_yaml(out_file)
     assert template

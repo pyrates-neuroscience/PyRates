@@ -36,7 +36,6 @@ JansenRitIN:
     - model_templates.jansen_rit.synapse.templates.JansenRitExcitatorySynapseRCO
     - JansenRitCPO
     - model_templates.jansen_rit.axon.templates.JansenRitPRO
-  label: JR_IN
 
 JansenRitPC:
   base: model_templates.jansen_rit.population.population.NeuralMass
@@ -55,7 +54,6 @@ JansenRitPC:
     model_templates.jansen_rit.synapse.templates.JansenRitInhibitorySynapseRCO: null
     JansenRitCPO: null
     model_templates.jansen_rit.axon.templates.JansenRitPRO: null
-  label: JR_PC
 
 
 

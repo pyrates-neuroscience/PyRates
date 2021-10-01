@@ -35,10 +35,10 @@
 
 # template-based interface
 from pyrates.frontend import template
-from pyrates.frontend.fileio import yaml
+from pyrates.frontend.fileio import yaml, pickle
 from pyrates.frontend.template import CircuitTemplate, NodeTemplate, EdgeTemplate, OperatorTemplate
 
-#external imports
+# external imports
 from typing import Union
 
 
@@ -63,6 +63,12 @@ def clear_frontend_caches(clear_template_cache=True, clear_operator_cache=True):
 def circuit_from_yaml(path: str):
     """Directly return CircuitIR instance from a yaml file."""
     return CircuitTemplate.from_yaml(path)
+
+
+# The following function are shorthands that bridge multiple interface steps
+def circuit_from_pickle(path: str, **kwargs):
+    """Directly return CircuitIR instance from a yaml file."""
+    return pickle.load(path, **kwargs)
 
 
 def simulate(circuit: Union[str, CircuitTemplate], **kwargs):
