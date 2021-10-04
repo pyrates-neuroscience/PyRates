@@ -27,7 +27,7 @@
 # Richard Gast and Daniel Rose et. al. in preparation
 """
 """
-from typing import Iterator
+from typing import Iterator, Callable
 
 from pyrates.ir.abc import AbstractBaseIR
 from pyrates.ir.operator_graph import OperatorGraph, VectorizedOperatorGraph
@@ -44,7 +44,8 @@ def clear_ir_caches():
     op_cache.clear()
 
 
-def cache_func(label: str, operators: dict, values: dict = None, template: str = None):
+def cache_func(label: str, operators: dict, values: dict = None, template: str = None, ir_class: Callable = None,
+               **kwargs):
     if operators is None:
         operators = {}
 
@@ -72,13 +73,13 @@ def cache_func(label: str, operators: dict, values: dict = None, template: str =
                     break
 
         # extend cached node
-        node.extend(NodeIR(label, operators=op_graph, values=values, template=template))
+        node.extend(NodeIR(label, operators=op_graph, values=values, template=template), **kwargs)
 
     except KeyError:
 
         # create new node
         op_cache[h] = op_graph
-        node_cache[h] = VectorizedNodeIR(label, operators=op_graph, values=values, template=template)
+        node_cache[h] = ir_class(label, operators=op_graph, values=values, template=template, **kwargs)
 
     return node_cache[h], changed_labels
 

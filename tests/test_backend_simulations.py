@@ -336,48 +336,7 @@ def test_2_3_edge():
         assert final_comparison == pytest.approx(0.0, rel=accuracy, abs=accuracy)
 
 
-@pytest.mark.skip
-def test_2_4_vectorization():
-    """Testing vectorization functionality of ComputeGraph class.
-
-    See Also
-    --------
-    :method:`_vectorize`: Detailed documentation of vectorize method of `ComputeGraph` class.
-    """
-
-    backends = ['numpy']
-
-    # define simulation params
-    dt = 1e-2
-    sim_time = 10.
-    sim_steps = int(sim_time / dt)
-    inp = np.zeros((sim_steps, 2)) + 0.5
-
-    for b in backends:
-        # test whether vectorized networks produce same output as non-vectorized backend
-        ################################################################################
-
-        # set up networks
-        net_config0 = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net12").apply()
-        net_config1 = CircuitTemplate.from_yaml("model_templates.test_resources.test_backend.net12").apply()
-        net0 = ComputeGraph(net_config=net_config0, name='net0', vectorization='none', dt=dt, build_in_place=False,
-                            backend=b)
-        net1 = ComputeGraph(net_config=net_config1, name='net1', vectorization='nodes', dt=dt, build_in_place=False,
-                            backend=b)
-
-        # simulate network behaviors
-        results0 = net0.run(sim_time, outputs={'a': 'pop0/op7/a', 'b': 'pop1/op7/a'},
-                            inputs={'all/op7/inp': inp})
-        results1 = net1.run(sim_time, outputs={'a': 'pop0/op7/a', 'b': 'pop1/op7/a'},
-                            inputs={'all/op7/inp': inp}, out_dir='/tmp/log')
-
-        error1 = nmrse(results0.values, results1.values)
-
-        assert np.sum(results1.values) > 0.
-        assert np.mean(error1) == pytest.approx(0., rel=1e-6, abs=1e-6)
-
-
-def test_2_5_solver():
+def test_2_4_solver():
     """Testing different numerical solvers of pyrates.
 
     See Also
@@ -412,7 +371,7 @@ def test_2_5_solver():
         assert np.mean(r.loc[:, 'a2'].values - r2.loc[:, 'a2'].values) == pytest.approx(0., rel=1e-4, abs=1e-4)
 
 
-def test_2_6_inputs_outputs():
+def test_2_5_inputs_outputs():
     """Tests the input-output interface of the run method in circuits of different hierarchical depth.
 
     See Also

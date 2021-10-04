@@ -55,6 +55,7 @@ __status__ = "Development"
 
 
 class CircuitTemplate(AbstractBaseTemplate):
+
     target_ir = CircuitIR
 
     def __init__(self, name: str, path: str, description: str = "A circuit template.", circuits: dict = None,
@@ -301,75 +302,14 @@ class CircuitTemplate(AbstractBaseTemplate):
                     values[n]["/".join((op, var))] = value
 
         # go through node templates and transform them into intermediate representations
-        node_keys = self.get_nodes(['all'])
-        nodes = {}
-        indices = {}
-        label_map = {}
-        for node in node_keys:
-            updates = values[node] if node in values else {}
-            node_template = self.get_node_template(node)
-            node_ir, label_map_tmp = node_template.apply(values=updates, label=node)
-            nodes[node_ir.label] = node_ir
-            indices[node] = node_ir.length-1
-            for key, val in label_map_tmp.items():
-                label_map[f"{node}/{key}"] = f"{node_ir.label}/{val}"
-            else:
-                if node != node_ir.label:
-                    label_map[node] = node_ir.label
+        nodes, indices, label_map = self._apply_nodes(node_keys=self.get_nodes(['all']), values=values)
 
         # reformat edge templates to EdgeIR instances
         #############################################
 
         # group edges that should be vectorized
         old_edges = self.collect_edges(delay_info=True)
-        edge_col = {}
-        for source, target, template, edge_dict, delayed in old_edges:
-
-            edge_dict = deepcopy(edge_dict)
-
-            # get correct operator and node prefixes for source and target variables
-            *s_node, s_op, s_var = source.split('/')
-            *t_node, t_op, t_var = target.split('/')
-            s_node = '/'.join(s_node)
-            t_node = '/'.join(t_node)
-            s_op_label = '/'.join((s_node, s_op))
-            t_op_label = '/'.join((t_node, t_op))
-
-            if s_op_label in label_map:
-                s_op_label = label_map[s_op_label]
-            elif s_node in label_map:
-                s_op_label = '/'.join((label_map[s_node], s_op))
-            if t_op_label in label_map:
-                t_op_label = label_map[t_op_label]
-            elif t_node in label_map:
-                t_op_label = '/'.join((label_map[t_node], t_op))
-
-            # create final information for source and target variables based on new prefixes
-            source_new = '/'.join((s_op_label, s_var))
-            target_new = '/'.join((t_op_label, t_var))
-            s_idx = indices[s_node]
-            t_idx = indices[t_node]
-
-            # group edges that connect the same vectorized node variables via the same edge templates
-            if (source_new, target_new, template, delayed) in edge_col:
-
-                # extend edge dict by edge variables
-                base_dict = edge_col[(source_new, target_new, template, delayed)]
-                for key, val in edge_dict.items():
-                    base_dict[key].append(val)
-                base_dict['source_idx'].append(s_idx)
-                base_dict['target_idx'].append(t_idx)
-
-            else:
-
-                # prepare edge dict for vectorization
-                for key, val in edge_dict.items():
-                    edge_dict[key] = [val]
-                edge_dict['source_idx'] = [s_idx]
-                edge_dict['target_idx'] = [t_idx]
-
-                # add edge dict to edge collection
-                edge_col[(source_new, target_new, template, delayed)] = edge_dict
+        edge_col = self._group_edges(edges=old_edges, label_map=label_map, indices=indices)
 
         # create final set of vectorized edges
         edges = []
@@ -378,8 +318,8 @@ class CircuitTemplate(AbstractBaseTemplate):
             # get edge template and instantiate it
             values = deepcopy(values)
 
-            # update edge template default values with passed edge values, if source and target are simple variable keys
-            if type(source) is str and type(target) is str and (source, target) in edge_values:
+            # update edge template default values with passed edge values,
+            if (source, target) in edge_values:
                 values.update(edge_values[(source, target)])
             weight = values.pop("weight", 1.)
 
@@ -391,93 +331,61 @@ class CircuitTemplate(AbstractBaseTemplate):
             source_idx = values.pop("source_idx", None)
             target_idx = values.pop("target_idx", None)
 
-            # treat additional source assignments in values dictionary
-            extra_sources = {}
-            keys_to_remove = []
-            for key, value in values.items():
-                try:
-                    _, _, _ = value.split("/")
-                except AttributeError:
-                    # not a string
-                    continue
-                except ValueError as e:
-                    raise ValueError(f"Wrong format of source specifier. Expected form: `node/op/var`. "
-                                     f"Actual form: {value}")
-                else:
-                    # was actually able to split that string? Then it is an additional source specifier.
-                    # Let's treat it as such
-                    try:
-                        op, var = key.split("/")
-                    except ValueError as e:
-                        if e.args[0].startswith("not enough"):
-                            # No operator specified: assume that it is a known input variable. If not, we will notice
-                            # later.
-                            var = key
-                            # Need to remove the key, but need to wait until after the iteration finishes.
-                            keys_to_remove.append(key)
-                        else:
-                            raise e
-                    else:
-                        # we know which variable in which operator, so let us set its type to "input"
-                        values[key] = "input"
-
-                    # assuming, the variable has been set to "input", we can omit any operator description and only
-                    # pass the actual variable name
-                    extra_sources[var] = value
-
-            for key in keys_to_remove:
-                values.pop(key)
-
             # treat empty dummy edge templates as not existent templates
-            # TODO: ensure that vectorized edge variables are mapped properly to old edge variable labels
             if template and len(template.operators) == 0:
                 template = None
+
+            # add standard edge
             if template is None:
-                edge_ir = None
-                label_map_tmp = dict()
+
+                # should not happen. Putting this just in case.
                 if values:
-                    # should not happen. Putting this just in case.
                     raise PyRatesException("An empty edge IR was provided with additional values. "
                                            "No way to figure out where to apply those values.")
 
+                # add simple linear edge to edge collection
+                edge_dict = self._prepare_edge_for_circuit(weight=weight, delay=delay, spread=spread,
+                                                           source_idx=source_idx, target_idx=target_idx)
+                edges.append((source, target, edge_dict))
+
+            # add edge from EdgeIR
             else:
-                edge_ir, label_map_tmp = template.apply(values=values)  # type: Optional[EdgeIR], dict
 
-            # check whether multiple source variables are defined
-            try:
-                # if source is a dictionary, pass on its values as source_var
-                source_var = list(source.values())[0]  # type: dict
-                source = list(source.keys())[0]
-            except AttributeError:
-                # no dictionary? only singular source definition present. go on as planned.
-                edge_dict = dict(edge_ir=edge_ir,
-                                 weight=weight,
-                                 delay=delay,
-                                 spread=spread)
+                sources = {}
+                for key, v in values.copy().items():
+                    if type(v) is str:
+                        sources[key] = values.pop(key)
 
-            else:
-                # oh source was indeed a dictionary. go pass source information as separate entry
-                edge_dict = dict(edge_ir=edge_ir,
-                                 weight=weight,
-                                 delay=delay,
-                                 spread=spread,
-                                 source_var=source_var)
+                # create edge ir
+                n = len(source_idx)
+                if n == 1:
+                    edge_ir = self._apply_edge(template, values=values, nodes=nodes, label_map=label_map)
+                else:
+                    edge_ir = self._apply_edge(template, values={key: v[0] for key, v in values.items()},
+                                               nodes=nodes, label_map=label_map)
+                    for i in range(1, n):
+                        edge_ir = self._apply_edge(template, values={key: v[i] for key, v in values.items()},
+                                                   nodes=nodes, label_map=label_map)
 
-            # now add extra sources, if there are some
-            if extra_sources:
-                edge_dict["extra_sources"] = extra_sources
-            if source_idx:
-                edge_dict['source_idx'] = source_idx
-                if type(edge_dict['weight']) is float:
-                    edge_dict['weight'] = [edge_dict['weight']] * len(edge_dict['source_idx'])
-            if target_idx:
-                edge_dict['target_idx'] = target_idx
-                if type(edge_dict['weight']) is float:
-                    edge_dict['weight'] = [edge_dict['weight']] * len(edge_dict['target_idx'])
+                # project inputs to edge ir node
+                if not sources:
+                    i_, in_var = edge_ir.inputs.copy().popitem()
+                    sources[f"{edge_ir.label}/{in_var[0]}"] = 'source'
 
-            edges.append((source, target,  # edge_unique_key,
-                          edge_dict
-                          ))
+                edge_idx = np.arange(edge_ir.length - n, edge_ir.length).tolist()
+
+                edge_ir_sources = self._extract_sources_from_edge_dict(sources, orig_source=source, label_map=label_map)
+                for edge_source, edge_target in edge_ir_sources.items():
+
+                    # add edge from source node to the new edge node
+                    edge_dict = self._prepare_edge_for_circuit(weight=weight, delay=delay, spread=spread,
+                                                               source_idx=source_idx, target_idx=edge_idx)
+                    edges.append((edge_source, edge_target, edge_dict))
+
+                # add edge from new edge node to target node
+                edge_dict = self._prepare_edge_for_circuit(weight=1.0, delay=None, spread=None,
+                                                           source_idx=edge_idx, target_idx=target_idx)
+                edges.append((edge_ir.output, target, edge_dict))
 
         # instantiate an intermediate representation of the circuit template
         self._ir = CircuitIR(label, nodes=nodes, edges=edges, verbose=verbose, adaptive_steps=adaptive_steps,
@@ -522,7 +430,7 @@ class CircuitTemplate(AbstractBaseTemplate):
                         nodes.extend(self.get_nodes(node_identifier=f"{n}/all", var_identifier=var_identifier))
                     return nodes
                 return self._get_nodes_with_var(var_identifier, nodes=list(net.keys()))
-            return []
+            return list()
 
         else:
 
@@ -662,6 +570,24 @@ class CircuitTemplate(AbstractBaseTemplate):
         input_labels.clear()
         gc.collect()
 
+    def _apply_nodes(self, node_keys: list, values: dict) -> tuple:
+        nodes = {}
+        indices = {}
+        label_map = {}
+        for node in node_keys:
+            updates = values[node] if node in values else {}
+            node_template = self.get_node_template(node)
+            node_ir, label_map_tmp = node_template.apply(values=updates, label=node)
+            nodes[node_ir.label] = node_ir
+            indices[node] = node_ir.length - 1
+            for key, val in label_map_tmp.items():
+                label_map[f"{node}/{key}"] = f"{node_ir.label}/{val}"
+            else:
+                if node != node_ir.label:
+                    label_map[node] = node_ir.label
+
+        return nodes, indices, label_map
+
     def _load_edge_templates(self, edges: List[Union[tuple, dict]]):
         """
         Reformat edges from [source, target, template_path, variables] to
@@ -791,34 +717,35 @@ class CircuitTemplate(AbstractBaseTemplate):
                 if len(target_nodes) == 1:
 
                     # extract index for single output node
-                    backend_op = self._get_op_identifier(f"{target_nodes[0]}/{out_op}")
+                    backend_key = self._relabel_var(f"{target_nodes[0]}/{out_op}/{out_var}", self._ir_map)
                     idx = indices[target_nodes[0]]
                     out_map[key] = [idx]
-                    out_vars[key] = f"{backend_op}/{out_var}"
+                    out_vars[key] = backend_key
 
                 elif target_nodes:
 
                     # extract index for multiple output nodes
                     out_map[key] = {}
                     for t in target_nodes:
-                        backend_op = self._get_op_identifier(f"{t}/{out_op}")
-                        idx = indices[t]
                         key2 = f"{t}/{out_op}/{out_var}"
+                        backend_key = self._relabel_var(key2, self._ir_map)
+                        idx = indices[t]
                         out_map[key][key2] = [idx]
-                        out_vars[key2] = f"{backend_op}/{out_var}"
+                        out_vars[key2] = backend_key
 
         else:
 
+            outputs = self._relabel_var(outputs, self._ir_map)
             *out_nodes, out_op, out_var = outputs.split('/')
             target_nodes = self.get_nodes(out_nodes, var_identifier=(out_op, out_var))
 
             # extract index for single output node
             for t in target_nodes:
-                backend_op = self._get_op_identifier(f"{t}/{out_op}")
                 key = f"{t}/{out_op}/{out_var}"
+                backend_key = self._relabel_var(key, self._ir_map)
                 idx = indices[t]
                 out_map[key] = [idx]
-                out_vars[key] = f"{backend_op}/{out_var}"
+                out_vars[key] = backend_key
 
         return out_map, out_vars
 
@@ -830,15 +757,123 @@ class CircuitTemplate(AbstractBaseTemplate):
             net = net.circuits[list(net.circuits)[0]]
         return circuit_lvls
 
-    def _get_op_identifier(self, op: str) -> str:
-        try:
-            return self._ir_map[op]
-        except KeyError:
+    def _group_edges(self, edges: list, label_map: dict, indices: dict) -> dict:
+        edge_col = {}
+        for source, target, template, edge_dict, delayed in edges:
+
+            edge_dict = deepcopy(edge_dict)
+
+            # extract variable info
+            *s_node, s_op, s_var = source.split('/')
+            *t_node, t_op, t_var = target.split('/')
+            s_node = '/'.join(s_node)
+            t_node = '/'.join(t_node)
+
+            # relabel variables according to variable map (accounting for vectorization)
+            source_new = self._relabel_var(source, label_map)
+            target_new = self._relabel_var(target, label_map)
+
+            s_idx = indices[s_node]
+            t_idx = indices[t_node]
+
+            # group edges that connect the same vectorized node variables via the same edge templates
+            if (source_new, target_new, template, delayed) in edge_col:
+
+                # extend edge dict by edge variables
+                base_dict = edge_col[(source_new, target_new, template, delayed)]
+                for key, val in edge_dict.items():
+                    if type(val) is not str:
+                        base_dict[key].append(val)
+                base_dict['source_idx'].append(s_idx)
+                base_dict['target_idx'].append(t_idx)
+
+            else:
+
+                # prepare edge dict for vectorization
+                for key, val in edge_dict.items():
+                    if type(val) is str:
+                        edge_dict[key] = val
+                    else:
+                        edge_dict[key] = [val]
+                edge_dict['source_idx'] = [s_idx]
+                edge_dict['target_idx'] = [t_idx]
+
+                # add edge dict to edge collection
+                edge_col[(source_new, target_new, template, delayed)] = edge_dict
+
+        return edge_col
+
+    def _extract_sources_from_edge_dict(self, edge_dict: dict, orig_source: str, label_map: dict) -> dict:
+
+        edge_sources = {}
+        for key, value in edge_dict.copy().items():
+
+            # handle edge input source
             try:
-                *node, op_tmp = op.split('/')
-                return f"{self._ir_map['/'.join(node)]}/{op_tmp}"
-            except KeyError:
-                return op
+                _, _, _ = value.split("/")
+            except AttributeError:
+                continue
+            except ValueError:
+                value = orig_source
+
+            # handle edge input variable
+            try:
+                _, _, _ = key.split("/")
+            except ValueError as e:
+                raise e
+            else:
+                edge_dict.pop(key)
+
+            edge_sources[self._relabel_var(value, label_map)] = self._relabel_var(key, label_map)
+
+        return edge_sources
+
+    @staticmethod
+    def _apply_edge(edge: EdgeTemplate, values: dict, nodes: dict, label_map: dict):
+
+        # apply edge template
+        edge_ir, label_map_tmp = edge.apply(values=values)  # type: EdgeIR, dict
+
+        # save edge ir references to dictionaries (treat it as a node)
+        nodes[edge_ir.label] = edge_ir
+        for key, val in label_map_tmp.items():
+            label_map[f"{edge.name}/{key}"] = f"{edge_ir.label}/{val}"
+        else:
+            if edge.name != edge_ir.label:
+                label_map[edge.name] = edge_ir.label
+
+        return edge_ir
+
+    @staticmethod
+    def _prepare_edge_for_circuit(weight: Union[float, list], delay: list = None, spread: list = None,
+                                  source_idx: list = None, target_idx: list = None) -> dict:
+
+        edge_dict = dict(weight=weight,
+                         delay=delay,
+                         spread=spread)
+
+        # now add extra sources, if there are some
+        if source_idx:
+            edge_dict['source_idx'] = source_idx
+            if type(edge_dict['weight']) is float:
+                edge_dict['weight'] = [edge_dict['weight']] * len(edge_dict['source_idx'])
+        if target_idx:
+            edge_dict['target_idx'] = target_idx
+            if type(edge_dict['weight']) is float:
+                edge_dict['weight'] = [edge_dict['weight']] * len(edge_dict['target_idx'])
+
+        return edge_dict
+
+    @staticmethod
+    def _relabel_var(var: str, var_map: dict) -> str:
+        var_split = var.split('/')
+        var_op = '/'.join(var_split[:-1])
+        var_node = '/'.join(var_split[:-2])
+        if var_op in var_map:
+             var = f"{var_map[var_op]}/{var_split[-1]}"
+        elif var_node in var_map:
+            var = f"{var_map[var_node]}/{var_split[-2]}/{var_split[-1]}"
+        return var
 
 
 def extend_var_dict(origin: dict, extension: dict):

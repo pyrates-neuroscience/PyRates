@@ -26,16 +26,13 @@ Op_rate:
 E_op:
   base: OperatorTemplate
   equations:
-    - "m = max(tanh(s*(v-theta)), 0)"
+    - "m = sigmoid(s*(v-theta))"
     - "d/dt * v = (I_e - I_i + I_ext + B - v) / tau"
-    - "d/dt * meg = ((I_e+I_i)/2.0-meg)/0.01"
   variables:
     m:
       default: output
     v:
       default: variable
-    meg:
-      default: variable
     I_e:
       default: input
     I_i:
@@ -45,46 +42,25 @@ E_op:
     theta:
       default: 0.0
     tau:
-      default: 10.0
+      default: 4.0
     I_ext:
       default: input
     B:
       default: 0.0
-    N:
-      default: 1.0
 
 # inhibitory node operator
 I_op:
-  base: OperatorTemplate
-  equations:
-    - "m_i = max(tanh(s*(v_i-theta)), 0)"
-    - "d/dt * v_i = (I_e - I_i + I_ext + B - v_i) / tau"
+  base: E_op
   variables:
-    m_i:
-      default: output
-    v_i:
-      default: variable
-    I_e:
-      default: input
-    I_i:
-      default: input
-    s:
-      default: 0.6667
-    theta:
-      default: 0.0
     tau:
-      default: 20.0
-    I_ext:
-      default: input
-    B:
-      default: 0.0
+      default: 12.0
 
 # edge operator
 STP_op:
   base: OperatorTemplate
   equations:
     - "d/dt * x = (1.0-x)/tau_r - k_r*u*x*m_in"
-    - "d/dt * u = (1.0-u)/tau_f + k_f*U*(1.0/U-u)*m_in"
+    - "d/dt * u = (1.0-u)/tau_f + k_f*U_0*(1.0/U_0-u)*m_in"
     - "m_out = m_in*x*u"
   variables:
     m_in:
@@ -103,7 +79,7 @@ STP_op:
       default: 0.2
     k_f:
       default: 0.0
-    U:
+    U_0:
       default: 1.0
 
 # alternative edge operator parametrization
@@ -118,7 +94,7 @@ STP_op_2:
       default: 0.0
     k_f:
       default: 0.6
-    U:
+    U_0:
       default: 0.05
 
 # observation operator
@@ -181,9 +157,9 @@ WC_stp:
     E: E_pop
     I: I_pop
   edges:
-    - [E/E_op/m, E/E_op/I_e, EE_edge, {weight: 1.0}]
-    - [E/E_op/m, I/I_op/I_e, EI_edge, {weight: 0.3}]
-    - [I/I_op/m_i, E/E_op/I_i, null, {weight: 0.7}]
+    - [E/E_op/m, E/E_op/I_e, EE_edge, {weight: 1.0, EE_edge/STP_op/m_in: source}]
+    - [E/E_op/m, I/I_op/I_e, EI_edge, {weight: 0.3, EI_edge/STP_op_2/m_in: source}]
+    - [I/I_op/m, E/E_op/I_i, null, {weight: 0.7}]
 
 # circuits
 WC_simple:

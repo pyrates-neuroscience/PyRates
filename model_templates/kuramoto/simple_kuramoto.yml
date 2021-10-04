@@ -22,6 +22,8 @@ Op_noise:
       default: input
     net_in:
       default: input
+    t:
+      default: variable
 
 Op_base:
   base: OperatorTemplate
@@ -80,8 +82,10 @@ KMN:
     p1: KM
     p2: KM
   edges:
-    - [{p1: {Op_base/theta: theta_s}, p2: {Op_base/theta: theta_t}}, p2/Op_base/net_in, Sin_edge, {weight: 2.0}]
-    - [{p2: {Op_base/theta: theta_s}, p1: {Op_base/theta: theta_t}}, p1/Op_base/net_in, Sin_edge, {weight: -2.0}]
+    - [p2/Op_base/theta, p2/Op_base/net_in, Sin_edge, {weight: 2.0, Sin_edge/Op_coupling/theta_s: source,
+                                                       Sin_edge/Op_coupling/theta_t: p2/Op_base/theta}]
+    - [p1/Op_base/theta, p1/Op_base/net_in, Sin_edge, {weight: -2.0, Sin_edge/Op_coupling/theta_s: source,
+                                                       Sin_edge/Op_coupling/theta_t: p1/Op_base/theta}]
 
 KMN_noise:
   base: CircuitTemplate
@@ -89,5 +93,7 @@ KMN_noise:
     p1: KM_noise
     p2: KM_noise
   edges:
-    - [{p1: {Op_noise/theta: theta_s}, p2: {Op_noise/theta: theta_t}}, p2/Op_noise/net_in, Sin_edge, {weight: 4.0}]
-    - [{p2: {Op_noise/theta: theta_s}, p1: {Op_noise/theta: theta_t}}, p1/Op_noise/net_in, Sin_edge, {weight: -4.0}]
+    - [ p2/Op_noise/theta, p2/Op_noise/net_in, Sin_edge, { weight: 4.0, Sin_edge/Op_coupling/theta_s: source,
+                                                         Sin_edge/Op_coupling/theta_t: p2/Op_noise/theta } ]
+    - [ p1/Op_noise/theta, p1/Op_noise/net_in, Sin_edge, { weight: -4.0, Sin_edge/Op_coupling/theta_s: source,
+                                                         Sin_edge/Op_coupling/theta_t: p1/Op_noise/theta } ]

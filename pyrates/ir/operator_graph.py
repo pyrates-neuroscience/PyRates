@@ -153,18 +153,6 @@ class VectorizedOperatorGraph(DiGraph):
 
         if op_graph is None:
             pass
-        # elif len(op_graph) == 0:
-        #     self.add_node("identity_operator",
-        #                   inputs=dict(in_var=dict(source=set(),
-        #                                           reduce_dim=True)),
-        #                   equations=["out_var = in_var"],
-        #                   variables=dict(in_var=dict(dtype="float32",
-        #                                              vtype="state_var",
-        #                                              shape=(1,)),
-        #                                  out_var=dict(dtype="float32",
-        #                                               vtype="state_var",
-        #                                               shape=(1,))),
-        #                   output="out_var")
         else:
             for op_key, data in op_graph:
                 try:
@@ -183,12 +171,11 @@ class VectorizedOperatorGraph(DiGraph):
                 op_values = deepcopy(values[op_key])
                 op_vars = self.operators[op_key]["variables"]
                 for var_key, value in op_values.items():
-                    if op_vars[var_key]["vtype"] != "input_variable":
-                        op_vars[var_key]["value"] = [value]
-                    else:
+                    if op_vars[var_key]["vtype"] == "input_variable":
                         op_vars[var_key]["value"] = value
                         op_vars[var_key]["vtype"] = "input"
-                # self.operators[op_key]["variables"] = op_vars
+                    else:
+                        op_vars[var_key]["value"] = value if type(value) is list else [value]
 
             self.add_edges_from(op_graph.edges)
 

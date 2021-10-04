@@ -28,6 +28,7 @@
 # Richard Gast and Daniel Rose et. al. in preparation
 from pyrates.frontend.template.operator_graph import OperatorGraphTemplate
 from pyrates.ir.node import cache_func
+from pyrates.ir.edge import EdgeIR
 
 
 class EdgeTemplate(OperatorGraphTemplate):
@@ -35,5 +36,5 @@ class EdgeTemplate(OperatorGraphTemplate):
     different operators. One template defines a typical structure of a given edge type."""
 
     @staticmethod
-    def target_ir(label: str, operators: dict, values: dict = None, template: str = None):
-        return cache_func(label, operators, values, template)
+    def target_ir(label: str, operators: dict, values: dict = None, template: str = None, **kwargs):
+        return cache_func(label, operators, values, template, EdgeIR, **kwargs)

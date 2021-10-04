@@ -133,17 +133,14 @@ def to_circuit(template: CircuitTemplate):
     return template.apply()
 
 
-
 def to_node(template: NodeTemplate):
     """Takes a node template and returns a NodeIR instance from it."""
     return template.apply()
 
 
-
 def to_edge(template: EdgeTemplate):
     """Takes a edge template and returns a EdgeIR instance from it."""
     return template.apply()
-
 
 
 def to_operator(template: OperatorTemplate):

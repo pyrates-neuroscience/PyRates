@@ -98,7 +98,7 @@ class OperatorGraphTemplate(AbstractBaseTemplate):
     def get_op(self, op: str):
         return self._op_map[op]
 
-    def apply(self, values: dict = None, label: str = None):
+    def apply(self, values: dict = None, label: str = None, **kwargs):
         """ Apply template to gain a node or edge intermediate representation.
 
         Parameters
@@ -145,7 +145,7 @@ class OperatorGraphTemplate(AbstractBaseTemplate):
                 "Found value updates that did not fit any operator by name. This may be due to a "
                 "typo in specifying the operator or variable to update. Remaining variables:"
                 f"{value_updates}")
-        return self.target_ir(label, operators, values=all_values, template=self.path)
+        return self.target_ir(label, operators, values=all_values, template=self.path, **kwargs)
 
     @staticmethod
     def target_ir(*args, **kwargs):
@@ -171,7 +171,7 @@ def _update_operators(base_operators: dict, updates: Union[str, List[str], dict]
         - list refers to multiple operators of the same class
         - dict contains operator path or name as key
     """
-    updated = deepcopy(base_operators)
+    updated = {}
 
     if isinstance(updates, str):
         updated[updates] = {}  # single operator path with no variations

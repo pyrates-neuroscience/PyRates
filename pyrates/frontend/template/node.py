@@ -27,7 +27,7 @@
 # 
 # Richard Gast and Daniel Rose et. al. in preparation
 from pyrates.frontend.template.operator_graph import OperatorGraphTemplate
-from pyrates.ir.node import cache_func
+from pyrates.ir.node import cache_func, VectorizedNodeIR
 
 
 class NodeTemplate(OperatorGraphTemplate):
@@ -35,5 +35,5 @@ class NodeTemplate(OperatorGraphTemplate):
     different operators. One template defines a typical structure of a given node type."""
 
     @staticmethod
-    def target_ir(label: str, operators: dict, values: dict = None, template: str = None):
-        return cache_func(label, operators, values, template)
+    def target_ir(label: str, operators: dict, values: dict = None, template: str = None, **kwargs):
+        return cache_func(label, operators, values, template, VectorizedNodeIR, **kwargs)

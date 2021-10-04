@@ -99,7 +99,7 @@ def test_full_jansen_rit_circuit_template_load():
     coupling_path = "model_templates.jansen_rit.edges.LinearCouplingOperator"
     edge_temp = template.edges[0][2]
     assert isinstance(edge_temp, EdgeTemplate)
-    assert list(edge_temp.operators)[1] is template_cache[coupling_path]
+    assert list(edge_temp.operators)[0] is template_cache[coupling_path]
     assert repr(template) == f"<CircuitTemplate '{path}'>"
 
 
@@ -112,16 +112,21 @@ def test_circuit_instantiation():
     circuit_template = template.from_yaml(path)
 
     circuit = circuit_template.apply()[0]
-    # used to be: test if two edges refer to the same coupling operator by comparing ids
-    # this is why we referenced by "operator"
-    # now: compare operators directly
-    edge_to_compare = circuit.edges[('JR_IIN', 'JR_PC', 0)]["edge_ir"]
-    for op_key, op in circuit.edges[("JR_PC", "JR_IIN", 0)]["edge_ir"].op_graph.nodes(data=True):
-        if op_key in edge_to_compare:
-            assert op["equations"] == edge_to_compare[op_key]['equations']
+
+    # test whether edge operator has been added as a network node
+    assert 'LCEdge' in circuit.nodes
+    assert circuit['LCEdge']['LinearCouplingOperator']['variables']['c']['shape'] == (4,)
+
+    # test whether edge operator is properly connected with network
+    assert circuit.edges[('LCEdge', 'JR_PC', 0)]
+    assert circuit.edges[('LCEdge', 'JR_PC', 1)]
+    assert len(circuit.edges[('LCEdge', 'JR_IIN', 0)]['target_idx']) == 2
+    assert circuit.edges[('JR_IIN', 'LCEdge', 0)]
+    assert circuit.edges[('JR_IIN', 'LCEdge', 1)]
+    assert len(circuit.edges[('JR_PC', 'LCEdge', 0)]['target_idx']) == 2
 
     # now test, if JR_EIN and JR_IIN have been vectorized into a single operator graph
-    assert len(circuit["JR_IIN"]['PotentialToRateOperator']['variables']['m_out']['value']) == 2
+    assert len(circuit["JR_IIN"]['JansenRitPRO']['variables']['m_out']['value']) == 2
 
     # now test, if the references are collected properly
     for node in circuit_template.nodes:
@@ -167,6 +172,8 @@ def test_equation_alteration():
     assert operator.equations == ("V = k * I_0",)
 
 
+# ToDo: implement to_dict methods on template classes
+@pytest.mark.skip
 def test_yaml_dump():
     """Test the functionality to dump an object to YAML"""
     from pyrates.frontend import fileio, clear_frontend_caches
@@ -176,8 +183,7 @@ def test_yaml_dump():
 
     from pyrates.frontend.template.circuit import CircuitTemplate
     clear_frontend_caches()
-    template = CircuitTemplate.from_yaml("model_templates.jansen_rit.circuit.JansenRitCircuit")
-    circuit = template.apply()[0]
+    circuit = CircuitTemplate.from_yaml("model_templates.jansen_rit.circuit.JansenRitCircuit")
 
     with pytest.raises(ValueError):
         fileio.save(circuit, "output/yaml_dump.yaml", "yml")
@@ -188,9 +194,8 @@ def test_yaml_dump():
     fileio.save(circuit, "output/yaml_dump.yaml", "yaml", "DumpedCircuit")
 
     # reload saved circuit
-    template.clear()
+    circuit.clear()
     clear_frontend_caches()
     saved_circuit = CircuitTemplate.from_yaml("output/yaml_dump/DumpedCircuit"
                                               ).apply(step_size=1e-3)[0]
     assert saved_circuit
-    # ToDo: figure out a simple way to compare both instances

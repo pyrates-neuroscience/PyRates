@@ -31,43 +31,27 @@
 from typing import List
 
 from pyrates.backend import PyRatesException
-from pyrates.ir.node import NodeIR
+from pyrates.ir.node import VectorizedNodeIR, NodeIR
 from pyrates.ir.operator_graph import OperatorGraph
 
 __author__ = "Daniel Rose"
 __status__ = "Development"
 
 
-class EdgeIR(NodeIR):
+class EdgeIR(VectorizedNodeIR):
 
-    __slots__ = ["_inputs"]
+    __slots__ = VectorizedNodeIR.__slots__ + ["_inputs"]
 
     def __init__(self, label: str, operators: OperatorGraph = None, values: dict = None, template: str = None):
 
         if not operators:
-            # treat the special case of an empty operator graph
             operators = {}
             values = {}
-            # operators = dict(identity_operator=OperatorIR(equations=["out_var = in_var"],
-            #                                               variables=[("in_var", "state_var", "float32", (1,)),
-            #                                                          ("out_var", "state_var", "float32", (1,))],
-            #                                               inputs=["in_var"],
-            #                                               output="out_var"))
-            # values = dict(identity_operator=dict(in_var=0.,
-            #                                      out_var=0.))
 
         super().__init__(label=label, operators=operators, values=values, template=template)
 
         self._inputs = None
-
-    @property
-    def input(self):
-        """Redirects to `self.inputs` for compatibility."""
-        return self.inputs
-
-    @property
-    def input_var(self):
-        return self.inputs
+        self.length = 1
 
     @property
     def inputs(self):
@@ -122,17 +106,13 @@ class EdgeIR(NodeIR):
 
         # only one single output operator allowed
         if len(out_op) == 1:
-            out_var = self[out_op[0]].output
-            return f"{out_op[0]}/{out_var}"
+            out_var = self[out_op[0]]['output']
+            return f"{self.label}/{out_op[0]}/{out_var}"
         elif len(out_op) == 0:
             return None
         else:
             raise PyRatesException("Too many or too little output operators found. Exactly one output operator and "
                                    "associated output variable is required per edge.")
-
-    @property
-    def output_var(self):
-        return self.output
 
     def __hash__(self):
         raise NotImplementedError
