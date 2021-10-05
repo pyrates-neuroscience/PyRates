@@ -15,9 +15,9 @@ Op_noise:
     K:
       default: 1.0
     t_old:
-      default: 0.0
+      default: variable(0.0)
     t_new:
-      default: 0.0
+      default: variable(0.0)
     xi:
       default: input
     net_in:
@@ -42,13 +42,13 @@ Op_base:
 Op_coupling:
   base: OperatorTemplate
   equations:
-    - "k = sin(theta_s-theta_t)"
+    - "s = sin(theta_s-theta_t)"
   variables:
     theta_s:
       default: input
     theta_t:
       default: input
-    k:
+    s:
       default: output
 
 Sin_edge:

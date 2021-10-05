@@ -1145,16 +1145,37 @@ def var_in_expression(var: str, expr: str) -> bool:
         return True
 
     # define follow-up operations/signs that are allowed to follow directly after term in eq
-    allowed_follow_ops = '+-=*/^<>=!.%@[]():, '
+    follow_ops = '+-=*/^<>=!.%@[]():, '
 
-    # find variable in expression
-    idx = expr.find(var)
-    idx_follow_op = idx + len(var)
+    start = 0
+    n = len(expr)
+    exists_in_expr = False
+    while start < n:
 
-    # decide whether variable actually exists in expression
-    return ((idx_follow_op < len(expr) and expr[idx_follow_op] in allowed_follow_ops) and
-        (idx == 0 or expr[idx - 1] in allowed_follow_ops)) or \
-            (idx_follow_op == len(expr) and expr[idx - 1] in allowed_follow_ops)
+        try:
+
+            # find variable in string and extract the follow-up sign
+            idx = expr[start:].find(var)
+            if idx == -1:
+                break
+            idx += start
+            idx_next = idx + len(var)
+            next_sign = expr[idx_next]
+            prev_sign = expr[idx - 1]
+
+            # decide whether variable actually exists in expression
+            exists_in_expr = ((idx_next < n and next_sign in follow_ops) and
+                              (idx == 0 or prev_sign in follow_ops)) or (idx_next == n and prev_sign in follow_ops)
+
+            if exists_in_expr:
+                break
+            start = idx_next
+
+        except IndexError:
+
+            break
+
+    return exists_in_expr
 
 
 def extract_var(var: str) -> tuple:

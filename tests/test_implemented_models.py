@@ -145,22 +145,23 @@ def test_3_3_wilson_cowan():
         # repeat for model with short-term plasticity
         #############################################
 
-        T = 220.0
+        T = 320.0
         dt = 5e-3
         dts = 1e-2
 
-        in_start = int(np.round(30.0 / dt))
+        in_start = int(np.round(130.0 / dt))
         in_dur = int(np.round(20.0 / dt))
         inp = np.zeros((int(np.round(T / dt)),))
-        inp[in_start:in_start + in_dur] = 5.0
+        inp[in_start:in_start + in_dur] = 1.0
 
         # perform simulation
         r2 = simulate("model_templates.wilson_cowan.simple_wilsoncowan.WC_stp", simulation_time=T,
                       sampling_step_size=dts, inputs={"E/E_op/I_ext": inp}, outputs={"V_e": "E/E_op/v"},
-                      backend=b, solver='scipy', step_size=dt, clear=False, method='RK23')
+                      backend=b, solver='scipy', step_size=dt, clear=True, method='RK23', atol=1e-6, rtol=1e-6,
+                      apply_kwargs={'backend_kwargs': {'file_name': 'wc2'}})
 
         # test firing rate relationships at pre-defined times
-        times = [29.0, 49.0, 219.0]
+        times = [129.0, 149.0, 319.0]
         indices = [np.argmin(np.abs(t - r2.index)) for t in times]
         assert r2.iloc[indices[0], 0] < r2.iloc[indices[1], 0]
         assert r2.iloc[indices[0], 0] - r2.iloc[indices[2], 0] == pytest.approx(0., rel=1e-3, abs=1e-3)
@@ -183,7 +184,7 @@ def test_3_4_kuramoto():
         # perform simulation
         r1 = simulate("model_templates.kuramoto.simple_kuramoto.KM_single", simulation_time=T, sampling_step_size=dts,
                       outputs={"theta": "p1/Op_base/theta"}, backend=b, solver='scipy', step_size=dt, clear=True,
-                      method='RK23')
+                      method='RK23', apply_kwargs={'backend_kwargs': {'file_name': 'km1'}})
 
         # test linear oscillator properties
         omega = 10.0
@@ -197,7 +198,8 @@ def test_3_4_kuramoto():
         # perform simulation
         r2 = simulate("model_templates.kuramoto.simple_kuramoto.KMN", simulation_time=T, sampling_step_size=dts,
                       outputs={"theta1": "p1/Op_base/theta", "theta2": "p2/Op_base/theta"},
-                      backend=b, solver='scipy', step_size=dt, clear=True)
+                      backend=b, solver='scipy', step_size=dt, clear=True,
+                      apply_kwargs={'backend_kwargs': {'file_name': 'km2'}})
 
         # test whether oscillator 2 showed a faster phase development than oscillator 1
         assert r2['theta1'].iloc[-1] < r2['theta2'].iloc[-1]
@@ -212,7 +214,8 @@ def test_3_4_kuramoto():
         r3 = simulate("model_templates.kuramoto.simple_kuramoto.KMN_noise", simulation_time=T, sampling_step_size=dts,
                       outputs={"theta1": "p1/Op_noise/theta", "theta2": "p2/Op_noise/theta"},
                       inputs={"p1/Op_noise/xi": inp1, "p2/Op_noise/xi": inp2}, backend=b, solver='scipy',
-                      step_size=dt, clear=True, method='RK23')
+                      step_size=dt, clear=True, method='RK23',
+                      apply_kwargs={'backend_kwargs': {'file_name': 'km3'}})
 
         # test whether oscillator 2 showed a faster phase development than oscillator 1
-        assert r3['theta1'].iloc[-1, 0] < r3['theta2'].iloc[-1, 0]
+        assert r3['theta1'].iloc[-1] < r3['theta2'].iloc[-1]
