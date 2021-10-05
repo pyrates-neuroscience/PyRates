@@ -53,64 +53,41 @@ References
 # Basic QIF Model
 # ===============
 #
-# We will start out by a step-by-step tutorial of how to use the QIF model without adaptation.
+# We will start out by a tutorial of how to use the QIF model without adaptation. To this end, we will use the
+# high-level interfaces from PyRates which allow to perform model loading and simulation in a single step.
+# For a step-to-step tutorial of the more low-level interfaces, have a look at the Jansen-Rit example.
 
 # %%
-# Step 1: Importing the frontend class for defining models
-# --------------------------------------------------------
-#
-# As a first step, we import the :code:`pyrates.frontend.CircuitTemplate` class, which allows us to set up a model
-# definition in PyRates.
-
-from pyrates.frontend import CircuitTemplate
-
-# %%
-# Step 2: Loading a model template from the `model_templates` library
-# -------------------------------------------------------------------
-#
-# In the second step, we load the model template for an excitatory QIF population that comes with PyRates via the
-# :code:`from_yaml()` method of the :code:`CircuitTemplate`. This method returns a :code:`CircuitTemplate` instance
-# which provides the method :code:`apply()` for turning it into a graph-based representation, i.e. a
-# :code:`pyrates.ir.CircuitIR` instance. Have a look at the yaml definition of the model that can be found at the path
-# used for the :code:`from_yaml()` method. You will see that all variables and parameters are already defined there.
-# These are the basic steps you perform, if you want to load a model that is
-# defined inside a yaml file. To check out the different model templates provided by PyRates, have a look at
-# the :code:`PyRates.model_templates` module.
-
-qif_circuit = CircuitTemplate.from_yaml("model_templates.montbrio.simple_montbrio.QIF_exc").apply()
-
-# %%
-# Step 3: Loading the model into the backend
-# ------------------------------------------
-#
-# In this example, we directly load the :code:`CircuitIR` instance into the backend via the  :code:`compile()` method
-# without any further changes to the graph. This way, a :code:`pyrates.backend.NumpyBackend` instance is created.
-# After this step, structural modifications of the network are not possible anymore.
-
-qif_compiled = qif_circuit._compile(backend='numpy', step_size=1e-3)
-
-# %%
-# Step 4: Numerical simulation of a the model behavior in time
+# Step 1: Numerical simulation of a the model behavior in time
 # ------------------------------------------------------------
 #
-# After loading the model into the backend, numerical simulations can be performed via the :code:`run()` method.
-# Calling this function will solve the initial value problem of the above defined differential equations for a time
-# interval from 0 to the given simulation time.
-# This solution will be calculated numerically by a differential equation solver in the backend, starting with a defined
-# step-size.
+# Here, we use the :code:`simulate` function imported from PyRates. As a first argument to this function, either a path
+# to a YAML-based model definition or a :code:`CircuitTemplate` instance can be provided. The function will then compile
+# the model and solve the initial value problem of the above defined differential equations for a time interval from
+# 0 to the given simulation time. This solution will be calculated numerically by a differential equation solver in
+# the backend, starting with a defined step-size. Here, we use the default backend and solver.
+# Check out the arguments of the code:`CircuitTemplate.run()` method for a detailed explanation of the arguments that
+# you can use to adjust this numerical procedure.
 
-results = qif_compiled.run(simulation_time=40.0, outputs={'r': 'p/Op_e/r'})
+from pyrates import simulate
+
+results = simulate("model_templates.montbrio.simple_montbrio.QIF_exc", step_size=1e-3, simulation_time=40.0,
+                   outputs={'r': 'p/Op_e/r'}, clear=True)
 
 # %%
-# Step 5: Visualization of the solution
+# Step 2: Visualization of the solution
 # -------------------------------------
 #
-# The output of the :code:`run()` method is a :code:`pandas.Dataframe`, which comes with a :code:`plot()` method for
-# plotting the timeseries it contains.
-# This timeseries represents the numerical solution of the initial value problem solved in step 4 with respect to the
+# The output of the :code:`simulate()` function is a :code:`pandas.Dataframe`, which allows for direct plotting of the
+# timeseries it contains.
+# This timeseries represents the numerical solution of the initial value problem solved in step 1 with respect to the
 # state variable :math:`r` of the model.
 
-results.plot()
+import matplotlib.pyplot as plt
+fig, ax = plt.subplots()
+ax.plot(results)
+ax.set_xlabel('time')
+ax.set_ylabel('r')
 
 # %%
 # QIF SFA Model
@@ -119,10 +96,13 @@ results.plot()
 # Now, lets have a look at the QIF model with spike-frequency adaptation. We will follow the same steps as outlined
 # above.
 
-qif_sfa_circuit = CircuitTemplate.from_yaml("model_templates.montbrio.simple_montbrio.QIF_sfa").apply()
-qif_sfa_compiled = qif_sfa_circuit._compile(backend='numpy', step_size=1e-3)
-results = qif_sfa_compiled.run(simulation_time=40.0, outputs={'r': 'p/Op_sfa/r'})
-results.plot()
+results2 = simulate("model_templates.montbrio.simple_montbrio.QIF_sfa", simulation_time=40.0, step_size=1e-3,
+                    outputs={'r': 'p/Op_sfa/r'}, clear=True)
+fig2, ax2 = plt.subplots()
+ax2.plot(results2)
+ax2.set_xlabel('time')
+ax2.set_ylabel('r')
+plt.show()
 
 # %%
 # you can see that, by adding the adaptation variable to the model, we introduced synchronized bursting behavior to

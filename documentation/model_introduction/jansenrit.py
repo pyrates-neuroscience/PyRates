@@ -90,46 +90,41 @@ from pyrates.frontend import CircuitTemplate
 # -------------------------------------------------------------------
 #
 # In the second step, we load a model template for the Jansen-Rit model that comes with PyRates via the
-# :code:`from_yaml()` method of the :code:`CircuitTemplate`. This method returns a :code:`CircuitTemplate` instance
-# which provides the method :code:`apply()` for turning it into a graph-based representation, i.e. a
-# :code:`pyrates.ir.CircuitIR` instance. Have a look at the yaml definition of the model that can be found at the path
-# used for the :code:`from_yaml()` method. You will see that all variables and parameters are already defined there.
-# These are the basic steps you perform, if you want to load a model that is
-# defined inside a yaml file. To check out the different model templates provided by PyRates, have a look at
-# the :code:`PyRates.model_templates` module.
+# :code:`from_yaml()` method of the :code:`CircuitTemplate`. This method returns a :code:`CircuitTemplate` instance.
+# Have a look at the yaml definition of the model that can be found via the path used for the :code:`from_yaml()`
+# method. You will see that all variables and parameters are already defined there. As an alternative, you can also use
+# the :code:`circuit_from_yaml()` function that you can simply import via :code:`from pyrates import circuit_from_yaml`.
+# These are the basic steps you perform, if you want to load a model that is defined inside a yaml file.
+# To check out the different model templates provided by PyRates, have a look at the :code:`PyRates.model_templates`
+# module.
 
-jrc = CircuitTemplate.from_yaml("model_templates.jansen_rit.simple_jansenrit.JRC_simple").apply()
-
-# %%
-# Step 3: Loading the model into the backend
-# ------------------------------------------
-#
-# In this example, we directly load the :code:`CircuitIR` instance into the backend via the  :code:`compile()` method
-# without any further changes to the graph. This way, a :code:`pyrates.backend.NumpyBackend` instance is created.
-# After this step, structural modifications of the network are not possible anymore. Here, we choose scipy as a solver
-# for our differential equation system. The default is the forward Euler method that is implemented in PyRates itself.
-# Generally, the scipy solver is both more accurate and faster and thus the recommended solver in PyRates.
-
-jrc_compiled = jrc._compile(backend='numpy', step_size=1e-4, solver='scipy')
+jrc = CircuitTemplate.from_yaml("model_templates.jansen_rit.simple_jansenrit.JRC_simple")
 
 # %%
-# Step 4: Numerical simulation of a the model behavior in time
+# Step 3: Numerical simulation of a the model behavior in time
 # ------------------------------------------------------------
 #
-# After loading the model into the backend, numerical simulations can be performed via the :code:`run()` method.
+# After loading the model template, numerical simulations can be performed via the :code:`run()` method.
 # Calling this function will solve the initial value problem of the above defined differential equations for a time
 # interval from 0 to the given simulation time.
 # This solution will be calculated numerically by a differential equation solver in the backend, starting with a defined
-# step-size.
+# step-size. As part of this process, a :code:`pyrates.backend.BaseBackend` instance is created that contains a graph
+# representation of the network equations. How exactly these equations will be solved, can be customized via the
+# arguments of the :code:`run()` method. You can choose between different backends, numerical solvers and integration
+# step-sizes, for instance. Here, we choose the `scipy` backend, which uses a 4(5)th order Runge-Kutta method as default
+# numerical solver. The default of the :code:`run()` method is the forward Euler method that is implemented in PyRates
+# itself.
 
-results = jrc_compiled.run(simulation_time=2.0,
-                           step_size=1e-4,
-                           sampling_step_size=1e-3,
-                           outputs={'V_pce': 'JRC/JRC_op/PSP_pc_e',
-                                    'V_pci': 'JRC/JRC_op/PSP_pc_i'})
+results = jrc.run(simulation_time=2.0,
+                  step_size=1e-4,
+                  sampling_step_size=1e-3,
+                  outputs={'V_pce': 'JRC/JRC_op/PSP_pc_e',
+                           'V_pci': 'JRC/JRC_op/PSP_pc_i'},
+                  backend='numpy',
+                  solver='scipy')
 
 # %%
-# Step 5: Visualization of the solution
+# Step 4: Visualization of the solution
 # -------------------------------------
 #
 # The output of the :code:`run()` method is a :code:`pandas.Dataframe`, which comes with a :code:`plot()` method for
@@ -137,13 +132,17 @@ results = jrc_compiled.run(simulation_time=2.0,
 # This timeseries represents the numerical solution of the initial value problem solved in step 4 with respect to the
 # state variables :math:`V_{pce}` and :math:`V_{pci}` of the model.
 
-results.plot()
+import matplotlib.pyplot as plt
+plt.plot(results)
 
 # %%
 # To visualize the average membrane potential at the PC somata, simply plot the difference between :math:`V_{pce}` and
 # :math:`V_{pci}`:
 
 v_pc = results['V_pce'] - results['V_pci']
-v_pc.plot()
-from matplotlib.pyplot import show
-show()
+plt.plot(v_pc)
+plt.legend(['V_pce', 'V_pci', 'V_pce - V_pci'])
+plt.ylabel('V')
+plt.xlabel('time')
+
+plt.show()
