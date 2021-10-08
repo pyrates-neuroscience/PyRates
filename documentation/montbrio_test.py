@@ -18,7 +18,7 @@ circuit = CircuitTemplate.from_yaml("../model_templates/montbrio/simple_montbrio
                                                          'p/Op_sfa_exp/J': 15.0*np.sqrt(2.0),
                                                          'p/Op_sfa_exp/alpha': 0.7}
                                             )
-compute_graph = circuit._compile(vectorization=True, backend='numpy', name='montbrio', solver='scipy')
+compute_graph = circuit.compile(vectorization=True, backend='numpy', name='montbrio', solver='scipy')
 
 result, t = compute_graph.run(T,
                               step_size=dt,

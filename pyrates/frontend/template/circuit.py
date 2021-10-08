@@ -37,6 +37,8 @@ arguments. For more detailed descriptions, see the respective docstrings.
 import gc
 from typing import List, Union, Dict, Optional
 from copy import deepcopy
+
+import pandas as pd
 from pandas import DataFrame, MultiIndex
 import numpy as np
 
@@ -174,7 +176,7 @@ class CircuitTemplate(AbstractBaseTemplate):
     def run(self, simulation_time: float, step_size: float, inputs: Optional[dict] = None,
             outputs: Optional[Union[dict, list]] = None, sampling_step_size: Optional[float] = None,
             solver: str = 'euler', backend: str = None, out_dir: Optional[str] = None, verbose: bool = True,
-            profile: bool = False, apply_kwargs: dict = None, clear: bool = True, **kwargs):
+            apply_kwargs: dict = None, clear: bool = True, **kwargs) -> pd.DataFrame:
 
         # add extrinsic inputs to network
         #################################
@@ -209,8 +211,7 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         # perform simulation
         outputs = net._ir.run(simulation_time=simulation_time, step_size=step_size, solver=solver,
-                              sampling_step_size=sampling_step_size, outputs=outputs_ir, out_dir=out_dir,
-                              profile=profile, **kwargs)
+                              sampling_step_size=sampling_step_size, outputs=outputs_ir, out_dir=out_dir, **kwargs)
 
         # apply indices to output variables
         outputs_final = {}
@@ -254,6 +255,32 @@ class CircuitTemplate(AbstractBaseTemplate):
             net.clear()
 
         return results
+
+    def get_run_func(self, step_size: float, inputs: Optional[dict] = None, backend: str = None,
+                     out_dir: Optional[str] = None, verbose: bool = True, apply_kwargs: dict = None, clear: bool = True,
+                     **kwargs) -> tuple:
+
+        # add extrinsic inputs to network
+        adaptive_steps = kwargs.pop('adaptive_step_size', False)
+        net = self
+        if inputs:
+            for target, in_array in inputs.items():
+                net = net._add_input(target, in_array, adaptive_steps, in_array.shape[0] * step_size)
+
+        # translate circuit template into a graph representation
+        if not apply_kwargs:
+            apply_kwargs = {}
+        _, _, ir_indices = net.apply(adaptive_steps=adaptive_steps, verbose=verbose, backend=backend,
+                                     step_size=step_size, **apply_kwargs)
+
+        # generate the run function
+        func, args = net._ir.get_run_func(step_size=step_size, out_dir=out_dir, **kwargs)
+
+        # clear the network temporary files
+        if clear:
+            net.clear()
+
+        return func, args
 
     def apply(self, adaptive_steps: bool = None, label: str = None, node_values: dict = None, edge_values: dict = None,
               verbose: bool = True, **kwargs) -> tuple:
@@ -569,6 +596,18 @@ class CircuitTemplate(AbstractBaseTemplate):
         clear_ir_caches()
         input_labels.clear()
         gc.collect()
+
+    @property
+    def intermediate_representation(self):
+        return self._ir
+
+    @property
+    def backend(self):
+        return self._ir.backend
+
+    @property
+    def compute_graph(self):
+        return self._ir.backend.graph
 
     def _apply_nodes(self, node_keys: list, values: dict) -> tuple:
         nodes = {}

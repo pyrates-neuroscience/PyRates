@@ -77,19 +77,21 @@ class CircuitIR(AbstractBaseIR):
         """
 
         # choose a backend
-        if not backend_kwargs:
-            backend_kwargs = {}
-        if not backend or backend == 'numpy':
-            from pyrates.backend.base_backend import BaseBackend
-            backend = BaseBackend
-        elif backend == 'tensorflow':
+        if backend == 'tensorflow':
             from pyrates.backend.tensorflow_backend import TensorflowBackend
             backend = TensorflowBackend
         elif backend == 'fortran':
             from pyrates.backend.fortran_backend import FortranBackend
             backend = FortranBackend
+        elif backend == 'PyAuto' or backend == 'pyauto':
+            from pyrates.backend.fortran_backend import PyAutoBackend
+            backend = PyAutoBackend
         else:
-            raise ValueError(f'Invalid backend type: {backend}. See documentation for supported backends.')
+            from pyrates.backend.base_backend import BaseBackend
+            backend = BaseBackend
+
+        if not backend_kwargs:
+            backend_kwargs = {}
         backend_kwargs['name'] = label
         backend_kwargs['float_default_type'] = float_precision
 
@@ -190,10 +192,6 @@ class CircuitIR(AbstractBaseIR):
         attr
             additional keyword attributes that can be added to the node data. (default `networkx` syntax.)
         """
-
-        # get unique labels for nodes  --> deprecated and removed.
-        # for label in nodes:
-        #     self.label_map[label] = self._get_unique_label(label)
 
         # assign NodeIR instances as "node" keys in a separate dictionary, because networkx saves node attributes into
         # a dictionary
@@ -340,14 +338,10 @@ class CircuitIR(AbstractBaseIR):
         target_node, target_var = self._parse_edge_specifier(target, data, "target_var")
 
         # step 2: parse source variable specifier (might be single string or dictionary for multiple source variables)
-        # ToDo: treat extra_sources properly, possibly by mapping inputs and sources at this point
         source_vars, extra_sources = self._parse_source_vars(source_node, source_var, edge_ir,
                                                              data.pop("extra_sources", None))
 
-        # step 3: verify complete source/target paths (safeguard, might be unnecessary)
-
-        # step 4: add edges
-        # temporary workaround to make sure source/target variable/operator and nodes are defined properly
+        # step 3: add edges
         attr_dict = dict(edge_ir=edge_ir,
                          weight=weight,
                          delay=delay,
@@ -356,23 +350,105 @@ class CircuitIR(AbstractBaseIR):
                          target_var=target_var,
                          extra_sources=extra_sources,
                          **data)
-        # ToDo: make sure multiple source variables are understood down the road
         self.graph.add_edge(source_node, target_node, **attr_dict)
+
+    def run(self,
+            simulation_time: float,
+            outputs: Optional[dict] = None,
+            sampling_step_size: Optional[float] = None,
+            solver: str = 'euler',
+            out_dir: Optional[str] = None,
+            verbose: bool = True,
+            **kwargs
+            ) -> Union[dict, Tuple[dict, float]]:
+        """Simulate the backend behavior over time via a tensorflow session.
+
+        Parameters
+        ----------
+        simulation_time
+            Simulation time in seconds.
+        outputs
+            Output variables that will be returned. Each key is the desired name of an output variable and each value is
+            a string that specifies a variable in the graph in the same format as used for the input definition:
+            'node_name/op_name/var_name'.
+        sampling_step_size
+            Time in seconds between sampling points of the output variables.
+        solver
+            Numerical solving scheme to use for differential equations. Currently supported ODE solving schemes:
+            - 'euler' for the explicit Euler method
+            - 'scipy' for integration via the `scipy.integrate.solve_ivp` method.
+        out_dir
+            Directory in which to store outputs.
+        verbose
+            If true, status updates will be printed to the console.
+        kwargs
+            Keyword arguments that are passed on to the chosen solver.
+
+        Returns
+        -------
+        Union[DataFrame, Tuple[DataFrame, float]]
+            First entry of the tuple contains the output variables in a pandas dataframe, the second contains the
+            simulation time in seconds. If profiling was not chosen during call of the function, only the dataframe
+            will be returned.
+
+        """
+
+        filterwarnings("ignore", category=FutureWarning)
+
+        if verbose:
+            print("Simulation Progress")
+            print("-------------------")
+
+        # prepare simulation
+        ####################
+
+        if verbose:
+            print("\t (1) Processing output variables...")
+
+        # collect backend output variables
+        ##################################
+
+        outputs_col = {}
+
+        if outputs:
+
+            # extract backend variables that correspond to requested output variables
+            for key, val in outputs.items():
+                outputs_col[key] = self.backend.get_var(val, get_key=True)
+
+            if verbose:
+                print("\t\t...finished.")
+
+        # run simulation
+        ################
+
+        if verbose:
+            print("\t (2) Performing the simulation...")
+
+        discrete_time = False if self._adaptive_steps else True
+        results = self.backend.run(T=simulation_time, dt=self.step_size, dts=sampling_step_size,
+                                   out_dir=out_dir, outputs=outputs_col, solver=solver, verbose=verbose,
+                                   discrete_time=discrete_time, **kwargs)
+
+        if verbose:
+            print("\t\t...finished.")
+
+        return results
+
+    def get_run_func(self, func_name: str, file_name: str, **kwargs):
+
+        run_info = self.backend.compile(func_name=func_name, file_name=file_name, **kwargs)
+        return run_info['func'], run_info['func_args']
+
+    def clear(self):
+        """Clears the backend graph from all operations and variables.
+        """
+        self.backend.clear()
+        in_edge_indices.clear()
+        in_edge_vars.clear()
 
     def getitem_from_iterator(self, key: str, key_iter: Iterator[str]):
         return self.graph.nodes[key]["node"]
-
-    def to_dict(self):
-        """Transform this object into a dictionary."""
-        from pyrates.frontend.dict import from_circuit
-        return from_circuit(self)
-
-    @staticmethod
-    def from_yaml(path, **kwargs):
-        from pyrates.frontend import circuit_from_yaml
-        c = circuit_from_yaml(path)
-        c.apply(**kwargs)
-        return c
 
     @property
     def nodes(self):
@@ -383,47 +459,6 @@ class CircuitIR(AbstractBaseIR):
     def edges(self):
         """Shortcut to self.graph.edges. See documentation of `networkx.MultiDiGraph.edges`."""
         return self.graph.edges
-
-    def _parse_edge_specifier(self, specifier: str, data: dict, var_string: str) -> Tuple[str, Union[str, dict]]:
-        """Parse source or target specifier for an edge.
-
-        Parameters
-        ----------
-        specifier
-            String that defines either a specific node or complete variable path of source or target for an edge.
-            Format: *circuits/node/op/var
-        data
-            dictionary containing additional information about the edge. This function looks for a variable specifier
-            as specified in `var_string`
-        var_string
-            String that points to an optional key of the `data` dictionary. Should be either 'source_var' or
-            'target_var'
-
-        Returns
-        -------
-        (node, var)
-
-        """
-
-        # step 1: try to get source and target variables from data dictionary, if not available, get them from
-        # source/target  string
-        try:
-            # try to get source variable info from data dictionary
-            var = data.pop(var_string)  # type: Union[str, dict]
-        except KeyError:
-            # not found, assume variable info is contained in `source`
-            # also means that there is only one source variable (on the main source node) to take care of
-            *node, op, var = specifier.split("/")
-            node = "/".join(node)
-            var = "/".join((op, var))
-        else:
-            # source_var was in data, so `source` contains only info about source node
-            node = specifier  # type: str
-
-        # # step 2: verify node paths, rename if necessary  --> deprecated and removed
-        # node = self._verify_rename_node(node)  # type: str
-
-        return node, var
 
     def _parse_source_vars(self, source_node: str, source_var: Union[str, dict], edge_ir, extra_sources: dict = None
                            ) -> Tuple[Union[str, dict], dict]:
@@ -536,161 +571,6 @@ class CircuitIR(AbstractBaseIR):
                 for idx, data in edges.items():
                     self._generate_edge_equation(source_node=source, target_node=target, edge_idx=idx, data=data,
                                                  **kwargs)
-
-    def run(self,
-            simulation_time: float,
-            outputs: Optional[dict] = None,
-            sampling_step_size: Optional[float] = None,
-            solver: str = 'euler',
-            out_dir: Optional[str] = None,
-            verbose: bool = True,
-            profile: bool = False,
-            **kwargs
-            ) -> Union[dict, Tuple[dict, float]]:
-        """Simulate the backend behavior over time via a tensorflow session.
-
-        Parameters
-        ----------
-        simulation_time
-            Simulation time in seconds.
-        step_size
-            Simulation step size in seconds.
-        inputs
-            Inputs for placeholder variables. Each key is a string that specifies a node variable in the graph
-            via the following format: 'node_name/op_name/var_nam'. Thereby, the node name can consist of multiple node
-            levels for hierarchical networks and either refer to a specific node name ('../node_lvl_name/..') or to
-            all nodes ('../all/..') at each level. Each value is an array that defines the input for the input variable
-            over time (first dimension).
-        outputs
-            Output variables that will be returned. Each key is the desired name of an output variable and each value is
-            a string that specifies a variable in the graph in the same format as used for the input definition:
-            'node_name/op_name/var_name'.
-        sampling_step_size
-            Time in seconds between sampling points of the output variables.
-        solver
-            Numerical solving scheme to use for differential equations. Currently supported ODE solving schemes:
-            - 'euler' for the explicit Euler method
-            - 'scipy' for integration via the `scipy.integrate.solve_ivp` method.
-        out_dir
-            Directory in which to store outputs.
-        verbose
-            If true, status updates will be printed to the console.
-        profile
-            If true, the total graph execution time will be printed and returned.
-        kwargs
-            Keyword arguments that are passed on to the chosen solver.
-
-        Returns
-        -------
-        Union[DataFrame, Tuple[DataFrame, float]]
-            First entry of the tuple contains the output variables in a pandas dataframe, the second contains the
-            simulation time in seconds. If profiling was not chosen during call of the function, only the dataframe
-            will be returned.
-
-        """
-
-        filterwarnings("ignore", category=FutureWarning)
-
-        if verbose:
-            print("Simulation Progress")
-            print("-------------------")
-
-        # prepare simulation
-        ####################
-
-        if verbose:
-            print("\t (1) Processing output variables...")
-
-        # collect backend output variables
-        ##################################
-
-        outputs_col = {}
-
-        if outputs:
-
-            # extract backend variables that correspond to requested output variables
-            for key, val in outputs.items():
-                outputs_col[key] = self.backend.get_var(val, get_key=True)
-
-            if verbose:
-                print("\t\t...finished.")
-
-        # run simulation
-        ################
-
-        discrete_time = False if self._adaptive_steps else True
-        # outputs_col, times, *time = self.backend.run(T=simulation_time, dt=step_size, dts=sampling_step_size,
-        #                                              out_dir=out_dir, outputs=outputs_col, solver=solver,
-        #                                              profile=profile, verbose=verbose, discrete_time=discrete_time,
-        #                                              **kwargs)
-        results = self.backend.run(T=simulation_time, dt=self.step_size, dts=sampling_step_size,
-                                   out_dir=out_dir, outputs=outputs_col, solver=solver,
-                                   profile=profile, verbose=verbose, discrete_time=discrete_time,
-                                   **kwargs)
-
-        if verbose and profile:
-            if simulation_time:
-                print(f"{simulation_time}s of backend behavior were simulated in {time[0]} s given a "
-                      f"simulation resolution of {self.step_size} s.")
-            else:
-                print(f"ComputeGraph computations finished after {time[0]} seconds.")
-
-        # return results
-        ################
-
-        if profile:
-            return results, time[0]
-        return results
-
-    def generate_auto_def(self, dir: str) -> str:
-        """Creates fortran files needed by auto (and pyauto) to run parameter continuaitons. The `run` method should be
-        called at least once before calling this method to start parameter continuations from a well-defined
-        initial state (i.e. a fixed point).
-
-        Parameters
-        ----------
-        dir
-            Build directory. If the `CircuitIR.run` method has been called previously, this should take the same value
-            as the `build_dir` argument of `run`.
-
-        Returns
-        -------
-        str
-            Full path to the generated auto file.
-        """
-
-        if hasattr(self.backend, 'generate_auto_def'):
-            return self.backend.generate_auto_def(dir)
-        else:
-            raise NotImplementedError(f'Method not implemented for the chosen backend: {self.backend.name}. Please'
-                                      f'choose another backend (e.g. `fortran`) to generate an auto file of the system.'
-                                      )
-
-    def to_pyauto(self, *args, **kwargs):
-        """
-
-        Parameters
-        ----------
-        dir
-
-        Returns
-        -------
-
-        """
-        if hasattr(self.backend, 'to_pyauto'):
-            return self.backend.to_pyauto(*args, **kwargs)
-        else:
-            raise NotImplementedError(f'Method not implemented for the chosen backend: {self.backend.name}. Please'
-                                      f'choose another backend (e.g. `fortran`) to generate a pyauto instance of the '
-                                      f'system.'
-                                      )
-
-    def clear(self):
-        """Clears the backend graph from all operations and variables.
-        """
-        self.backend.clear()
-        in_edge_indices.clear()
-        in_edge_vars.clear()
 
     def _parse_op_layers_into_computegraph(self, layers: list, exclude: bool = False,
                                            op_identifier: Optional[str] = None, **kwargs) -> None:
@@ -878,55 +758,6 @@ class CircuitIR(AbstractBaseIR):
 
     def _preprocess_delay(self, delay, discretize=True):
         return int(np.round(delay / self.step_size, decimals=0)) if discretize and not self._adaptive_steps else delay
-
-    @staticmethod
-    def _map_multiple_inputs(inputs: dict, reduce_dim: bool, scope: str) -> tuple:
-        """Creates mapping between multiple input variables and a single output variable.
-
-        Parameters
-        ----------
-        inputs
-            Input variables.
-        reduce_dim
-            If true, input variables will be summed up, if false, they will be concatenated.
-        scope
-            Scope of the input variables
-
-        Returns
-        -------
-        tuple
-            Summed up or concatenated input variables and the mapping to the respective input variables
-
-        """
-
-        if scope not in in_edge_vars:
-            in_edge_vars[scope] = []
-        inputs_unique = in_edge_vars[scope]
-        input_mapping = {}
-        new_input_vars = []
-        for key, var in inputs.items():
-            *node, in_op, in_var = key.split('/')
-            if 'symbol' in var and 'expr' not in var:
-                in_var = var['symbol'].name
-            inp = get_unique_label(in_var, inputs_unique)
-            new_input_vars.append(inp)
-            inputs_unique.append(inp)
-            input_mapping[inp] = key
-
-        if reduce_dim:
-            input_expr = f"sum(({','.join(new_input_vars)}), 0)"
-        else:
-            idx = 0
-            var = inputs[input_mapping[new_input_vars[idx]]]
-            while not hasattr(var, 'shape'):
-                idx += 1
-                var = inputs[input_mapping[new_input_vars[idx]]]
-            shape = var['shape']
-            if len(shape) > 0:
-                input_expr = f"reshape(({','.join(new_input_vars)}), ({len(new_input_vars) * shape[0],}))"
-            else:
-                input_expr = f"stack({','.join(new_input_vars)})"
-        return input_expr, input_mapping
 
     def _sort_edges(self, edges: List[tuple], attr: str, data_included: bool = False) -> dict:
         """Sorts edges according to the given edge attribute.
@@ -1425,6 +1256,97 @@ class CircuitIR(AbstractBaseIR):
         else:
             inputs[tvar] = {'sources': [op_name],
                             'reduce_dim': True}
+
+    @staticmethod
+    def _parse_edge_specifier(specifier: str, data: dict, var_string: str) -> Tuple[str, Union[str, dict]]:
+        """Parse source or target specifier for an edge.
+
+        Parameters
+        ----------
+        specifier
+            String that defines either a specific node or complete variable path of source or target for an edge.
+            Format: *circuits/node/op/var
+        data
+            dictionary containing additional information about the edge. This function looks for a variable specifier
+            as specified in `var_string`
+        var_string
+            String that points to an optional key of the `data` dictionary. Should be either 'source_var' or
+            'target_var'
+
+        Returns
+        -------
+        (node, var)
+
+        """
+
+        # step 1: try to get source and target variables from data dictionary, if not available, get them from
+        # source/target  string
+        try:
+            # try to get source variable info from data dictionary
+            var = data.pop(var_string)  # type: Union[str, dict]
+        except KeyError:
+            # not found, assume variable info is contained in `source`
+            # also means that there is only one source variable (on the main source node) to take care of
+            *node, op, var = specifier.split("/")
+            node = "/".join(node)
+            var = "/".join((op, var))
+        else:
+            # source_var was in data, so `source` contains only info about source node
+            node = specifier  # type: str
+
+        # # step 2: verify node paths, rename if necessary  --> deprecated and removed
+        # node = self._verify_rename_node(node)  # type: str
+
+        return node, var
+
+    @staticmethod
+    def _map_multiple_inputs(inputs: dict, reduce_dim: bool, scope: str) -> tuple:
+        """Creates mapping between multiple input variables and a single output variable.
+
+        Parameters
+        ----------
+        inputs
+            Input variables.
+        reduce_dim
+            If true, input variables will be summed up, if false, they will be concatenated.
+        scope
+            Scope of the input variables
+
+        Returns
+        -------
+        tuple
+            Summed up or concatenated input variables and the mapping to the respective input variables
+
+        """
+
+        if scope not in in_edge_vars:
+            in_edge_vars[scope] = []
+        inputs_unique = in_edge_vars[scope]
+        input_mapping = {}
+        new_input_vars = []
+        for key, var in inputs.items():
+            *node, in_op, in_var = key.split('/')
+            if 'symbol' in var and 'expr' not in var:
+                in_var = var['symbol'].name
+            inp = get_unique_label(in_var, inputs_unique)
+            new_input_vars.append(inp)
+            inputs_unique.append(inp)
+            input_mapping[inp] = key
+
+        if reduce_dim:
+            input_expr = f"sum(({','.join(new_input_vars)}), 0)"
+        else:
+            idx = 0
+            var = inputs[input_mapping[new_input_vars[idx]]]
+            while not hasattr(var, 'shape'):
+                idx += 1
+                var = inputs[input_mapping[new_input_vars[idx]]]
+            shape = var['shape']
+            if len(shape) > 0:
+                input_expr = f"reshape(({','.join(new_input_vars)}), ({len(new_input_vars) * shape[0],}))"
+            else:
+                input_expr = f"stack({','.join(new_input_vars)})"
+        return input_expr, input_mapping
 
 
 class SubCircuitView(AbstractBaseIR):

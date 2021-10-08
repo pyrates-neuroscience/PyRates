@@ -89,6 +89,12 @@ def test_2_1_operator():
             targets[i + 1, 1] = targets[i, 1] + dt * update0_1(targets[i, 0])
 
         # compare results with target values
+        import matplotlib.pyplot as plt
+        plt.plot(results['a'].values[:])
+        plt.plot(targets[:, 1])
+        plt.legend(['r', 't'])
+        plt.show()
+
         diff = results['a'].values[:] - targets[:, 1]
         assert np.mean(np.abs(diff)) == pytest.approx(0., rel=accuracy, abs=accuracy)
 

@@ -56,5 +56,5 @@ def test_ir_compilation():
     clear_frontend_caches()
 
     circuit = CircuitIR.from_yaml(path)
-    circuit._ir.backend._compile()
+    circuit._ir.backend.compile()
     circuit.clear()

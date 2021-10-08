@@ -50,7 +50,7 @@ from .parser import var_in_expression, extract_var
 from .computegraph import ComputeGraph
 
 # external imports
-from typing import Optional, Dict, List, Union, Any
+from typing import Optional, Dict, List, Union, Any, Callable
 import os
 import sys
 from shutil import rmtree
@@ -85,7 +85,7 @@ class CodeGen:
     def add_linebreak(self):
         """Add a line-break to the code.
         """
-        self.code.append("\n")
+        self.code.append("")
 
     def add_indent(self):
         """Add an indent to the code.
@@ -591,42 +591,22 @@ class BaseBackend(object):
         self._file_name = file_name
 
         # network specs
-        run_info = self._compile(in_place=in_place, func_name=func_name, file_name=file_name, **compile_kwargs)
+        run_info = self.compile(in_place=in_place, func_name=func_name, file_name=file_name, **compile_kwargs)
         state_vec = self.get_var(run_info['state_vec'])['value']
         rhs = self.ops['cast']['func'](self.ops['zeros']['func'](shape=tuple(state_vec.shape)))
 
         # simulation specs
-        steps = int(np.round(T / dt))
-        store_steps = int(np.round(T / dts))
-        state_rec = np.zeros((store_steps, state_vec.shape[0]))
         times = np.arange(0, T, dts) if dts else np.arange(0, T, dt)
 
         # perform simulation
         ####################
 
-        # numerical integration via a system update function generated from the compute graph
         rhs_func = run_info['func']
         func_args = run_info['func_args'][3:]
         args = tuple([self.get_var(arg)['value'] for arg in func_args])
 
-        if solver == 'euler':
-
-            # perform integration via standard Euler method
-            store_step = int(np.round(dts/dt))
-            state_rec = self._euler_integration(steps, store_step, state_vec, state_rec, dt, rhs_func, rhs, *args)
-
-        else:
-
-            from scipy.integrate import solve_ivp
-
-            # solve via scipy's ode integration function
-            def fun(t, y):
-                rhs_func(t, y, rhs, *args)
-                return rhs
-            t = 0.0
-            kwargs['t_eval'] = times
-            results = solve_ivp(fun=fun, t_span=(t, T), y0=state_vec, first_step=dt, **kwargs)
-            state_rec = results['y'].T
+        # perform integration via scipy solver (mostly Runge-Kutta methods)
+        state_rec = self._solve_ivp(solver, T, state_vec, rhs, dt, times, dts, rhs_func, *args, **kwargs)
 
         # reduce state recordings to requested state variables
         final_results = {}
@@ -667,7 +647,7 @@ class BaseBackend(object):
         # clear code generator
         self._code_gen.clear()
 
-    def _compile(self, in_place: bool = True, func_name: str = None, file_name: str = None, **kwargs) -> dict:
+    def compile(self, in_place: bool = True, func_name: str = None, file_name: str = None, **kwargs) -> dict:
 
         # finalize compute graph
         self.graph = self.graph.compile(in_place=in_place)
@@ -798,20 +778,13 @@ class BaseBackend(object):
         if rhs_var:
 
             # differential equation (DE) update
-            if indices:
+            if not indices:
+                raise ValueError('State variables need to be stored in a single state vector, for which the indices '
+                                 'have to be passed to this method.')
 
-                # DE updates stored in a state-vector
-                for idx, expr in zip(indices, expressions):
-                    code_gen.add_code_line(f"{rhs_var}{self._idx[0]}{idx}{self._idx[1]} = {expr}")
-
-            else:
-
-                if len(nodes) > 1:
-                    raise ValueError('Received a request to update a variable via multiple right-hand side expressions.'
-                                     )
-
-                # DE update stored in a single variable
-                code_gen.add_code_line(f"{rhs_var} = {expressions[0]}")
+            # DE updates stored in a state-vector
+            for idx, expr in zip(indices, expressions):
+                code_gen.add_code_line(f"{rhs_var}{self._idx[0]}{idx}{self._idx[1]} = {expr}")
 
             # add rhs var to function arguments
             func_args = [rhs_var] + func_args
@@ -819,21 +792,16 @@ class BaseBackend(object):
         else:
 
             # non-differential equation update
-
             var_names, expressions, undefined_vars, defined_vars = sort_equations(var_names, expressions)
             func_args.extend(undefined_vars)
 
             if indices:
+                raise ValueError('Indices to non-state variables should be defined in the respective equations, not'
+                                 'be passed to this method.')
 
-                # non-DE update stored in a variable slice
-                for idx, expr, target_var in zip(indices, expressions, var_names):
-                    code_gen.add_code_line(f"{target_var}{self._idx[0]}{idx}{self._idx[1]} = {expr}")
-
-            else:
-
-                # non-DE update stored in a single variable
-                for target_var, expr in zip(var_names, expressions):
-                    code_gen.add_code_line(f"{target_var} = {expr}")
+            # non-DE update stored in a single variable
+            for target_var, expr in zip(var_names, expressions):
+                code_gen.add_code_line(f"{target_var} = {expr}")
 
         return func_args, defined_vars, code_gen
 
@@ -928,6 +896,31 @@ class BaseBackend(object):
             expr_str = expr_str.replace(expr_str[start:start+end], f"{expr.args[0]}")
         return expr_str
 
+    def _solve_ivp(self, solver: str, T: float, state_vec: np.ndarray, rhs: np.ndarray, dt: float,
+                   eval_times: np.ndarray, dts: float, rhs_func: Callable, *args, **kwargs) -> np.ndarray:
+
+        if solver == 'euler':
+
+            # solve ivp via forward euler method (fixed integration step-size)
+            return self._solve_euler(T, state_vec, rhs, dt, eval_times, dts, rhs_func, *args, **kwargs)
+
+        else:
+
+            # solve ivp via scipy methods (solvers of various orders with adaptive step-size)
+            from scipy.integrate import solve_ivp
+            t = 0.0
+            kwargs['t_eval'] = eval_times
+
+            # wrapper function
+            def fun(t, y):
+                rhs_func(t, y, rhs, *args)
+                return rhs
+
+            # call scipy solver
+            results = solve_ivp(fun=fun, t_span=(t, T), y0=state_vec, first_step=dt, **kwargs)
+
+            return results['y'].T
+
     @staticmethod
     def _generate_func_head(func_name: str, code_gen: CodeGen, state_var: str = None, func_args: list = None,
                             imports: list = None):
@@ -967,12 +960,22 @@ class BaseBackend(object):
         return v.shape[0]
 
     @staticmethod
-    def _euler_integration(steps, store_step, state_vec, state_rec, dt, rhs_func, rhs, *args):
+    def _solve_euler(T: float, state_vec: np.ndarray, rhs: np.ndarray, dt: float, eval_times: np.ndarray, dts: float,
+                     rhs_func: Callable, *args, **kwargs):
+
+        # preparations for fixed step-size integration
         idx = 0
+        steps = int(np.round(T / dt))
+        store_steps = int(np.round(T / dts))
+        store_step = int(np.round(dts / dt))
+        state_rec = np.zeros((store_steps, state_vec.shape[0]))
+
+        # solve ivp for forward Euler method
         for step in range(steps):
             if step % store_step == 0:
                 state_rec[idx, :] = state_vec
                 idx += 1
             rhs_func(step, state_vec, rhs, *args)
             state_vec += dt * rhs
+
         return state_rec
