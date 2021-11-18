@@ -257,8 +257,8 @@ JRC_delaycoupled:
     JRC1: JRC_pop
     JRC2: JRC_pop
   edges:
-    - [JRC1/JRC_op/m_out, JRC2/JRC_op/m_in, DummyEdge, {weight: 1.0, delay: 0.0, spread: 0.001}]
-    - [JRC2/JRC_op/m_out, JRC1/JRC_op/m_in, DummyEdge, {weight: 1.0, delay: 0.0, spread: 0.001}]
+    - [JRC1/JRC_op/m_out, JRC2/JRC_op/m_in, DummyEdge, {weight: 1.0, delay: 0.004, spread: 0.001}]
+    - [JRC2/JRC_op/m_out, JRC1/JRC_op/m_in, DummyEdge, {weight: 1.0, delay: 0.004, spread: 0.001}]
 
 JRC_dc:
   base: CircuitTemplate

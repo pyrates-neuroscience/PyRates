@@ -352,14 +352,6 @@ class FortranBackend(BaseBackend):
         func_args = state_vars + [func_args[idx] for idx in np.sort(indices)]
 
         # add function header
-        code_gen.add_code_line(f"module {self._file_name}")
-        code_gen.add_linebreak()
-        for line in self._global_variables:
-            code_gen.add_code_line(line)
-        code_gen.add_linebreak()
-        code_gen.add_code_line("contains")
-        code_gen.add_linebreak()
-        code_gen.add_linebreak()
         code_gen.add_code_line(f"subroutine {func_name}({','.join(func_args)})")
         code_gen.add_linebreak()
         code_gen.add_code_line("implicit none")
@@ -404,8 +396,20 @@ class FortranBackend(BaseBackend):
         if not func_name:
             func_name = self._func_name
 
+        # add global variables and module definition above the funcion
+        code_gen = FortranGen()
+        code_gen.add_code_line(f"module {self._file_name}")
+        code_gen.add_linebreak()
+        for line in self._global_variables:
+            code_gen.add_code_line(line)
+        code_gen.add_linebreak()
+        code_gen.add_code_line("contains")
+        code_gen.add_linebreak()
+        code_gen.add_linebreak()
+        code_gen.add_code_line(func_str)
+
         # save rhs function to file
-        f2py.compile(func_str, modulename=file_name, extension=self._file_ending,
+        f2py.compile(code_gen.generate(), modulename=file_name, extension=self._file_ending,
                      source_fn=f'{build_dir}/{file_name}{self._file_ending}', verbose=False)
 
         # import function from temporary file
@@ -574,14 +578,32 @@ class PyAutoBackend(FortranBackend):
 
         # set auto default constants
         self.auto_constants = {'NDIM': 1, 'NPAR': 1,
-                              'IPS': -2, 'ILP': 0, 'ICP': [14], 'NTST': 1, 'NCOL': 4, 'IAD': 3, 'ISP': 0, 'ISW': 1,
-                              'IPLT': 0, 'NBC': 0, 'NINT': 0, 'NMX': 10000, 'NPR': 100, 'MXBF': 10, 'IID': 2, 'ITMX': 8,
-                              'ITNW': 5, 'NWTN': 3, 'JAC': 0, 'EPSL': 1e-6, 'EPSU': 1e-6, 'EPSS': 1e-4, 'IRS': 0,
+                              'IPS': -2, 'ILP': 0, 'ICP': [14], 'NTST': 1, 'NCOL': 3, 'IAD': 0, 'ISP': 0, 'ISW': 1,
+                              'IPLT': 0, 'NBC': 0, 'NINT': 0, 'NMX': 10000, 'NPR': 1, 'MXBF': 10, 'IID': 2, 'ITMX': 2,
+                              'ITNW': 5, 'NWTN': 2, 'JAC': 0, 'EPSL': 1e-6, 'EPSU': 1e-6, 'EPSS': 1e-4, 'IRS': 0,
                               'DS': 1e-4, 'DSMIN': 1e-8, 'DSMAX': 1e-2, 'IADS': 1, 'THL': {},
                               'THU': {}, 'UZR': {}, 'STOP': {}}
 
         super().__init__(ops=ops, dtypes=dtypes, name=name, float_default_type=float_default_type, imports=imports,
                          build_dir=build_dir, **kwargs)
+
+    def clear(self) -> None:
+        """Removes all layers, variables and operations from graph. Deletes build directory.
+        """
+
+        # call parent method
+        super().clear()
+
+        # delete fortran-specific temporary files
+        wdir = f"{self._orig_dir}/{self._build_dir}" if self._build_dir != self._orig_dir else self._orig_dir
+        fendings = ["so", "exe", "mod", "o"]
+        for f in [f for f in os.listdir(wdir)]:
+            fname = self._file_name
+            fsplit = f.split('.')
+            if fsplit[0] == fname and fsplit[-1] in fendings:
+                os.remove(f"{wdir}/{f}")
+            elif fsplit[0] == 'fort':
+                os.remove(f"{wdir}/{f}")
 
     def _generate_func(self, func_str: str, func_name: str = None, file_name: str = None, build_dir: str = None,
                        decorator: Any = None, **kwargs):
@@ -599,9 +621,22 @@ class PyAutoBackend(FortranBackend):
         code_gen.add_linebreak()
         code_gen, constants_gen = self._generate_auto_routines(code_gen, file_name, func_name, **kwargs)
         func_str = code_gen.generate()
+        code_gen.clear()
+
+        # add global variables and module definition above the funcion definitions
+        code_gen = FortranGen()
+        code_gen.add_code_line(f"module {self._file_name}")
+        code_gen.add_linebreak()
+        for line in self._global_variables:
+            code_gen.add_code_line(line)
+        code_gen.add_linebreak()
+        code_gen.add_code_line("contains")
+        code_gen.add_linebreak()
+        code_gen.add_linebreak()
+        code_gen.add_code_line(func_str)
 
         # write rhs function to file
-        f2py.compile(func_str, modulename=file_name, extension=self._file_ending,
+        f2py.compile(code_gen.generate(), modulename=file_name, extension=self._file_ending,
                      source_fn=f'{build_dir}/{file_name}{self._file_ending}', verbose=False)
 
         # import function from temporary file
@@ -642,9 +677,22 @@ class PyAutoBackend(FortranBackend):
         code_gen.add_code_line("double precision, intent(inout) :: dfdu(ndim,ndim), dfdp(ndim,*)")
 
         # declare variables that need to be extracted from args array
-        for arg in self._func_args:
+        for arg in self._func_args.copy():
             dtype, _, shape = self._get_var_declaration_info(arg)
-            code_gen.add_code_line(f"{dtype} :: {arg}{shape}")
+            try:
+                s = [int(s) for s in shape[1:-1].split(',')]
+                if len(s) == 1:
+                    val = self.graph.eval_node(var)
+                    val_init = f"{dtype}, parameter :: {var}{shape} = (/{','.join(val.tolist())}/)"
+                    self._global_variables.append(val_init)
+                else:
+                    raise NotImplementedError('The PyAutoBackend cannot generate run functions that include parameters '
+                                              'of dimensionality 2 or higher.')
+
+                idx = self._func_args.index(arg)
+                self._func_args.pop(idx)
+            except ValueError:
+                code_gen.add_code_line(f"{dtype} :: {arg}{shape}")
         code_gen.add_linebreak()
 
         # extract variables from args array
@@ -756,7 +804,7 @@ class PyAutoBackend(FortranBackend):
         pyauto = PyAuto(working_dir=self._build_dir, auto_dir=self._auto_dir)
         ds = dt * self._time_scale
         dsmin = ds*1e-2
-        auto_defs = {'DSMIN': dsmin, 'DSMAX': ds*1e2, 'NMX': int(T/dsmin), 'NPR': int(dts/dt)}
+        auto_defs = {'DSMIN': dsmin, 'DSMAX': ds*1e1, 'NMX': int(T/dsmin)}
         for key, val in auto_defs.items():
             if key not in kwargs:
                 kwargs[key] = val

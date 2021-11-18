@@ -27,7 +27,6 @@
 # 
 # Richard Gast and Daniel Rose et. al. in preparation
 from typing import Union, List, Type, Dict
-from copy import deepcopy
 
 from pyrates.ir.circuit import PyRatesException
 from pyrates.frontend.template import _complete_template_path

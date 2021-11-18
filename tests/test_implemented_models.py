@@ -60,7 +60,7 @@ def test_3_1_jansenrit():
     dt = 1e-4
     dts = 1e-2
 
-    backends = ['numpy', 'fortran']
+    backends = ['pyauto', 'fortran']
     for b in backends:
 
         # compare single operator JRC implementation with multi-node JRC implementation
@@ -92,7 +92,7 @@ def test_3_2_montbrio():
     inp = np.zeros((int(np.round(T/dt)),))
     inp[in_start:in_start+in_dur] = 5.0
 
-    backends = ['pyauto', 'numpy', 'fortran']
+    backends = ['numpy', 'fortran']
     for b in backends:
 
         # assess correct behavior of the model around the bi-stable regime
@@ -101,7 +101,7 @@ def test_3_2_montbrio():
         # perform simulation
         r1 = simulate("model_templates.montbrio.simple_montbrio.QIF_exc", simulation_time=T, sampling_step_size=dts,
                       inputs={"p/Op_e/inp": inp}, outputs={"r": "p/Op_e/r"}, method='RK23', backend=b, solver='scipy',
-                      step_size=dt, clear=True, apply_kwargs={'backend_kwargs': {'file_name': 'm1', 'auto_dir': '~/PycharmProjects/auto-07p'}})
+                      step_size=dt, clear=True, apply_kwargs={'backend_kwargs': {'file_name': 'm1'}})
 
         # test firing rate relationships at pre-defined times
         times = [25.0, 49.0, 79.0]
@@ -126,6 +126,7 @@ def test_3_3_wilson_cowan():
     in_dur = int(np.round(20.0 / dt))
     inp = np.zeros((int(np.round(T / dt)),))
     inp[in_start:in_start + in_dur] = 5.0
+    inp = np.round(inp, decimals=4)
 
     backends = ['numpy', 'fortran']
     for b in backends:

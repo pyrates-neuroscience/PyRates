@@ -436,3 +436,67 @@ def test_2_5_inputs_outputs():
                       apply_kwargs={'backend_kwargs': {'file_name': 'inout_4'}})
 
         assert np.mean(r1.values.flatten() - r2.values.flatten()) == pytest.approx(0., rel=1e-4, abs=1e-4)
+
+
+def test_2_6_vectorization():
+    """Tests whether a Jansen-Rit-based circuit with and without vectorization of mathematical operations yields
+    identical results.
+
+    See Also
+    --------
+    :method:`CircuitTemplate.run` for a documentation of the keyword argument `vectorize`.
+    """
+
+    backends = ['default', 'fortran']
+
+    dt = 5e-4
+    dts = 1e-3
+    T = 1.0
+    inp = np.zeros((int(np.round(T/dt)),)) + 220.0
+
+    for i, b in enumerate(backends):
+
+        # simulation with vectorized network equations
+        r1 = simulate("model_templates.jansen_rit.simple_jansenrit.JRC_delaycoupled", vectorize=True,
+                      inputs={"JRC2/JRC_op/u": inp}, outputs={"r": "JRC1/JRC_op/PSP_ein"}, backend=b,
+                      solver='euler', step_size=dt, clear=True, simulation_time=T, sampling_step_size=dts,
+                      apply_kwargs={'backend_kwargs': {'file_name': f'vec{i + 1}'}}
+                      )
+
+        # simulation without vectorization of the network equations
+        r2 = simulate("model_templates.jansen_rit.simple_jansenrit.JRC_delaycoupled", vectorize=False,
+                      inputs={"JRC2/JRC_op/u": inp}, outputs={"r": "JRC1/JRC_op/PSP_ein"}, backend=b,
+                      solver='euler', step_size=dt, clear=True, simulation_time=T, sampling_step_size=dts,
+                      apply_kwargs={'backend_kwargs': {'file_name': f'novec{i + 1}'}}
+                      )
+
+        assert np.mean(r1.values - r2.values) == pytest.approx(0.0, rel=1e-4, abs=1e-4)
+
+
+def test_2_7_backends():
+    """Tests the whether different backends produce comparable results when simulating the dynamics of different models.
+
+    See Also
+    -------
+    :method:`CircuitIR.__init__` for documentation of the available backend options.
+    """
+
+    backends = ['fortran']
+
+    dt = 5e-4
+    dts = 1e-3
+    T = 10.
+
+    r0 = simulate("model_templates.montbrio.simple_montbrio.QIF_sfa", simulation_time=T, sampling_step_size=dts,
+                  inputs=None, outputs={"r": "p/Op_sfa/r"}, solver='euler', step_size=dt, clear=True,
+                  apply_kwargs={'backend_kwargs': {'file_name': 'm0'}})
+
+    for i, b in enumerate(backends):
+
+        r = simulate("model_templates.montbrio.simple_montbrio.QIF_sfa",
+                     inputs=None, outputs={"r": "p/Op_sfa/r"}, backend=b, solver='euler', step_size=dt, clear=True,
+                     simulation_time=T, sampling_step_size=dts,
+                     apply_kwargs={'backend_kwargs': {'file_name': f'm{i+1}', 'auto_dir': '~/PycharmProjects/auto-07p'}}
+                     )
+
+        assert np.mean(r0.values - r.values) == pytest.approx(0.0, rel=1e-4, abs=1e-4)

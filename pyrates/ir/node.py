@@ -54,7 +54,12 @@ def cache_func(label: str, operators: dict, values: dict = None, template: str =
     h = hash(op_graph)
 
     changed_labels = {}
+    vectorize = kwargs.pop('vectorize', True)
     try:
+
+        # if vectorization is to be skipped, ignore cached IRs
+        if not vectorize:
+            raise KeyError
 
         # extract node from cache
         node = node_cache[h]
@@ -79,9 +84,10 @@ def cache_func(label: str, operators: dict, values: dict = None, template: str =
 
         # create new node
         op_cache[h] = op_graph
-        node_cache[h] = ir_class(label, operators=op_graph, values=values, template=template, **kwargs)
+        node = ir_class(label, operators=op_graph, values=values, template=template, **kwargs)
+        node_cache[h] = node
 
-    return node_cache[h], changed_labels
+    return node, changed_labels
 
 
 class NodeIR(AbstractBaseIR):

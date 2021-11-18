@@ -615,8 +615,7 @@ class DifferentialEvolutionAlgorithm(GeneticAlgorithmTemplate):
         if verbose:
             print('Starting evolutionary optimization.')
         results = differential_evolution(self.eval_fitness, bounds=gene_bounds,
-                                         args=(gene_map, loss_func, loss_kwargs, run_func, template,
-                                               compile_kwargs, run_kwargs),
+                                         args=(gene_map, loss_func, loss_kwargs, run_func, template, run_kwargs),
                                          **kwargs)
 
         # extract results
@@ -654,8 +653,7 @@ class DifferentialEvolutionAlgorithm(GeneticAlgorithmTemplate):
 
     def eval_fitness(self, genes: list, gene_map: list, loss_func: callable,
                      loss_kwargs: Optional[dict] = None, run_func: Optional[callable] = None,
-                     template: Optional[str] = None, compile_kwargs: Optional[dict] = None,
-                     run_kwargs: Optional[dict] = None) -> float:
+                     template: Optional[str] = None, run_kwargs: Optional[dict] = None) -> float:
         """Performs simulation in PyRates of the model defined by `template` and calculates the fitness based on the
         resulting timeseries of that simulation.
 
@@ -689,20 +687,16 @@ class DifferentialEvolutionAlgorithm(GeneticAlgorithmTemplate):
                     model_id = self.model_ids.pop()
                     if type(template) is str:
                         template = CircuitTemplate.from_yaml(template)
-                    model = deepcopy(template).apply(label=f'model_{model_id}')
 
                     # apply new parameters to model template
                     params, param_map = dict(), dict()
                     for i, (p, key) in enumerate(zip(genes, gene_map)):
                         params[i] = p
                         param_map[i] = key
-                    adapt_circuit(model, params=params, param_map=param_map)
-
-                    # compile model into backend
-                    model_compiled = model.compile(**compile_kwargs)
+                    adapt_circuit(template, params=params, param_map=param_map)
 
                     # define run func
-                    run_func = model_compiled.run
+                    run_func = template.run
                     break
 
                 except (FileExistsError, FileNotFoundError):

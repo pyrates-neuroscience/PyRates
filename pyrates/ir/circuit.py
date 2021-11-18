@@ -41,6 +41,7 @@ from pyrates.ir.node import NodeIR
 from pyrates.ir.edge import EdgeIR
 from pyrates.ir.abc import AbstractBaseIR
 from pyrates.backend.parser import parse_equations, replace, get_unique_label
+from pyrates.backend.computegraph import ComputeGraph
 
 __author__ = "Daniel Rose, Richard Gast"
 __status__ = "Development"
@@ -55,7 +56,7 @@ class CircuitIR(AbstractBaseIR):
     and variables."""
 
     __slots__ = ["label", "label_map", "graph", "sub_circuits",  "backend", "step_size", "_edge_idx_counter",
-                 "_adaptive_steps", "_t"]
+                 "_adaptive_steps", "_t", "_verbose"]
 
     def __init__(self, label: str = "circuit", nodes: Dict[str, NodeIR] = None, edges: list = None,
                  template: str = None, adaptive_steps: bool = False, step_size: float = None, verbose: bool = True,
@@ -75,6 +76,9 @@ class CircuitIR(AbstractBaseIR):
             optional string reference to path to template that this circuit was loaded from. Leave empty, if no template
             was used.
         """
+
+        # TODO: create and return a label map that maps between the provided node/edge names and the variable names in the compute graph
+        # TODO: rebuild the init and the whole IR such that the graph is a compute graph instance and the
 
         # choose a backend
         if backend == 'tensorflow':
@@ -102,10 +106,9 @@ class CircuitIR(AbstractBaseIR):
         super().__init__(template)
         self.label = label
         self.step_size = step_size
-        self.backend = backend(**backend_kwargs)
         self._adaptive_steps = adaptive_steps
         self._edge_idx_counter = 0
-        self.graph = MultiDiGraph()
+        self._verbose = verbose
 
         # translate the network into a networkx graph
         #############################################
@@ -113,27 +116,30 @@ class CircuitIR(AbstractBaseIR):
         if verbose:
             print("Compilation Progress")
             print("--------------------")
-
-        # create network graph
-        if verbose:
             print('\t(1) Translating the circuit template into a graph representation...')
-        if nodes:
-            self.add_nodes_from(nodes)
-        if edges:
-            self.add_edges_from(edges)
+
+        # connect nodes and edges to a networkx graph
+        net = NetworkGraph(nodes=nodes, edges=edges, label=label)
+
         if verbose:
             print('\t\t...finished.')
+
+        # preprocess the edge operations in the network graph
+        #####################################################
 
         # finalize edge transmission operators
         if verbose:
             print("\t(2) Preprocessing edge transmission operations...")
-        self._preprocess_edge_operations(dde_approx=kwargs.pop('dde_approx', 0),
-                                         matrix_sparseness=kwargs.pop('matrix_sparseness', 0.05))
+
         if verbose:
             print("\t\t...finished.")
 
-        # parse all equations and variables into the backend
-        ####################################################
+        # parse all equations and variables into a compute graph
+        ########################################################
+
+        # TODO: This process should create the 'graph' field of the CircuitIR. Create useful properties such as 'nodes'
+        #  and edges and a label map that translates between the compute graph nodes and the nodes/edges provided by
+        #  the user.
 
         if verbose:
             print("\t(3) Parsing the model equations into a compute graph...")
@@ -181,60 +187,6 @@ class CircuitIR(AbstractBaseIR):
                 item = item.getitem_from_iterator(key, key_iter)
         return item
 
-    def add_nodes_from(self, nodes: Dict[str, NodeIR], **attr):
-        """ Add multiple nodes to circuit. Allows networkx-style adding of nodes.
-
-        Parameters
-        ----------
-        nodes
-            Dictionary with node label as key. The item is a NodeIR instance. Note that the item type is not tested
-            here, but passing anything that does not behave like a `NodeIR` may cause problems later.
-        attr
-            additional keyword attributes that can be added to the node data. (default `networkx` syntax.)
-        """
-
-        # assign NodeIR instances as "node" keys in a separate dictionary, because networkx saves node attributes into
-        # a dictionary
-        # reformat dictionary to tuple/generator, since networkx does not parse dictionary correctly in add_nodes_from
-        nodes = ((key, {"node": node}) for key, node in nodes.items())
-        self.graph.add_nodes_from(nodes, **attr)
-
-    def add_node(self, label: str, node: NodeIR, **attr):
-        """Add single node
-
-        Parameters
-        ----------
-        label
-            String to identify node by. Is tested for uniqueness internally, and renamed if necessary. Renamed labels
-            are stored in the `CircuitIR` instance attribute `label_map`.
-        node
-            Instance of `NodeIR`. Will be added with the key "node" to the node dictionary.
-        attr
-            Additional attributes (keyword arguments) that can be added to the node data. (Default `networkx` syntax.)
-        """
-        self.graph.add_node(label, node=node, **attr)
-
-    def add_edges_from(self, edges: list, **attr):
-        """ Add multiple edges. This method explicitly assumes, that edges are given in edge_templates instead of
-        existing instances of `EdgeIR`.
-
-        Parameters
-        ----------
-        edges
-            List of edges, each of shape [source/op/var, target/op/var, edge_dict]. The edge_dict must contain the
-            keys "edge_ir", and optionally "weight" and "delay".
-        attr
-            Additional attributes (keyword arguments) that can be added to the edge data. (Default `networkx` syntax.)
-
-
-        Returns
-        -------
-        """
-
-        for (source, target, edge_dict) in edges:
-            self.add_edge(source, target,  # edge_unique_key,
-                          **edge_dict, **attr)
-
     def add_edges_from_matrix(self, source_var: str, target_var: str, nodes: list, weight=None, delay=None,
                               template=None, **attr) -> None:
         """Adds all possible edges between the `source_var` and `target_var` of all passed `nodes`. `Weight` and `Delay`
@@ -264,6 +216,10 @@ class CircuitIR(AbstractBaseIR):
         None
 
         """
+
+        # TODO: Move method to CircuitTemplate
+
+        raise NotImplementedError('This method does not work. Sry.')
 
         # construct edge attribute dictionary from arguments
         ####################################################
@@ -313,52 +269,12 @@ class CircuitIR(AbstractBaseIR):
         # add edges to network
         self.add_edges_from(edges)
 
-    def add_edge(self, source: str, target: str, edge_ir: EdgeIR = None, weight: float = 1., delay: float = None,
-                 spread: float = None, **data):
-        """
-        Parameters
-        ----------
-        source
-        target
-        edge_ir
-        weight
-        delay
-        spread
-        data
-            If no template is given, `data` is assumed to conform to the format that is needed to add an edge. I.e.,
-            `data` needs to contain fields for `weight`, `delay`, `edge_ir`, `source_var`, `target_var`.
-
-        Returns
-        -------
-
-        """
-
-        # step 1: parse and verify source and target specifiers
-        source_node, source_var = self._parse_edge_specifier(source, data, "source_var")
-        target_node, target_var = self._parse_edge_specifier(target, data, "target_var")
-
-        # step 2: parse source variable specifier (might be single string or dictionary for multiple source variables)
-        source_vars, extra_sources = self._parse_source_vars(source_node, source_var, edge_ir,
-                                                             data.pop("extra_sources", None))
-
-        # step 3: add edges
-        attr_dict = dict(edge_ir=edge_ir,
-                         weight=weight,
-                         delay=delay,
-                         spread=spread,
-                         source_var=source_vars,
-                         target_var=target_var,
-                         extra_sources=extra_sources,
-                         **data)
-        self.graph.add_edge(source_node, target_node, **attr_dict)
-
     def run(self,
             simulation_time: float,
             outputs: Optional[dict] = None,
             sampling_step_size: Optional[float] = None,
             solver: str = 'euler',
             out_dir: Optional[str] = None,
-            verbose: bool = True,
             **kwargs
             ) -> Union[dict, Tuple[dict, float]]:
         """Simulate the backend behavior over time via a tensorflow session.
@@ -379,8 +295,6 @@ class CircuitIR(AbstractBaseIR):
             - 'scipy' for integration via the `scipy.integrate.solve_ivp` method.
         out_dir
             Directory in which to store outputs.
-        verbose
-            If true, status updates will be printed to the console.
         kwargs
             Keyword arguments that are passed on to the chosen solver.
 
@@ -395,14 +309,14 @@ class CircuitIR(AbstractBaseIR):
 
         filterwarnings("ignore", category=FutureWarning)
 
-        if verbose:
+        if self._verbose:
             print("Simulation Progress")
             print("-------------------")
 
         # prepare simulation
         ####################
 
-        if verbose:
+        if self._verbose:
             print("\t (1) Processing output variables...")
 
         # collect backend output variables
@@ -416,21 +330,21 @@ class CircuitIR(AbstractBaseIR):
             for key, val in outputs.items():
                 outputs_col[key] = self.backend.get_var(val, get_key=True)
 
-            if verbose:
+            if self._verbose:
                 print("\t\t...finished.")
 
         # run simulation
         ################
 
-        if verbose:
+        if self._verbose:
             print("\t (2) Performing the simulation...")
 
         discrete_time = False if self._adaptive_steps else True
         results = self.backend.run(T=simulation_time, dt=self.step_size, dts=sampling_step_size,
-                                   out_dir=out_dir, outputs=outputs_col, solver=solver, verbose=verbose,
-                                   discrete_time=discrete_time, **kwargs)
+                                   out_dir=out_dir, outputs=outputs_col, solver=solver,  discrete_time=discrete_time,
+                                   **kwargs)
 
-        if verbose:
+        if self._verbose:
             print("\t\t...finished.")
 
         return results
@@ -446,131 +360,6 @@ class CircuitIR(AbstractBaseIR):
         self.backend.clear()
         in_edge_indices.clear()
         in_edge_vars.clear()
-
-    def getitem_from_iterator(self, key: str, key_iter: Iterator[str]):
-        return self.graph.nodes[key]["node"]
-
-    @property
-    def nodes(self):
-        """Shortcut to self.graph.nodes. See documentation of `networkx.MultiDiGraph.nodes`."""
-        return self.graph.nodes
-
-    @property
-    def edges(self):
-        """Shortcut to self.graph.edges. See documentation of `networkx.MultiDiGraph.edges`."""
-        return self.graph.edges
-
-    def _parse_source_vars(self, source_node: str, source_var: Union[str, dict], edge_ir, extra_sources: dict = None
-                           ) -> Tuple[Union[str, dict], dict]:
-        """Parse is source variable specifications. This tests, whether a single or more source variables and verifies
-        all given paths.
-
-        Parameters
-        ----------
-        source_node
-            String that specifies a single node as source of an edge.
-        source_var
-            Single variable specifier string or dictionary of form `{source_op/source_var: edge_op/edge_var
-        edge_ir
-            Instance of an EdgeIR that contains information about the internal structure of an edge.
-
-        Returns
-        -------
-        source_var
-        """
-
-        # step 1: figure out, whether only one or more source variables are defined
-
-        try:
-            # try to treat source_var as dictionary
-            n_source_vars = len(source_var.keys())
-        except AttributeError:
-            # not a dictionary, so must be a string
-            n_source_vars = 1
-        else:
-            # was a dictionary, treat case that it only has length 1
-            if n_source_vars == 1:
-                source_var = next(iter(source_var))
-
-        if n_source_vars == 1:
-            _, _ = source_var.split("/")  # should be op, var, but we do not need them here
-            self._verify_path(source_node, source_var)
-        else:
-            # verify that number of source variables matches number of input variables in edge
-            if extra_sources is not None:
-                n_source_vars += len(extra_sources)
-
-            if n_source_vars != edge_ir.n_inputs:
-                raise PyRatesException(f"Mismatch between number of source variables ({n_source_vars}) and "
-                                       f"inputs ({edge_ir.n_inputs}) in an edge with source '{source_node}' and source"
-                                       f"variables {source_var}.")
-            for node_var, edge_var in source_var.items():
-                self._verify_path(source_node, node_var)
-
-            # ToDo: Get all input variables from all operators and properly map them at this stage?
-            #  note: at this stage source_var is not manipulated at all
-
-        if extra_sources is not None:
-            for edge_var, source in extra_sources.items():
-                node, op, var = source.split("/")
-                node = self._verify_rename_node(node)
-                source = "/".join((node, op, var))
-                self._verify_path(source)
-                extra_sources[edge_var] = source
-
-        return source_var, extra_sources
-
-    def _verify_path(self, *parts: str):
-        """
-
-        Parameters
-        ----------
-        parts
-            One or more parts of a path string
-
-        Returns
-        -------
-
-        """
-
-        # go trough circuit hierarchy
-        path = "/".join(parts)
-
-        # check if path is valid
-        if path not in self:
-            raise PyRatesException(f"Could not find object with path `{path}`.")
-
-    def _preprocess_edge_operations(self, dde_approx: int = 0, **kwargs):
-        """Restructures network graph to collapse nodes and edges that share the same operator graphs. Variable values
-        get an additional vector dimension. References to the respective index is saved in the internal `label_map`."""
-
-        # go through nodes and create buffers for delayed outputs and mappings for their inputs
-        #######################################################################################
-
-        for node_name in self.nodes:
-
-            node_outputs = self.graph.out_edges(node_name, keys=True)
-            node_outputs = self._sort_edges(node_outputs, 'source_var', data_included=False)
-
-            # loop over ouput variables of node
-            for i, (out_var, edges) in enumerate(node_outputs.items()):
-
-                # extract delay info from variable projections
-                op_name, var_name = out_var.split('/')
-                delays, spreads, nodes, add_delay = self._collect_delays_from_edges(edges)
-
-                # add synaptic buffer to output variables with delay
-                if add_delay:
-                    self._add_edge_buffer(node_name, op_name, var_name, edges=edges, delays=delays,
-                                          nodes=nodes, spreads=spreads,
-                                          dde_approx=dde_approx)
-
-        # create the final equations and variables for each edge
-        for source, targets in self.graph.adjacency():
-            for target, edges in targets.items():
-                for idx, data in edges.items():
-                    self._generate_edge_equation(source_node=source, target_node=target, edge_idx=idx, data=data,
-                                                 **kwargs)
 
     def _parse_op_layers_into_computegraph(self, layers: list, exclude: bool = False,
                                            op_identifier: Optional[str] = None, **kwargs) -> None:
@@ -713,51 +502,215 @@ class CircuitIR(AbstractBaseIR):
 
         return equations, variables
 
-    def _collect_delays_from_edges(self, edges):
-        means, stds, nodes = [], [], []
-        for s, t, e in edges:
-            d = self.edges[s, t, e]['delay']
-            if type(d) is list:
-                d = [1 if d_tmp is None else d_tmp for d_tmp in d]
-            v = self.edges[s, t, e].pop('spread', [0])
-            if v is None or np.sum(v) == 0:
-                v = [0] * len(self.edges[s, t, e]['target_idx'])
-                discretize = True
-            else:
-                discretize = False
-                v = self._process_delays(v, discretize=discretize)
-            if d is None or np.sum(d) == 0:
-                d = [1] * len(self.edges[s, t, e]['target_idx'])
-            else:
-                d = self._process_delays(d, discretize=discretize)
-            means += d
-            stds += v
+    def _add_edge_input_collector(self, node: str, op: str, var: str, idx: int, edge: tuple) -> None:
+        """Adds an input collector variable to an edge.
 
-        max_delay = np.max(means)
-        add_delay = ("int" in str(type(max_delay)) and max_delay > 1) or \
-                    ("float" in str(type(max_delay)) and max_delay > self.step_size)
-        if sum(stds) == 0:
-            stds = None
+        Parameters
+        ----------
+        node
+            Name of the target node of the edge.
+        op
+            Name of the target operator of the edge.
+        var
+            Name of the target variable of the edge.
+        idx
+            Index of the input collector variable on that edge.
+        edge
+            Edge identifier (source_name, target_name, edge_idx).
 
-        for s, t, e in edges:
-            if add_delay:
-                nodes.append(self.edges[s, t, e].pop('source_idx'))
-                self.edges[s, t, e]['source_idx'] = []
-            self.edges[s, t, e]['delay'] = None
+        Returns
+        -------
+        None
 
-        return means, stds, nodes, add_delay
+        """
 
-    def _process_delays(self, d, discretize=True):
-        if type(d) is list:
-            d = np.asarray(d).squeeze()
-            d = [self._preprocess_delay(d_tmp, discretize=discretize) for d_tmp in d] if d.shape else \
-                [self._preprocess_delay(d, discretize=discretize)]
+        target_shape = self[f"{node}/{op}/{var}"]['shape']
+        node_ir = self[node]
+
+        # create collector equation
+        eqs = [f"{var} = {var}_col_{idx}"]
+
+        # create collector variable definition
+        val_dict = {'vtype': 'state_var',
+                    'dtype': self.backend._float_def,
+                    'shape': target_shape,
+                    'value': 0.
+                    }
+        var_dict = {f'{var}_col_{idx}': val_dict.copy(),
+                    var: val_dict.copy()}
+        # added the actual output variable as well.
+
+        # add collector operator to operator graph
+        node_ir.add_op(f'{op}_{var}_col_{idx}',
+                       inputs={},
+                       output=var,
+                       equations=eqs,
+                       variables=var_dict)
+        node_ir.add_op_edge(f'{op}_{var}_col_{idx}', op)
+
+        # add input information to target operator
+        op_inputs = self[f"{node}/{op}"]['inputs']
+        if var in op_inputs.keys():
+            op_inputs[var]['sources'].add(f'{op}_{var}_col_{idx}')
         else:
-            d = [self._preprocess_delay(d, discretize=discretize)]
-        return d
+            op_inputs[var] = {'sources': {f'{op}_{var}_col_{idx}'},
+                              'reduce_dim': True}
 
-    def _preprocess_delay(self, delay, discretize=True):
-        return int(np.round(delay / self.step_size, decimals=0)) if discretize and not self._adaptive_steps else delay
+        # update edge target information
+        if len(edge) > 3:
+            edge = edge[:3]
+        s, t, e = edge
+        self.edges[s, t, e]['target_var'] = f'{op}_{var}_col_{idx}/{var}_col_{idx}'
+
+    @staticmethod
+    def _map_multiple_inputs(inputs: dict, reduce_dim: bool, scope: str) -> tuple:
+        """Creates mapping between multiple input variables and a single output variable.
+
+        Parameters
+        ----------
+        inputs
+            Input variables.
+        reduce_dim
+            If true, input variables will be summed up, if false, they will be concatenated.
+        scope
+            Scope of the input variables
+
+        Returns
+        -------
+        tuple
+            Summed up or concatenated input variables and the mapping to the respective input variables
+
+        """
+
+        if scope not in in_edge_vars:
+            in_edge_vars[scope] = []
+        inputs_unique = in_edge_vars[scope]
+        input_mapping = {}
+        new_input_vars = []
+        for key, var in inputs.items():
+            *node, in_op, in_var = key.split('/')
+            if 'symbol' in var and 'expr' not in var:
+                in_var = var['symbol'].name
+            inp = get_unique_label(in_var, inputs_unique)
+            new_input_vars.append(inp)
+            inputs_unique.append(inp)
+            input_mapping[inp] = key
+
+        if reduce_dim:
+            input_expr = f"sum(({','.join(new_input_vars)}), 0)"
+        else:
+            idx = 0
+            var = inputs[input_mapping[new_input_vars[idx]]]
+            while not hasattr(var, 'shape'):
+                idx += 1
+                var = inputs[input_mapping[new_input_vars[idx]]]
+            shape = var['shape']
+            if len(shape) > 0:
+                input_expr = f"reshape(({','.join(new_input_vars)}), ({len(new_input_vars) * shape[0],}))"
+            else:
+                input_expr = f"stack({','.join(new_input_vars)})"
+        return input_expr, input_mapping
+
+
+class NetworkGraph(AbstractBaseIR):
+    """View on the entire network as a graph. Translates edge operations and attributes into a form that allows to
+    parse the network graph into a final compute graph."""
+
+    def __init__(self, label: str = "circuit", nodes: Dict[str, NodeIR] = None, edges: list = None,
+                 template: str = None, **kwargs):
+
+        # TODO: differentiate between vectorized and non-vectorized NetworkGraph
+
+        super().__init__(label=label, template=template)
+        self.graph = MultiDiGraph()
+
+        # add nodes to graph
+        if nodes:
+            nodes = ((key, {"node": node}) for key, node in nodes.items())
+            self.graph.add_nodes_from(nodes)
+
+        # add edges to graph
+        if edges:
+            for (source, target, edge_dict) in edges:
+                self.add_edge(source, target, **edge_dict)
+
+        # translate edge operations and attributes into graph operators
+        self._preprocess_edge_operations(dde_approx=kwargs.pop('dde_approx', 0),
+                                         matrix_sparseness=kwargs.pop('matrix_sparseness', 0.05))
+
+    def add_edge(self, source: str, target: str, edge_ir: EdgeIR = None, weight: float = 1., delay: float = None,
+                 spread: float = None, **data):
+        """
+        Parameters
+        ----------
+        source
+        target
+        edge_ir
+        weight
+        delay
+        spread
+        data
+            If no template is given, `data` is assumed to conform to the format that is needed to add an edge. I.e.,
+            `data` needs to contain fields for `weight`, `delay`, `edge_ir`, `source_var`, `target_var`.
+
+        Returns
+        -------
+
+        """
+
+        # step 1: parse and verify source and target specifiers
+        source_node, source_var = self._parse_edge_specifier(source, data, "source_var")
+        target_node, target_var = self._parse_edge_specifier(target, data, "target_var")
+
+        # step 2: parse source variable specifier (might be single string or dictionary for multiple source variables)
+        source_vars, extra_sources = self._parse_source_vars(source_node, source_var, edge_ir,
+                                                             data.pop("extra_sources", None))
+
+        # step 3: add edges
+        attr_dict = dict(edge_ir=edge_ir,
+                         weight=weight,
+                         delay=delay,
+                         spread=spread,
+                         source_var=source_vars,
+                         target_var=target_var,
+                         extra_sources=extra_sources,
+                         **data)
+        self.graph.add_edge(source_node, target_node, **attr_dict)
+
+    def getitem_from_iterator(self, key: str, key_iter: Iterator[str]):
+        return self.graph.nodes[key]["node"]
+
+    def _preprocess_edge_operations(self, dde_approx: int = 0, **kwargs):
+        """Restructures network graph to collapse nodes and edges that share the same operator graphs. Variable values
+        get an additional vector dimension. References to the respective index is saved in the internal `label_map`."""
+
+        # go through nodes and create buffers for delayed outputs and mappings for their inputs
+        #######################################################################################
+
+        for node_name in self.nodes:
+
+            node_outputs = self.graph.out_edges(node_name, keys=True)
+            node_outputs = self._sort_edges(node_outputs, 'source_var', data_included=False)
+
+            # loop over ouput variables of node
+            for i, (out_var, edges) in enumerate(node_outputs.items()):
+
+                # extract delay info from variable projections
+                op_name, var_name = out_var.split('/')
+                delays, spreads, nodes, add_delay = self._collect_delays_from_edges(edges)
+
+                # add synaptic buffer to output variables with delay
+                if add_delay:
+                    self._add_edge_buffer(node_name, op_name, var_name, edges=edges, delays=delays,
+                                          nodes=nodes, spreads=spreads,
+                                          dde_approx=dde_approx)
+
+        # create the final equations and variables for each edge
+        for source, targets in self.graph.adjacency():
+            for target, edges in targets.items():
+                for idx, data in edges.items():
+                    self._generate_edge_equation(source_node=source, target_node=target, edge_idx=idx, data=data,
+                                                 **kwargs)
 
     def _sort_edges(self, edges: List[tuple], attr: str, data_included: bool = False) -> dict:
         """Sorts edges according to the given edge attribute.
@@ -804,6 +757,40 @@ class CircuitIR(AbstractBaseIR):
                     edges_new[value].append((source, target, edge))
 
         return edges_new
+
+    def _collect_delays_from_edges(self, edges):
+        means, stds, nodes = [], [], []
+        for s, t, e in edges:
+            d = self.edges[s, t, e]['delay']
+            if type(d) is list:
+                d = [1 if d_tmp is None else d_tmp for d_tmp in d]
+            v = self.edges[s, t, e].pop('spread', [0])
+            if v is None or np.sum(v) == 0:
+                v = [0] * len(self.edges[s, t, e]['target_idx'])
+                discretize = True
+            else:
+                discretize = False
+                v = self._process_delays(v, discretize=discretize)
+            if d is None or np.sum(d) == 0:
+                d = [1] * len(self.edges[s, t, e]['target_idx'])
+            else:
+                d = self._process_delays(d, discretize=discretize)
+            means += d
+            stds += v
+
+        max_delay = np.max(means)
+        add_delay = ("int" in str(type(max_delay)) and max_delay > 1) or \
+                    ("float" in str(type(max_delay)) and max_delay > self.step_size)
+        if sum(stds) == 0:
+            stds = None
+
+        for s, t, e in edges:
+            if add_delay:
+                nodes.append(self.edges[s, t, e].pop('source_idx'))
+                self.edges[s, t, e]['source_idx'] = []
+            self.edges[s, t, e]['delay'] = None
+
+        return means, stds, nodes, add_delay
 
     def _add_edge_buffer(self, node: str, op: str, var: str, edges: list, delays: list, nodes: list,
                          spreads: Optional[list] = None, dde_approx: int = 0) -> None:
@@ -899,7 +886,7 @@ class CircuitIR(AbstractBaseIR):
                                               'shape': (len(source_idx_tmp[idx]),),
                                               'value': source_idx_tmp[idx]}
                 elif i != 0 and idx_apply:
-                    var_prev_idx = get_indexed_var_str(var_prev, idx_str)
+                    var_prev_idx = get_indexed_var_str(var_prev, idx_str, var_length=len(rates_tmp))
                 else:
                     var_prev_idx = var_prev
 
@@ -1087,83 +1074,6 @@ class CircuitIR(AbstractBaseIR):
                 self.edges[s, t, e]['source_idx'] = list(range(idx_l, idx_h))
                 idx_l = idx_h
 
-    def _bool_to_idx(self, v):
-        v_idx = np.argwhere(v).squeeze()
-        v_dict = {}
-        if v_idx.shape and v_idx.shape[0] > 1 and all(np.diff(v_idx) == 1):
-            v_idx_str = (f"{v_idx[0]}", f"{v_idx[-1] + 1}")
-        elif v_idx.shape and v_idx.shape[0] > 1:
-            var_name = f"delay_idx_{self._edge_idx_counter}"
-            v_idx_str = f"{var_name}"
-            v_dict[var_name] = {'value': v_idx, 'vtype': 'constant'}
-            self._edge_idx_counter += 1
-        else:
-            try:
-                v_idx_str = f"{v_idx.max()}"
-            except ValueError:
-                v_idx_str = ""
-        return v_idx.tolist(), v_idx_str, v_dict
-
-    def _add_edge_input_collector(self, node: str, op: str, var: str, idx: int, edge: tuple) -> None:
-        """Adds an input collector variable to an edge.
-
-        Parameters
-        ----------
-        node
-            Name of the target node of the edge.
-        op
-            Name of the target operator of the edge.
-        var
-            Name of the target variable of the edge.
-        idx
-            Index of the input collector variable on that edge.
-        edge
-            Edge identifier (source_name, target_name, edge_idx).
-
-        Returns
-        -------
-        None
-
-        """
-
-        target_shape = self[f"{node}/{op}/{var}"]['shape']
-        node_ir = self[node]
-
-        # create collector equation
-        eqs = [f"{var} = {var}_col_{idx}"]
-
-        # create collector variable definition
-        val_dict = {'vtype': 'state_var',
-                    'dtype': self.backend._float_def,
-                    'shape': target_shape,
-                    'value': 0.
-                    }
-        var_dict = {f'{var}_col_{idx}': val_dict.copy(),
-                    var: val_dict.copy()}
-        # added the actual output variable as well.
-
-        # add collector operator to operator graph
-        node_ir.add_op(f'{op}_{var}_col_{idx}',
-                       inputs={},
-                       output=var,
-                       equations=eqs,
-                       variables=var_dict)
-        node_ir.add_op_edge(f'{op}_{var}_col_{idx}', op)
-
-        # add input information to target operator
-        op_inputs = self[f"{node}/{op}"]['inputs']
-        if var in op_inputs.keys():
-            op_inputs[var]['sources'].add(f'{op}_{var}_col_{idx}')
-        else:
-            op_inputs[var] = {'sources': {f'{op}_{var}_col_{idx}'},
-                              'reduce_dim': True}
-
-        # update edge target information
-        if len(edge) > 3:
-            edge = edge[:3]
-        s, t, e = edge
-        self.edges[s, t, e]['target_var'] = f'{op}_{var}_col_{idx}/{var}_col_{idx}'
-
     def _generate_edge_equation(self, source_node: str, target_node: str, edge_idx: int, data: dict,
                                 matrix_sparseness: float = 0.1):
 
@@ -1257,6 +1167,111 @@ class CircuitIR(AbstractBaseIR):
             inputs[tvar] = {'sources': [op_name],
                             'reduce_dim': True}
 
+    def _process_delays(self, d, discretize=True):
+        if type(d) is list:
+            d = np.asarray(d).squeeze()
+            d = [self._preprocess_delay(d_tmp, discretize=discretize) for d_tmp in d] if d.shape else \
+                [self._preprocess_delay(d, discretize=discretize)]
+        else:
+            d = [self._preprocess_delay(d, discretize=discretize)]
+        return d
+
+    def _preprocess_delay(self, delay, discretize=True):
+        return int(np.round(delay / self.step_size, decimals=0)) if discretize and not self._adaptive_steps else delay
+
+    def _bool_to_idx(self, v):
+        v_idx = np.argwhere(v).squeeze()
+        v_dict = {}
+        if v_idx.shape and v_idx.shape[0] > 1 and all(np.diff(v_idx) == 1):
+            v_idx_str = (f"{v_idx[0]}", f"{v_idx[-1] + 1}")
+        elif v_idx.shape and v_idx.shape[0] > 1:
+            var_name = f"delay_idx_{self._edge_idx_counter}"
+            v_idx_str = f"{var_name}"
+            v_dict[var_name] = {'value': v_idx, 'vtype': 'constant'}
+            self._edge_idx_counter += 1
+        else:
+            try:
+                v_idx_str = f"{v_idx.max()}"
+            except ValueError:
+                v_idx_str = ""
+        return v_idx.tolist(), v_idx_str, v_dict
+
+    def _parse_source_vars(self, source_node: str, source_var: Union[str, dict], edge_ir, extra_sources: dict = None
+                           ) -> Tuple[Union[str, dict], dict]:
+        """Parse is source variable specifications. This tests, whether a single or more source variables and verifies
+        all given paths.
+
+        Parameters
+        ----------
+        source_node
+            String that specifies a single node as source of an edge.
+        source_var
+            Single variable specifier string or dictionary of form `{source_op/source_var: edge_op/edge_var
+        edge_ir
+            Instance of an EdgeIR that contains information about the internal structure of an edge.
+
+        Returns
+        -------
+        source_var
+        """
+
+        # step 1: figure out, whether only one or more source variables are defined
+
+        try:
+            # try to treat source_var as dictionary
+            n_source_vars = len(source_var.keys())
+        except AttributeError:
+            # not a dictionary, so must be a string
+            n_source_vars = 1
+        else:
+            # was a dictionary, treat case that it only has length 1
+            if n_source_vars == 1:
+                source_var = next(iter(source_var))
+
+        if n_source_vars == 1:
+            _, _ = source_var.split("/")  # should be op, var, but we do not need them here
+            self._verify_path(source_node, source_var)
+        else:
+            # verify that number of source variables matches number of input variables in edge
+            if extra_sources is not None:
+                n_source_vars += len(extra_sources)
+
+            if n_source_vars != edge_ir.n_inputs:
+                raise PyRatesException(f"Mismatch between number of source variables ({n_source_vars}) and "
+                                       f"inputs ({edge_ir.n_inputs}) in an edge with source '{source_node}' and source"
+                                       f"variables {source_var}.")
+            for node_var, edge_var in source_var.items():
+                self._verify_path(source_node, node_var)
+
+        if extra_sources is not None:
+            for edge_var, source in extra_sources.items():
+                node, op, var = source.split("/")
+                source = "/".join((node, op, var))
+                self._verify_path(source)
+                extra_sources[edge_var] = source
+
+        return source_var, extra_sources
+
+    def _verify_path(self, *parts: str):
+        """
+
+        Parameters
+        ----------
+        parts
+            One or more parts of a path string
+
+        Returns
+        -------
+
+        """
+
+        # go trough circuit hierarchy
+        path = "/".join(parts)
+
+        # check if path is valid
+        if path not in self:
+            raise PyRatesException(f"Could not find object with path `{path}`.")
+
     @staticmethod
     def _parse_edge_specifier(specifier: str, data: dict, var_string: str) -> Tuple[str, Union[str, dict]]:
         """Parse source or target specifier for an edge.
@@ -1294,98 +1309,28 @@ class CircuitIR(AbstractBaseIR):
             # source_var was in data, so `source` contains only info about source node
             node = specifier  # type: str
 
-        # # step 2: verify node paths, rename if necessary  --> deprecated and removed
-        # node = self._verify_rename_node(node)  # type: str
-
         return node, var
 
-    @staticmethod
-    def _map_multiple_inputs(inputs: dict, reduce_dim: bool, scope: str) -> tuple:
-        """Creates mapping between multiple input variables and a single output variable.
-
-        Parameters
-        ----------
-        inputs
-            Input variables.
-        reduce_dim
-            If true, input variables will be summed up, if false, they will be concatenated.
-        scope
-            Scope of the input variables
-
-        Returns
-        -------
-        tuple
-            Summed up or concatenated input variables and the mapping to the respective input variables
-
-        """
-
-        if scope not in in_edge_vars:
-            in_edge_vars[scope] = []
-        inputs_unique = in_edge_vars[scope]
-        input_mapping = {}
-        new_input_vars = []
-        for key, var in inputs.items():
-            *node, in_op, in_var = key.split('/')
-            if 'symbol' in var and 'expr' not in var:
-                in_var = var['symbol'].name
-            inp = get_unique_label(in_var, inputs_unique)
-            new_input_vars.append(inp)
-            inputs_unique.append(inp)
-            input_mapping[inp] = key
-
-        if reduce_dim:
-            input_expr = f"sum(({','.join(new_input_vars)}), 0)"
-        else:
-            idx = 0
-            var = inputs[input_mapping[new_input_vars[idx]]]
-            while not hasattr(var, 'shape'):
-                idx += 1
-                var = inputs[input_mapping[new_input_vars[idx]]]
-            shape = var['shape']
-            if len(shape) > 0:
-                input_expr = f"reshape(({','.join(new_input_vars)}), ({len(new_input_vars) * shape[0],}))"
-            else:
-                input_expr = f"stack({','.join(new_input_vars)})"
-        return input_expr, input_mapping
-
-
-class SubCircuitView(AbstractBaseIR):
-    """View on a subgraph of a circuit. In order to keep memory footprint and computational cost low, the original (top
-    lvl) circuit is referenced locally as 'top_level_circuit' and all subgraph-related information is computed only
-    when needed."""
-
-    def __init__(self, top_level_circuit: CircuitIR, subgraph_key: str):
-
-        super().__init__()
-        self.top_level_circuit = top_level_circuit
-        self.subgraph_key = subgraph_key
-
-    def getitem_from_iterator(self, key: str, key_iter: Iterator[str]):
-
-        key = f"{self.subgraph_key}/{key}"
-
-        if key in self.top_level_circuit.sub_circuits:
-            return SubCircuitView(self.top_level_circuit, key)
-        else:
-            return self.top_level_circuit.nodes[key]["node"]
+    @property
+    def nodes(self):
+        """Shortcut to self.graph.nodes. See documentation of `networkx.MultiDiGraph.nodes`."""
+        return self.graph.nodes
 
     @property
-    def induced_graph(self):
-        """Return the subgraph specified by `subgraph_key`."""
-
-        nodes = (node for node in self.top_level_circuit.nodes if node.startswith(self.subgraph_key))
-        return subgraph(self.top_level_circuit.graph, nodes)
-
-    def __str__(self):
-
-        return f"{self.__class__.__name__} on '{self.subgraph_key}' in {self.top_level_circuit}"
+    def edges(self):
+        """Shortcut to self.graph.edges. See documentation of `networkx.MultiDiGraph.edges`."""
+        return self.graph.edges
 
 
 def get_indexed_var_str(var: str, idx: Union[tuple, str], var_length: int = None):
     if type(idx) is tuple:
         if var_length and int(idx[1]) - int(idx[0]) == var_length:
             return var
+        elif not var_length:
+            var = f"reshape({var}, 1)"
         return f"index_range({var}, {idx[0]}, {idx[1]})"
     if idx:
+        if not var_length:
+            var = f"reshape({var}, 1)"
         return f"index({var}, {idx})"
     return var

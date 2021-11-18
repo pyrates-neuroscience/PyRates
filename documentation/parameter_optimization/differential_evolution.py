@@ -112,11 +112,10 @@ diff_eq = DifferentialEvolutionAlgorithm()
 winner = diff_eq.run(initial_gene_pool=params,
                      gene_map=param_map,
                      template=model_template,
-                     compile_kwargs={'solver': 'scipy', 'backend': 'numpy', 'step_size': 1e-4},
                      run_kwargs={'step_size': 1e-4, 'simulation_time': 3., 'sampling_step_size': 1e-3,
+                                 'solver': 'scipy', 'method': 'RK23',
                                  'outputs': {'V_pce': 'JRC/JRC_op/PSP_pc_e', 'V_pci': 'JRC/JRC_op/PSP_pc_i'}},
-                     loss_func=loss,
-                     loss_kwargs={'min_amp': 6e-3, 'max_amp': 9e-3},
+                     loss_func=loss, loss_kwargs={'min_amp': 6e-3, 'max_amp': 9e-3},
                      workers=-1, strategy='best2exp', mutation=(0.5, 1.9), recombination=0.8, atol=1e-5, tol=1e-3,
                      polish=False)
 
@@ -137,15 +136,14 @@ winner = diff_eq.run(initial_gene_pool=params,
 from pyrates.frontend import CircuitTemplate
 from matplotlib.pyplot import show
 
-jr_temp = CircuitTemplate.from_yaml(model_template).apply()
-jr_temp.set_node_var('JRC/JRC_op/c', winner.at[0, 'C'])
-jr_comp = jr_temp.compile(solver='scipy', backend='numpy', step_size=1e-4)
-results = jr_comp.run(simulation_time=3.0, sampling_step_size=1e-2,
-                      outputs={'V_pce': 'JRC/JRC_op/PSP_pc_e', 'V_pci': 'JRC/JRC_op/PSP_pc_i'})
+jrc = CircuitTemplate.from_yaml(model_template)
+jrc = jrc.update_var(node_vars={'JRC/JRC_op/c': winner.at[0, 'c']})
+results = jrc.run(simulation_time=3.0, sampling_step_size=1e-2, solver='scipy', backend='numpy', step_size=1e-4,
+                  outputs={'V_pce': 'JRC/JRC_op/PSP_pc_e', 'V_pci': 'JRC/JRC_op/PSP_pc_i'})
 
 results = results['V_pce'] - results['V_pci']
 results.plot()
-jr_comp.clear()
+jrc.clear()
 show()
 
 # %%

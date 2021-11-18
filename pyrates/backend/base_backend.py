@@ -502,7 +502,7 @@ class BaseBackend(object):
 
         # create variable
         var, label = self.create_backend_var(vtype=vtype, dtype=dtype, shape=shape, value=value, name=label,
-                                             backend=self, squeeze=kwargs.pop('squeeze', True))
+                                             backend=self, squeeze=kwargs.pop('squeeze', False))
 
         # add variable to compute graph
         name, cg_var = self.graph.add_var(label=name, value=var, vtype=vtype, **kwargs)
@@ -670,9 +670,8 @@ class BaseBackend(object):
 
         # add vectorized state variables and updates to the backend
         state_vec = self.ops['concat']['func'](vars, axis=0)
-        rhs_vec = self.ops['concat']['func'](updates, axis=0)
         state_var_key, state_var = self.add_var(vtype='state_var', name='state_vec', value=state_vec, squeeze=False)
-        rhs_var_key, rhs_var = self.add_var(vtype='state_var', name='state_vec_update', value=np.zeros_like(rhs_vec))
+        rhs_var_key, rhs_var = self.add_var(vtype='state_var', name='state_vec_update', value=np.zeros_like(state_vec))
 
         return_dict = {'old_state_vars': old_state_vars, 'state_vec': state_var_key, 'vec_indices': indices}
 
@@ -911,13 +910,8 @@ class BaseBackend(object):
             t = 0.0
             kwargs['t_eval'] = eval_times
 
-            # wrapper function
-            def fun(t, y):
-                rhs_func(t, y, rhs, *args)
-                return rhs
-
             # call scipy solver
-            results = solve_ivp(fun=fun, t_span=(t, T), y0=state_vec, first_step=dt, **kwargs)
+            results = solve_ivp(fun=rhs_func, t_span=(t, T), y0=state_vec, first_step=dt, args=args, **kwargs)
 
             return results['y'].T
 
