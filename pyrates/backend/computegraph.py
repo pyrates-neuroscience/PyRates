@@ -30,7 +30,7 @@
 """
 
 # external imports
-from typing import Any, Callable, Union, Iterable
+from typing import Any, Callable, Union, Iterable, Optional
 from networkx import MultiDiGraph
 from sympy import Symbol, Expr, Function
 from copy import deepcopy
@@ -46,34 +46,229 @@ __status__ = "development"
 #########################
 
 
+# numpy-based node class
+class ComputeNode:
+    """Base class for adding variables to the compute graph. Creates a numpy array with additional attributes
+    for variable identification/retrieval from graph. Should be used as parent class for custom variable classes.
+
+    Parameters
+    ----------
+    name
+        Full name of the variable in the original NetworkGraph (including the node and operator it belongs to).
+    dtype
+        Data-type of the variable. For valid data-types, check the documentation of the backend in use.
+    shape
+        Shape of the variable.
+    """
+
+    __slots__ = ["name", "symbol", "dtype", "shape", "_value"]
+
+    def __init__(self, name: str, symbol: Union[Symbol, Expr, Function], dtype: Optional[str] = None,
+                 shape: Optional[str] = None):
+        """Instantiates a basic node of a ComputeGraph instance.
+        """
+
+        self.name = name
+        self.symbol = symbol
+        self.dtype = dtype
+        self.shape = shape
+        self._value = self._get_value(shape=shape, dtype=dtype)
+
+        # # check whether necessary arguments were provided
+        # if all([arg is None for arg in [shape, value, dtype]]):
+        #     raise ValueError('Either `value` or `shape` and `dtype` need to be provided')
+        #
+        # # get shape
+        # if not shape:
+        #     shape = value.shape if hasattr(value, 'shape') else np.shape(value)
+        #
+        # # get data type
+        # if not dtype:
+        #     if hasattr(value, 'dtype'):
+        #         dtype = value.dtype
+        #     else:
+        #         try:
+        #             dtype = np.dtype(value)
+        #         except TypeError:
+        #             dtype = type(value)
+        # dtype = dtype.name if hasattr(dtype, 'name') else str(dtype)
+        # if dtype in backend.dtypes:
+        #     dtype = backend.dtypes[dtype]
+        # else:
+        #     for dtype_tmp in backend.dtypes:
+        #         if dtype_tmp in dtype:
+        #             dtype = backend.dtypes[dtype_tmp]
+        #             break
+        #     else:
+        #         dtype = backend._float_def
+        #         warnings.warn(f'WARNING! Unknown data type of variable {name}: {dtype}. '
+        #                       f'Datatype will be set to default type: {dtype}.')
+        #
+        # # create variable
+        # if vtype == 'state_var' and 1 in tuple(shape) and squeeze:
+        #     idx = tuple(shape).index(1)
+        #     shape = list(shape)
+        #     shape.pop(idx)
+        #     shape = tuple(shape)
+        # if callable(value):
+        #     obj = value
+        # else:
+        #     try:
+        #         # normal variable
+        #         value = cls._get_value(value, dtype, shape)
+        #         if squeeze:
+        #             value = cls.squeeze(value)
+        #         obj = cls._get_var(value, name, dtype)
+        #     except TypeError:
+        #         # list of callables
+        #         obj = cls._get_var(value, name, dtype)
+        #
+        # # store additional attributes on variable object
+        # obj.short_name = name.split('/')[-1]
+        # if not hasattr(obj, 'name'):
+        #     obj.name = name
+        # else:
+        #     name = obj.name
+        # obj.vtype = vtype
+        #
+        # return obj, name
+
+    def reshape(self, shape: tuple, **kwargs):
+
+        self._value = self.value.reshape(shape, **kwargs)
+        return self
+
+    def squeeze(self, axis=None):
+        self._value = self.value.squeeze(axis=axis)
+        return self
+
+    @property
+    def value(self):
+        """Returns current value of BaseVar.
+        """
+        return self._value
+
+    def _is_equal_to(self, v):
+        for attr in self.__slots__:
+            if not hasattr(v, attr) or getattr(v, attr) != getattr(self, attr):
+                return False
+        return True
+
+    @staticmethod
+    def _get_value(value: Optional[Union[list, np.ndarray]] = None, dtype: Optional[str] = None,
+                   shape: Optional[tuple] = None):
+        """Defines initial value of variable.
+        """
+        if value is None:
+            return np.zeros(shape=shape, dtype=dtype)
+        elif not hasattr(value, 'shape'):
+            if type(value) is list:
+                return np.asarray(value, dtype=dtype).reshape(shape)
+            else:
+                return np.zeros(shape=shape, dtype=dtype) + value
+        elif shape:
+            if value.shape == shape:
+                return value
+            elif sum(shape) < sum(value.shape):
+                return value.squeeze()
+            else:
+                idx = ",".join("None" if s == 1 else ":" for s in shape)
+                return eval(f'value[{idx}]')
+        else:
+            return np.asarray(value, dtype=dtype)
+
+    def __deepcopy__(self, memodict: dict):
+        node = ComputeNode(name=self.name, symbol=self.symbol, dtype=self.dtype, shape=self.shape)
+        node._value = node._value[:]
+        return node
+
+    def __str__(self):
+        return self.name
+
+    def __hash__(self):
+        return hash(str(self))
+
+
+class ComputeVar(ComputeNode):
+    """Class for variables and vector-valued constants in the ComputeGraph.
+    """
+
+    __slots__ = super().__slots__ + ["vtype"]
+
+    def __init__(self, name: str, symbol: Union[Symbol, Expr, Function], vtype: str, dtype: Optional[str] = None,
+                 shape: Optional[str] = None, value: Optional[Union[list, np.ndarray]] = None):
+
+        # set attributes
+        super().__init__(name=name, symbol=symbol, dtype=dtype, shape=shape)
+        self.vtype = vtype
+
+        # adjust variable value
+        self._value = self._get_value(value=value, shape=shape, dtype=dtype)
+
+
+class ComputeOp(ComputeNode):
+    """Class for ComputeGraph nodes that represent mathematical operations.
+    """
+
+    __slots__ = super().__slots__ + ["func", "expr"]
+
+    def __init__(self, name: str, symbol: Union[Symbol, Expr, Function], func: Callable, expr: Expr,
+                 dtype: Optional[str] = None, shape: Optional[str] = None):
+
+        # set attributes
+        super().__init__(name=name, symbol=symbol, dtype=dtype, shape=shape)
+        self.func = func
+        self.expr = expr
+
+
+# networkx-based graph class
 class ComputeGraph(MultiDiGraph):
     """Creates a compute graph where nodes are all constants and variables of the network and edges are the mathematical
     operations linking those variables/constants together to form equations.
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, backend: str, **kwargs):
 
-        super().__init__(**kwargs)
+        super().__init__()
+
+        # choose a backend
+        if backend == 'tensorflow':
+            from pyrates.backend.tensorflow_backend import TensorflowBackend
+            backend = TensorflowBackend
+        elif backend == 'fortran':
+            from pyrates.backend.fortran_backend import FortranBackend
+            backend = FortranBackend
+        elif backend == 'PyAuto' or backend == 'pyauto':
+            from pyrates.backend.fortran_backend import PyAutoBackend
+            backend = PyAutoBackend
+        else:
+            from pyrates.backend.base_backend import BaseBackend
+            backend = BaseBackend
+
+        # set attributes
+        self.backend = backend(**kwargs)
         self.var_updates = {'DEs': dict(), 'non-DEs': dict()}
         self._eq_nodes = []
 
     def add_var(self, label: str, value: Any, vtype: str, **kwargs):
 
         unique_label = self._generate_unique_label(label)
-        super().add_node(unique_label, symbol=Symbol(unique_label), value=value, vtype=vtype, **kwargs)
-        return unique_label, self.nodes[unique_label]
+        var = ComputeVar(value=value, vtype=vtype, **kwargs)
+        super().add_node(unique_label, node=var)
+        return unique_label, self.nodes[unique_label]['node']
 
-    def add_op(self, inputs: Union[list, tuple], label: str, expr: Expr, func: Callable, vtype: str, **kwargs):
+    def add_op(self, inputs: Union[list, tuple], label: str, expr: Expr, func: Callable, **kwargs):
 
         # add target node that contains result of operation
         unique_label = self._generate_unique_label(label)
-        super().add_node(unique_label, expr=expr, func=func, vtype=vtype, symbol=Symbol(unique_label), **kwargs)
+        op = ComputeOp(func=func, expr=expr, **kwargs)
+        super().add_node(unique_label, node=op)
 
         # add edges from source nodes to target node
         for i, v in enumerate(inputs):
             super().add_edge(v, unique_label, key=i)
 
-        return unique_label, self.nodes[unique_label]
+        return unique_label, self.nodes[unique_label]['node']
 
     def add_var_update(self, var: str, update: str, differential_equation: bool = False):
 

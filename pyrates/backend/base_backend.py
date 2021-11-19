@@ -43,8 +43,6 @@ Currently supported backends:
 """
 
 # pyrates internal imports
-import gc
-
 from .base_funcs import *
 from .parser import var_in_expression, extract_var
 from .computegraph import ComputeGraph
@@ -54,7 +52,6 @@ from typing import Optional, Dict, List, Union, Any, Callable
 import os
 import sys
 from shutil import rmtree
-import warnings
 import numpy as np
 
 
@@ -143,183 +140,6 @@ def sort_equations(lhs_vars: list, rhs_expressions: list) -> tuple:
     expressions_new.extend(expressions_old[::-1])
 
     return vars_new[::-1], expressions_new[::-1], [v for v in all_vars if v not in defined_vars], defined_vars
-
-
-#################################
-# classes for backend variables #
-#################################
-
-
-class BaseVar(np.ndarray):
-    """Base class for adding variables to the PyRates compute graph. Creates a numpy array with additional attributes
-    for variable identification/retrieval from graph. Should be used as parent class for custom variable classes.
-
-    Parameters
-    ----------
-    vtype
-        Type of the variable. Can be either `constant` or `state_variable`. Constant variables are necessary to perform
-        certain graph optimizations previous to run time.
-    dtype
-        Data-type of the variable. For valid data-types, check the documentation of the backend in use.
-    shape
-        Shape of the variable.
-    value
-        Value of the variable. If scalar, please provide the shape in addition.
-    name
-        Full name of the variable (including the node and operator it belongs to).
-    short_name
-        Name of the variable excluding its node and operator.
-
-    Returns
-    -------
-    BaseVar
-        Instance of BaseVar.
-    """
-
-    def __new__(cls, vtype: str, backend: Any, name: str, dtype: Optional[str] = None,
-                shape: Optional[tuple] = None, value: Optional[Any] = None, squeeze: bool = True):
-        """Creates new instance of BaseVar.
-        """
-
-        # check whether necessary arguments were provided
-        if all([arg is None for arg in [shape, value, dtype]]):
-            raise ValueError('Either `value` or `shape` and `dtype` need to be provided')
-
-        # get shape
-        if not shape:
-            shape = value.shape if hasattr(value, 'shape') else np.shape(value)
-
-        # get data type
-        if not dtype:
-            if hasattr(value, 'dtype'):
-                dtype = value.dtype
-            else:
-                try:
-                    dtype = np.dtype(value)
-                except TypeError:
-                    dtype = type(value)
-        dtype = dtype.name if hasattr(dtype, 'name') else str(dtype)
-        if dtype in backend.dtypes:
-            dtype = backend.dtypes[dtype]
-        else:
-            for dtype_tmp in backend.dtypes:
-                if dtype_tmp in dtype:
-                    dtype = backend.dtypes[dtype_tmp]
-                    break
-            else:
-                dtype = backend._float_def
-                warnings.warn(f'WARNING! Unknown data type of variable {name}: {dtype}. '
-                              f'Datatype will be set to default type: {dtype}.')
-
-        # create variable
-        if vtype == 'state_var' and 1 in tuple(shape) and squeeze:
-            idx = tuple(shape).index(1)
-            shape = list(shape)
-            shape.pop(idx)
-            shape = tuple(shape)
-        if callable(value):
-            obj = value
-        else:
-            try:
-                # normal variable
-                value = cls._get_value(value, dtype, shape)
-                if squeeze:
-                    value = cls.squeeze(value)
-                obj = cls._get_var(value, name, dtype)
-            except TypeError:
-                # list of callables
-                obj = cls._get_var(value, name, dtype)
-
-        # store additional attributes on variable object
-        obj.short_name = name.split('/')[-1]
-        if not hasattr(obj, 'name'):
-            obj.name = name
-        else:
-            name = obj.name
-        obj.vtype = vtype
-
-        return obj, name
-
-    def numpy(self):
-        """Returns current value of BaseVar.
-        """
-        try:
-            return self[:]
-        except IndexError:
-            return self
-
-    def reshape(self, shape: tuple, **kwargs):
-
-        obj = super().reshape(shape, **kwargs)
-        if hasattr(self, 'name'):
-            obj.name = self.name
-        if hasattr(self, 'short_name'):
-            obj.short_name = self.short_name
-        if hasattr(self, 'vtype'):
-            obj.vtype = self.vtype
-        return obj
-
-    @staticmethod
-    def _get_value(value, dtype, shape):
-        """Defines initial value of variable.
-        """
-        if value is None:
-            return np.zeros(shape=shape, dtype=dtype)
-        elif not hasattr(value, 'shape'):
-            if type(value) is list:
-                return np.asarray(value, dtype=dtype).reshape(shape)
-            else:
-                return np.zeros(shape=shape, dtype=dtype) + value
-        elif shape:
-            if value.shape == shape:
-                return value
-            elif sum(shape) < sum(value.shape):
-                return value.squeeze()
-            else:
-                idx = ",".join("None" if s == 1 else ":" for s in shape)
-                return eval(f'value[{idx}]')
-        else:
-            return np.asarray(value, dtype=dtype)
-
-    @staticmethod
-    def squeeze(var, axis=None):
-        return var.squeeze(axis)
-
-    def _is_equal_to(self, v: np.ndarray):
-        if self.short_name == v.short_name and self.shape == v.shape:
-            if sum(v.shape) > 1:
-                return all(self.flatten() != v.flatten())
-            else:
-                return self != v
-
-    @classmethod
-    def _get_var(cls, value, name, dtype):
-        """Creates new numpy array from BaseVar.
-        """
-        return np.array(value).view(cls)
-
-    def __deepcopy__(self, memodict={}):
-        obj = super().__deepcopy__(memodict)
-        if not hasattr(obj, 'name') and hasattr(self, 'name'):
-            obj.name = self.name
-        if not hasattr(obj, 'short_name') and hasattr(self, 'short_name'):
-            obj.short_name = self.short_name
-        if not hasattr(obj, 'vtype') and hasattr(self, 'vtype'):
-            obj.vtype = self.vtype
-        return obj
-
-    def __str__(self):
-        return self.name
-
-    def __hash__(self):
-        return hash(str(self))
-
-    @staticmethod
-    def __subclasscheck__(subclass):
-        if np.ndarray.__subclasscheck__(subclass):
-            return True
-        else:
-            return interp1d.__subclasscheck__(subclass)
 
 
 #######################################

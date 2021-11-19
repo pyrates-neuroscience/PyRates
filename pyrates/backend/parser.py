@@ -38,6 +38,9 @@ from pyparsing import Literal, CaselessLiteral, Word, Combine, Optional, \
     ZeroOrMore, Forward, nums, alphas, ParserElement
 from sympy import Expr, Symbol, lambdify, sympify
 
+# pyrates internal imports
+from pyrates.backend.computegraph import ComputeGraph
+
 # meta infos
 __author__ = "Richard Gast"
 __status__ = "development"
@@ -96,7 +99,7 @@ class ExpressionParser(ParserElement):
 
     """
 
-    def __init__(self, expr_str: str, args: dict, backend: tp.Any, **kwargs) -> None:
+    def __init__(self, expr_str: str, args: dict, cg: tp.Any, **kwargs) -> None:
         """Instantiates expression parser.
         """
 
@@ -111,7 +114,7 @@ class ExpressionParser(ParserElement):
         # input arguments
         self.vars = args.copy()
         self.var_map = {}
-        self.backend = backend
+        self.cg = cg
         self.parser_kwargs = kwargs
 
         self.lhs, self.rhs, self._diff_eq, self._assign_type, self.lhs_key = self._preprocess_expr_str(expr_str)
@@ -776,10 +779,10 @@ class SympyParser(ExpressionParser):
 
     _constant_counter = 0
 
-    def __init__(self, expr_str: str, args: dict, backend: tp.Any, **kwargs) -> None:
+    def __init__(self, expr_str: str, args: dict, cg: ComputeGraph, **kwargs) -> None:
         """Instantiates expression parser.
         """
-        super().__init__(expr_str=expr_str, args=args, backend=backend, algebra=True, **kwargs)
+        super().__init__(expr_str=expr_str, args=args, cg=cg, algebra=True, **kwargs)
 
     def parse_expr(self) -> dict:
         """Parses string-based mathematical expression/equation.
@@ -831,12 +834,12 @@ class SympyParser(ExpressionParser):
                     if 'symbol' in var:
 
                         # if parsed already, retrieve label from existing variable
-                        label = self.backend.get_var(var['value'].name, get_key=True)
+                        label = self.cg.get_var(var['value'].name, get_key=True)
 
                     else:
 
                         # if not parsed already, parse variable into backend
-                        label, var = self.backend.add_var(name=arg.name, **var)
+                        label, var = self.cg.add_var(name=arg.name, **var)
                         self.vars[arg.name].update(var)
 
                 else:
@@ -860,11 +863,11 @@ class SympyParser(ExpressionParser):
                 label = str(expr.func)
 
             # define function calls that can be used for the operation
-            backend_funcs = {label: self.backend.ops[label]['func']} if label in self.backend.ops else {}
-            func = lambdify(func_args, expr=expr, modules=[backend_funcs, self.backend.type])
+            backend_funcs = {label: self.cg.ops[label]['func']} if label in self.cg.ops else {}
+            func = lambdify(func_args, expr=expr, modules=[backend_funcs, "numpy"])
 
             # parse mathematical operation into compute graph
-            return self.backend.add_op(inputs, name=label, expr=expr, func=func, vtype='variable')
+            return self.cg.add_op(inputs, name=label, expr=expr, func=func, vtype='variable')
 
         else:
 
@@ -888,7 +891,7 @@ class SympyParser(ExpressionParser):
 
             # create backend state variable if it does not exist already
             if 'symbol' not in v:
-                _, v = self.backend.add_var(name=lhs_key, **v)
+                _, v = self.cg.add_var(name=lhs_key, **v)
 
         else:
 
@@ -896,8 +899,8 @@ class SympyParser(ExpressionParser):
             lhs_key, v = self.parse(self.expr_stack)
 
         # create mapping between left-hand side and right-hand side of the equation
-        backend_var = self.backend.get_var(lhs_key, get_key=True, **self.parser_kwargs)
-        self.backend.graph.add_var_update(backend_var, self.rhs[0], differential_equation=self._diff_eq)
+        backend_var = self.cg.get_var(lhs_key, get_key=True, **self.parser_kwargs)
+        self.cg.add_var_update(backend_var, self.rhs[0], differential_equation=self._diff_eq)
         if lhs_key in self.vars:
             self.vars[lhs_key].update(v)
 
@@ -906,7 +909,7 @@ class SympyParser(ExpressionParser):
 ################################
 
 
-def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwargs) -> dict:
+def parse_equations(equations: list, equation_args: dict, cg: ComputeGraph, **kwargs) -> dict:
     """Parses a system (list) of equations into the backend. Transforms differential equations into the appropriate set
     of right-hand side evaluations that can be solved later on.
 
@@ -916,8 +919,8 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
         Collection of equations that describe the dynamics of the nodes and edges.
     equation_args
         Key-value pairs of arguments needed for parsing the equations.
-    backend
-        Backend instance to parse the equations into.
+    cg
+        ComputeGraph instance that all equations will be parsed into.
     kwargs
         Additional keyword arguments to be passed to the backend methods.
 
@@ -965,7 +968,7 @@ def parse_equations(equations: list, equation_args: dict, backend: tp.Any, **kwa
         ################
 
         instantaneous = is_diff_eq(eq) is False
-        parser = SympyParser(expr_str=eq, args=op_args, backend=backend, instantaneous=instantaneous, **kwargs.copy(),
+        parser = SympyParser(expr_str=eq, args=op_args, cg=cg, instantaneous=instantaneous, **kwargs.copy(),
                              scope=scope)
         variables = parser.parse_expr()
 
