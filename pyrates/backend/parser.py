@@ -39,7 +39,7 @@ from pyparsing import Literal, CaselessLiteral, Word, Combine, Optional, \
 from sympy import Expr, Symbol, lambdify, sympify
 
 # pyrates internal imports
-from pyrates.backend.computegraph import ComputeGraph
+from pyrates.backend.computegraph import ComputeGraph, ComputeVar, ComputeOp
 
 # meta infos
 __author__ = "Richard Gast"
@@ -113,7 +113,6 @@ class ExpressionParser(ParserElement):
 
         # input arguments
         self.vars = args.copy()
-        self.var_map = {}
         self.cg = cg
         self.parser_kwargs = kwargs
 
@@ -128,9 +127,6 @@ class ExpressionParser(ParserElement):
         self.expr_str = expr_str
         self.algebra = kwargs.pop('algebra', None)
         self.expr_stack = []
-        self.op = None
-        self._finished_rhs = False
-        self._instantaneous = kwargs.pop('instantaneous', False)
 
         # define algebra
         ################
@@ -266,224 +262,227 @@ class ExpressionParser(ParserElement):
 
         """
 
-        # get next operation from stack
-        op = expr_stack.pop()
+        raise NotImplementedError('Currently, the method `parse` is not implemented for this type of '
+                                  '`ExpressionParser`.')
 
-        # check type of operation
-        #########################
-
-        if op == '-one':
-
-            # multiply expression by minus one
-            self.op = self.backend.add_op('*', self.parse(expr_stack), -1, **self.parser_kwargs)
-
-        elif op in ["*=", "/=", "+=", "-=", "="]:
-
-            # collect rhs
-            op1 = self.parse(expr_stack)
-
-            # collect lhs
-            indexed_lhs = True if "]" in expr_stack else False
-            op2 = self.parse(expr_stack)
-
-            # combine elements via mathematical/boolean operator
-            if indexed_lhs:
-                self.op = self._apply_idx(op=op2[0], idx=op2[1], update=op1, update_type=op, **self.parser_kwargs)
-            else:
-                self.op = self.backend.add_op(op, op2, op1, **self.parser_kwargs)
-
-        elif op in "+-/**^@<=>=!==%":
-
-            # collect elements to combine
-            op2 = self.parse(expr_stack)
-            op1 = self.parse(expr_stack)
-
-            # combine elements via mathematical/boolean operator
-            self.op = self.backend.add_op(op, op1, op2, **self.parser_kwargs)
-
-        elif ".T" == op or ".I" == op:
-
-            # transpose/invert expression
-            self.op = self.backend.add_op(op, self.parse(expr_stack), **self.parser_kwargs)
-
-        elif op == "]":
-
-            # parse indices
-            indices = []
-            while len(expr_stack) > 0 and expr_stack[-1] != "[":
-                index = []
-                while len(expr_stack) > 0 and expr_stack[-1] not in ",[":
-                    if expr_stack[-1] == ":":
-                        index.append(expr_stack.pop())
-                    else:
-                        try:
-                            int(expr_stack[-1])
-                            index.append(expr_stack.pop())
-                        except ValueError:
-                            tmp = self._finished_rhs
-                            self._finished_rhs = False
-                            index.append(self.parse(expr_stack))
-                            self._finished_rhs = tmp
-                indices.append(index[::-1])
-                if expr_stack[-1] == ",":
-                    expr_stack.pop()
-            expr_stack.pop()
-
-            # build string-based representation of idx
-            if 'idx' not in self.vars.keys():
-                self.vars['idx'] = {}
-            idx = ""
-            i = 0
-            for index in indices[::-1]:
-                for ind in index:
-                    if type(ind) == str:
-                        idx += ind
-                    elif isinstance(ind, Number):
-                        idx += f"{ind}"
-                    else:
-                        self.vars['idx'][f'idx_var_{i}'] = ind
-                        idx += f"idx_var_{i}"
-                    i += 1
-                idx += ","
-            idx = idx[0:-1]
-
-            # extract variable and apply idx if its a rhs variable. Else return variable and index
-            if self._finished_rhs:
-                op = expr_stack.pop(-1)
-                if op in self.vars:
-                    op_to_idx = self.vars[op]
-                else:
-                    op_to_idx = self.parse([op])
-                self.op = (op_to_idx, idx)
-            else:
-                op_to_idx = self.parse(expr_stack)
-                op_idx = self._apply_idx(op_to_idx, idx, **self.parser_kwargs)
-                self.op = op_idx
-
-        elif op == "PI":
-
-            # return float representation of pi
-            self.op = math.pi
-
-        elif op == "E":
-
-            # return float representation of e
-            self.op = math.e
-
-        elif op in self.vars:
-
-            # extract constant/variable from args dict
-            self.op = self.vars[op]
-
-        elif op[-1] == "(":
-
-            expr_stack.pop(-1)
-
-            # parse arguments
-            args = []
-            while len(expr_stack) > 0:
-                args.append(self.parse(expr_stack))
-                if len(expr_stack) == 0 or expr_stack[-1] != ",":
-                    break
-                else:
-                    expr_stack.pop()
-
-            # apply function to arguments
-            try:
-                if len(args) == 1:
-                    self.op = self.backend.add_op(op[0:-1], args[0], **self.parser_kwargs)
-                else:
-                    self.op = self.backend.add_op(op[0:-1], *tuple(args[::-1]), **self.parser_kwargs)
-            except KeyError:
-                if any(["float" in op, "bool" in op, "int" in op, "complex" in op]):
-                    self.op = self.backend.add_op('cast', args[0], op[0:-1], **self.parser_kwargs)
-                else:
-                    raise KeyError(f"Undefined function in expression: {self.expr_str}. {op[0:-1]} needs to be "
-                                   f"provided in arguments dictionary.")
-
-        elif op == ")":
-
-            # check whether expression in parenthesis is a group of arguments to a function
-            start_par = -1
-            found_end = 0
-            while found_end < 1:
-                if "(" in expr_stack[start_par]:
-                    found_end += 1
-                if ")" in expr_stack[start_par]:
-                    found_end -= 1
-                start_par -= 1
-            if "," in expr_stack[start_par+1:]:
-
-                args = []
-                while True:
-                    args.append(self.parse(expr_stack))
-                    if expr_stack[-1] == ",":
-                        expr_stack.pop(-1)
-                    elif expr_stack[-1] == "(":
-                        expr_stack.pop(-1)
-                        break
-                    else:
-                        break
-                self.op = args[::-1]
-
-            else:
-
-                self.op = self.parse(expr_stack)
-                expr_stack.pop(-1)
-
-        elif any([op == "True", op == "true", op == "False", op == "false"]):
-
-            # return boolean
-            self.op = True if op in "Truetrue" else False
-
-        elif any(["float" in op, "bool" in op, "int" in op, "complex" in op]):
-
-            expr_stack.pop(-1)
-
-            # extract data type
-            try:
-                self.op = self.backend.add_op('cast', self.parse(expr_stack), op[0:-1], **self.parser_kwargs)
-            except AttributeError:
-                raise AttributeError(f"Datatype casting error in expression: {self.expr_str}. "
-                                     f"{op[0:-1]} is not a valid data-type for this parser.")
-
-        elif "." in op:
-
-            self.op = float(op)
-
-        elif op.isnumeric():
-
-            self.op = int(op)
-
-        elif op[0].isalpha():
-
-            if self._finished_rhs:
-
-                if op == 'rhs':
-                    self.op = self.rhs
-                else:
-                    shape = self.rhs.shape if hasattr(self.rhs, 'shape') else ()
-                    dtype = self.rhs.dtype if hasattr(self.rhs, 'dtype') else type(self.rhs)
-                    self.op = self.backend.add_var(vtype='state_var', name=op, shape=shape, dtype=dtype,
-                                                   **self.parser_kwargs)
-                    self.vars[op] = self.op
-
-            elif op == 't':
-
-                self.op = self.backend.add_var(vtype='state_var', name=op, shape=(), dtype='float', value=0.0,
-                                               **self.parser_kwargs)
-
-            else:
-
-                raise ValueError(f"Undefined variable detected in expression: {self.expr_str}. {op} was not found "
-                                 f"in the respective arguments dictionary.")
-
-        else:
-
-            raise ValueError(f"Undefined operation detected in expression: {self.expr_str}. {op} cannot be "
-                             f"interpreted by this parser.")
-
-        return self.op
+        # # get next operation from stack
+        # op = expr_stack.pop()
+        #
+        # # check type of operation
+        # #########################
+        #
+        # if op == '-one':
+        #
+        #     # multiply expression by minus one
+        #     self.op = self.backend.add_op('*', self.parse(expr_stack), -1, **self.parser_kwargs)
+        #
+        # elif op in ["*=", "/=", "+=", "-=", "="]:
+        #
+        #     # collect rhs
+        #     op1 = self.parse(expr_stack)
+        #
+        #     # collect lhs
+        #     indexed_lhs = True if "]" in expr_stack else False
+        #     op2 = self.parse(expr_stack)
+        #
+        #     # combine elements via mathematical/boolean operator
+        #     if indexed_lhs:
+        #         self.op = self._apply_idx(op=op2[0], idx=op2[1], update=op1, update_type=op, **self.parser_kwargs)
+        #     else:
+        #         self.op = self.backend.add_op(op, op2, op1, **self.parser_kwargs)
+        #
+        # elif op in "+-/**^@<=>=!==%":
+        #
+        #     # collect elements to combine
+        #     op2 = self.parse(expr_stack)
+        #     op1 = self.parse(expr_stack)
+        #
+        #     # combine elements via mathematical/boolean operator
+        #     self.op = self.backend.add_op(op, op1, op2, **self.parser_kwargs)
+        #
+        # elif ".T" == op or ".I" == op:
+        #
+        #     # transpose/invert expression
+        #     self.op = self.backend.add_op(op, self.parse(expr_stack), **self.parser_kwargs)
+        #
+        # elif op == "]":
+        #
+        #     # parse indices
+        #     indices = []
+        #     while len(expr_stack) > 0 and expr_stack[-1] != "[":
+        #         index = []
+        #         while len(expr_stack) > 0 and expr_stack[-1] not in ",[":
+        #             if expr_stack[-1] == ":":
+        #                 index.append(expr_stack.pop())
+        #             else:
+        #                 try:
+        #                     int(expr_stack[-1])
+        #                     index.append(expr_stack.pop())
+        #                 except ValueError:
+        #                     tmp = self._finished_rhs
+        #                     self._finished_rhs = False
+        #                     index.append(self.parse(expr_stack))
+        #                     self._finished_rhs = tmp
+        #         indices.append(index[::-1])
+        #         if expr_stack[-1] == ",":
+        #             expr_stack.pop()
+        #     expr_stack.pop()
+        #
+        #     # build string-based representation of idx
+        #     if 'idx' not in self.vars.keys():
+        #         self.vars['idx'] = {}
+        #     idx = ""
+        #     i = 0
+        #     for index in indices[::-1]:
+        #         for ind in index:
+        #             if type(ind) == str:
+        #                 idx += ind
+        #             elif isinstance(ind, Number):
+        #                 idx += f"{ind}"
+        #             else:
+        #                 self.vars['idx'][f'idx_var_{i}'] = ind
+        #                 idx += f"idx_var_{i}"
+        #             i += 1
+        #         idx += ","
+        #     idx = idx[0:-1]
+        #
+        #     # extract variable and apply idx if its a rhs variable. Else return variable and index
+        #     if self._finished_rhs:
+        #         op = expr_stack.pop(-1)
+        #         if op in self.vars:
+        #             op_to_idx = self.vars[op]
+        #         else:
+        #             op_to_idx = self.parse([op])
+        #         self.op = (op_to_idx, idx)
+        #     else:
+        #         op_to_idx = self.parse(expr_stack)
+        #         op_idx = self._apply_idx(op_to_idx, idx, **self.parser_kwargs)
+        #         self.op = op_idx
+        #
+        # elif op == "PI":
+        #
+        #     # return float representation of pi
+        #     self.op = math.pi
+        #
+        # elif op == "E":
+        #
+        #     # return float representation of e
+        #     self.op = math.e
+        #
+        # elif op in self.vars:
+        #
+        #     # extract constant/variable from args dict
+        #     self.op = self.vars[op]
+        #
+        # elif op[-1] == "(":
+        #
+        #     expr_stack.pop(-1)
+        #
+        #     # parse arguments
+        #     args = []
+        #     while len(expr_stack) > 0:
+        #         args.append(self.parse(expr_stack))
+        #         if len(expr_stack) == 0 or expr_stack[-1] != ",":
+        #             break
+        #         else:
+        #             expr_stack.pop()
+        #
+        #     # apply function to arguments
+        #     try:
+        #         if len(args) == 1:
+        #             self.op = self.backend.add_op(op[0:-1], args[0], **self.parser_kwargs)
+        #         else:
+        #             self.op = self.backend.add_op(op[0:-1], *tuple(args[::-1]), **self.parser_kwargs)
+        #     except KeyError:
+        #         if any(["float" in op, "bool" in op, "int" in op, "complex" in op]):
+        #             self.op = self.backend.add_op('cast', args[0], op[0:-1], **self.parser_kwargs)
+        #         else:
+        #             raise KeyError(f"Undefined function in expression: {self.expr_str}. {op[0:-1]} needs to be "
+        #                            f"provided in arguments dictionary.")
+        #
+        # elif op == ")":
+        #
+        #     # check whether expression in parenthesis is a group of arguments to a function
+        #     start_par = -1
+        #     found_end = 0
+        #     while found_end < 1:
+        #         if "(" in expr_stack[start_par]:
+        #             found_end += 1
+        #         if ")" in expr_stack[start_par]:
+        #             found_end -= 1
+        #         start_par -= 1
+        #     if "," in expr_stack[start_par+1:]:
+        #
+        #         args = []
+        #         while True:
+        #             args.append(self.parse(expr_stack))
+        #             if expr_stack[-1] == ",":
+        #                 expr_stack.pop(-1)
+        #             elif expr_stack[-1] == "(":
+        #                 expr_stack.pop(-1)
+        #                 break
+        #             else:
+        #                 break
+        #         self.op = args[::-1]
+        #
+        #     else:
+        #
+        #         self.op = self.parse(expr_stack)
+        #         expr_stack.pop(-1)
+        #
+        # elif any([op == "True", op == "true", op == "False", op == "false"]):
+        #
+        #     # return boolean
+        #     self.op = True if op in "Truetrue" else False
+        #
+        # elif any(["float" in op, "bool" in op, "int" in op, "complex" in op]):
+        #
+        #     expr_stack.pop(-1)
+        #
+        #     # extract data type
+        #     try:
+        #         self.op = self.backend.add_op('cast', self.parse(expr_stack), op[0:-1], **self.parser_kwargs)
+        #     except AttributeError:
+        #         raise AttributeError(f"Datatype casting error in expression: {self.expr_str}. "
+        #                              f"{op[0:-1]} is not a valid data-type for this parser.")
+        #
+        # elif "." in op:
+        #
+        #     self.op = float(op)
+        #
+        # elif op.isnumeric():
+        #
+        #     self.op = int(op)
+        #
+        # elif op[0].isalpha():
+        #
+        #     if self._finished_rhs:
+        #
+        #         if op == 'rhs':
+        #             self.op = self.rhs
+        #         else:
+        #             shape = self.rhs.shape if hasattr(self.rhs, 'shape') else ()
+        #             dtype = self.rhs.dtype if hasattr(self.rhs, 'dtype') else type(self.rhs)
+        #             self.op = self.backend.add_var(vtype='state_var', name=op, shape=shape, dtype=dtype,
+        #                                            **self.parser_kwargs)
+        #             self.vars[op] = self.op
+        #
+        #     elif op == 't':
+        #
+        #         self.op = self.backend.add_var(vtype='state_var', name=op, shape=(), dtype='float', value=0.0,
+        #                                        **self.parser_kwargs)
+        #
+        #     else:
+        #
+        #         raise ValueError(f"Undefined variable detected in expression: {self.expr_str}. {op} was not found "
+        #                          f"in the respective arguments dictionary.")
+        #
+        # else:
+        #
+        #     raise ValueError(f"Undefined operation detected in expression: {self.expr_str}. {op} cannot be "
+        #                      f"interpreted by this parser.")
+        #
+        # return self.op
 
     def clear(self):
         """Clears expression list and stack.
@@ -495,47 +494,50 @@ class ExpressionParser(ParserElement):
         available.
         """
 
-        # update left-hand side of equation
-        ###################################
+        raise NotImplementedError('Currently, the private method `_update_lhs` is not implemented for this type of '
+                                  '`ExpressionParser`.')
 
-        diff_eq = self._diff_eq
-
-        if diff_eq:
-
-            lhs = self.vars[self.lhs_key]
-
-            # update state variable vectors
-            y_idx = self._append_to_var(var_name='y', val=lhs)
-            self._append_to_var(var_name='y_delta', val=lhs)
-
-            # extract left-hand side variable from state variable vector
-            lhs_indexed = self.backend._create_op('index', self.backend.ops['index']['name'], self.vars['y'], y_idx)
-            lhs_indexed.short_name = lhs.short_name
-
-            if 'y_' in lhs_indexed.value:
-                del_start, del_end = lhs_indexed.value.index('_'), lhs_indexed.value.index('[')
-                lhs_indexed.value = lhs_indexed.value[:del_start] + lhs_indexed.value[del_end:]
-            self.vars[self.lhs_key] = lhs_indexed
-
-            # assign rhs to state var delta vector
-            self.rhs = self.backend.add_op('=', self.vars['y_delta'], self.rhs, y_idx, **self.parser_kwargs)
-
-            # broadcast rhs and lhs and store results in backend
-            self.backend.state_vars.append(lhs.name)
-            self.backend.vars[lhs.name] = self.vars[self.lhs_key]
-            self.rhs.state_var = lhs.name
-
-        else:
-
-            # simple update
-            if not self._instantaneous:
-                self.backend.next_layer()
-            indexed_lhs = "]" in self.expr_stack
-            self.lhs = self.parse(self.expr_stack + ['rhs', self._assign_type])
-            if not indexed_lhs:
-                self.backend.lhs_vars.append(self.vars[self.lhs_key].name)
-            if not self._instantaneous:
-                self.backend.previous_layer()
+        # # update left-hand side of equation
+        # ###################################
+        #
+        # diff_eq = self._diff_eq
+        #
+        # if diff_eq:
+        #
+        #     lhs = self.vars[self.lhs_key]
+        #
+        #     # update state variable vectors
+        #     y_idx = self._append_to_var(var_name='y', val=lhs)
+        #     self._append_to_var(var_name='y_delta', val=lhs)
+        #
+        #     # extract left-hand side variable from state variable vector
+        #     lhs_indexed = self.backend._create_op('index', self.backend.ops['index']['name'], self.vars['y'], y_idx)
+        #     lhs_indexed.short_name = lhs.short_name
+        #
+        #     if 'y_' in lhs_indexed.value:
+        #         del_start, del_end = lhs_indexed.value.index('_'), lhs_indexed.value.index('[')
+        #         lhs_indexed.value = lhs_indexed.value[:del_start] + lhs_indexed.value[del_end:]
+        #     self.vars[self.lhs_key] = lhs_indexed
+        #
+        #     # assign rhs to state var delta vector
+        #     self.rhs = self.backend.add_op('=', self.vars['y_delta'], self.rhs, y_idx, **self.parser_kwargs)
+        #
+        #     # broadcast rhs and lhs and store results in backend
+        #     self.backend.state_vars.append(lhs.name)
+        #     self.backend.vars[lhs.name] = self.vars[self.lhs_key]
+        #     self.rhs.state_var = lhs.name
+        #
+        # else:
+        #
+        #     # simple update
+        #     if not self._instantaneous:
+        #         self.backend.next_layer()
+        #     indexed_lhs = "]" in self.expr_stack
+        #     self.lhs = self.parse(self.expr_stack + ['rhs', self._assign_type])
+        #     if not indexed_lhs:
+        #         self.backend.lhs_vars.append(self.vars[self.lhs_key].name)
+        #     if not self._instantaneous:
+        #         self.backend.previous_layer()
 
     def _preprocess_expr_str(self, expr: str) -> tuple:
         """Turns differential equations into simple algebraic equations using a certain solver scheme and extracts
@@ -613,62 +615,6 @@ class ExpressionParser(ParserElement):
         """
         self.expr_stack.append(toks[-1])
 
-    def _apply_idx(self, op: tp.Any, idx: tp.Any, update: tp.Optional[tp.Any] = None,
-                   update_type: tp.Optional[str] = None, **kwargs) -> tp.Any:
-        """Apply index idx to operation op.
-
-        Parameters
-        ----------
-        op
-            Operation to be indexed.
-        idx
-            Index to op.
-        update
-            Update to apply to op at idx.
-        update_type
-            Type of left-hand side update (e.g. `=` or `+=`).
-        kwargs
-            Additional keyword arguments to be passed to the indexing functions.
-
-        Returns
-        -------
-        tp.Any
-            Result of applying idx to op.
-
-        """
-
-        kwargs.update(self.parser_kwargs)
-
-        # get constants/variables that are part of the index
-        args = []
-        if idx in self.vars['idx']:
-            idx = self.vars['idx'].pop(idx)
-        if type(idx) is str:
-            idx_old = idx
-            idx = []
-            for idx_tmp in idx_old.split(','):
-                for idx_tmp2 in idx_tmp.split(':'):
-                    idx.append(idx_tmp2)
-                    if idx_tmp2 in self.vars['idx']:
-                        idx_var = self.vars['idx'].pop(idx_tmp2)
-                        if not hasattr(idx_var, 'short_name'):
-                            if hasattr(idx_var, 'shape') and tuple(idx_var.shape):
-                                idx_var = idx_var[0]
-                            idx[-1] = f"{idx_var}"
-                        else:
-                            if "_evaluated" in idx_var.short_name:
-                                idx[-1] = f"{idx_var.numpy()}"
-                            else:
-                                idx[-1] = idx_var.short_name
-                                args.append(idx_var)
-                    idx.append(':')
-                idx.pop(-1)
-                idx.append(',')
-            idx.pop(-1)
-            idx = "".join(idx)
-
-        return self.backend.apply_idx(op, idx, update, update_type, *tuple(args))
-
     def _check_parsed_expr(self, expr_str: str) -> None:
         """check whether parsing of expression string was successful.
 
@@ -689,41 +635,11 @@ class ExpressionParser(ParserElement):
         if len(expr_str) > 0:
             raise ValueError(f"Error while parsing expression: {self.expr_str}. {expr_str} could not be parsed.")
 
-    def _append_to_var(self, var_name: str, val: tp.Any) -> str:
-
-        # create variable vector if not existent
-        if var_name not in self.vars:
-            self.vars[var_name] = self.backend.add_var(vtype='state_var', name=var_name, shape=(), dtype=val.dtype,
-                                                       value=[], squeeze=False)
-
-        # append left-hand side variable to variable vector
-        var = self.backend.remove_var(var_name)
-        var_val = var.numpy().tolist()
-        append_val = val.numpy().tolist()
-        if sum(var.shape) and sum(val.shape):
-            new_val = var_val + append_val
-        elif sum(var.shape):
-            new_val = var_val + [append_val]
-        else:
-            new_val = append_val if type(append_val) is list else [append_val]
-
-        # add updated variable to backend
-        self.vars[var_name] = self.backend.add_var(vtype='state_var', name=var_name, value=new_val,
-                                                   shape=(len(new_val),), dtype=var.dtype, squeeze=False)
-
-        # return index to variable vector to retrieve appended values
-        i1 = len(var_val) + self.backend.idx_start
-        i2 = len(new_val) + self.backend.idx_start
-        return f"{i1}:{i2}" if i2 - i1 > 1 else f"{i1}"
-
-    @staticmethod
-    def _compare(x: tp.Any, y: tp.Any) -> bool:
-        """Checks whether x and y are equal or not.
-        """
-        test = x == y
-        if hasattr(test, 'shape'):
-            test = test.any()
-        return test
+    def get_var_attr(self, var: str, attr: str):
+        try:
+            return getattr(self.vars[var], attr)
+        except AttributeError:
+            return self.vars[var][attr]
 
 
 class SympyParser(ExpressionParser):
@@ -831,30 +747,30 @@ class SympyParser(ExpressionParser):
 
                     # case: variables/constants
                     var = self.vars[arg.name]
-                    if 'symbol' in var:
+                    if isinstance(var, ComputeVar):
 
                         # if parsed already, retrieve label from existing variable
-                        label = self.cg.get_var(var['value'].name, get_key=True)
+                        label = var.name
 
                     else:
 
                         # if not parsed already, parse variable into backend
-                        label, var = self.cg.add_var(name=arg.name, **var)
-                        self.vars[arg.name].update(var)
+                        label, var = self.cg.add_var(label=arg.name, **var)
+                        self.vars[arg.name] = var
 
                 else:
 
                     # case: mathematical expressions
                     label, var = self.parse(arg)
 
-                if 'symbol' in var:
+                if isinstance(var, ComputeVar):
 
                     # replace name of variable in expression with new variable symbol
-                    expr = expr.subs(arg, var['symbol'])
+                    expr = expr.subs(arg, var.symbol)
 
                     # store input to mathematical expression, if it is not a simple scalar
                     inputs.append(label)
-                    func_args.append(var['symbol'])
+                    func_args.append(var.symbol)
 
             # retrieve name of the mathematical operation
             try:
@@ -867,7 +783,7 @@ class SympyParser(ExpressionParser):
             func = lambdify(func_args, expr=expr, modules=[backend_funcs, "numpy"])
 
             # parse mathematical operation into compute graph
-            return self.cg.add_op(inputs, name=label, expr=expr, func=func, vtype='variable')
+            return self.cg.add_op(inputs, label=label, expr=expr, func=func)
 
         else:
 
@@ -890,8 +806,8 @@ class SympyParser(ExpressionParser):
             v = self.vars[self.lhs_key]
 
             # create backend state variable if it does not exist already
-            if 'symbol' not in v:
-                _, v = self.cg.add_var(name=lhs_key, **v)
+            if not isinstance(v, ComputeVar):
+                _, v = self.cg.add_var(label=lhs_key, **v)
 
         else:
 
@@ -899,10 +815,9 @@ class SympyParser(ExpressionParser):
             lhs_key, v = self.parse(self.expr_stack)
 
         # create mapping between left-hand side and right-hand side of the equation
-        backend_var = self.cg.get_var(lhs_key, get_key=True, **self.parser_kwargs)
-        self.cg.add_var_update(backend_var, self.rhs[0], differential_equation=self._diff_eq)
+        self.cg.add_var_update(v.name, self.rhs[0], differential_equation=self._diff_eq)
         if lhs_key in self.vars:
-            self.vars[lhs_key].update(v)
+            self.vars[lhs_key] = v
 
 ################################
 # helper classes and functions #
@@ -940,47 +855,62 @@ def parse_equations(equations: list, equation_args: dict, cg: ComputeGraph, **kw
         # extract operator variables from equation args
         op_args = {}
         in_vars = []
+        update_vars = {}
         for key, var in equation_args.copy().items():
+
             if scope in key:
 
                 var_name = key.split('/')[-1]
 
                 if var_name == 'inputs':
 
-                    # extract inputs from other scopes
+                    # extract inputs from other variable scopes
                     for in_key, inp in var.items():
+
+                        # check whether input variable has been passed properly
                         if inp not in equation_args:
                             raise KeyError(inp)
+
+                        # extract input variable name and scope
                         in_key_split = inp.split('/')
                         in_scope = "/".join(in_key_split[:-1])
+
+                        # extract input variable
                         inp_tmp = equation_args[inp]
+
+                        # add input variable to operator arguments
                         op_args[in_key] = inp_tmp
-                        op_args[in_key]['scope'] = in_scope
+
+                        # remember to update the variable entry in the variable collection later
+                        update_vars[f"{in_scope}/{in_key}"] = in_key
+
+                        # add variable to operator inputs
                         in_vars.append(in_key)
 
                 elif var_name not in in_vars:
 
                     # include variable information in operator arguments
                     op_args[var_name] = var
-                    op_args[var_name]['scope'] = scope
+
+                    # remember to update the variable entry in the variable collection later
+                    update_vars[key] = var_name
 
         # parse equation
         ################
 
         instantaneous = is_diff_eq(eq) is False
+
+        # initialize parser
         parser = SympyParser(expr_str=eq, args=op_args, cg=cg, instantaneous=instantaneous, **kwargs.copy(),
                              scope=scope)
+
+        # parse expression into compute graph
         variables = parser.parse_expr()
 
-        # update equations args
-        #######################
-
-        for key, var in variables.items():
-            if key != 'inputs':
-                scope_tmp = var['scope'] if 'scope' in var else scope
-                var_name = f"{scope_tmp}/{key}"
-                if var_name in equation_args:
-                    equation_args[var_name].update(var)
+        # store newly created backend variables
+        for full_key, var_key in update_vars.items():
+            if full_key in equation_args:
+                equation_args[full_key] = variables[var_key]
 
     return equation_args
 

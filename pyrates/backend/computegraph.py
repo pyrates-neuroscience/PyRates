@@ -193,7 +193,7 @@ class ComputeVar(ComputeNode):
     """Class for variables and vector-valued constants in the ComputeGraph.
     """
 
-    __slots__ = super().__slots__ + ["vtype"]
+    __slots__ = ComputeNode.__slots__ + ["vtype"]
 
     def __init__(self, name: str, symbol: Union[Symbol, Expr, Function], vtype: str, dtype: Optional[str] = None,
                  shape: Optional[str] = None, value: Optional[Union[list, np.ndarray]] = None):
@@ -210,7 +210,7 @@ class ComputeOp(ComputeNode):
     """Class for ComputeGraph nodes that represent mathematical operations.
     """
 
-    __slots__ = super().__slots__ + ["func", "expr"]
+    __slots__ = ComputeNode.__slots__ + ["func", "expr"]
 
     def __init__(self, name: str, symbol: Union[Symbol, Expr, Function], func: Callable, expr: Expr,
                  dtype: Optional[str] = None, shape: Optional[str] = None):
@@ -253,7 +253,7 @@ class ComputeGraph(MultiDiGraph):
     def add_var(self, label: str, value: Any, vtype: str, **kwargs):
 
         unique_label = self._generate_unique_label(label)
-        var = ComputeVar(value=value, vtype=vtype, **kwargs)
+        var = ComputeVar(name=unique_label, symbol=Symbol(unique_label), value=value, vtype=vtype, **kwargs)
         super().add_node(unique_label, node=var)
         return unique_label, self.nodes[unique_label]['node']
 
@@ -261,7 +261,7 @@ class ComputeGraph(MultiDiGraph):
 
         # add target node that contains result of operation
         unique_label = self._generate_unique_label(label)
-        op = ComputeOp(func=func, expr=expr, **kwargs)
+        op = ComputeOp(name=unique_label, symbol=Symbol(unique_label), func=func, expr=expr, **kwargs)
         super().add_node(unique_label, node=op)
 
         # add edges from source nodes to target node
@@ -493,3 +493,14 @@ class ComputeGraph(MultiDiGraph):
                     new_shape.append(1)
 
         return tuple(new_shape)
+
+    def get_var(self, var: str):
+        return self.nodes[var]['node']
+
+    @property
+    def ops(self):
+        return self.backend.ops
+
+    @property
+    def dtypes(self):
+        return self.backend.dtypes

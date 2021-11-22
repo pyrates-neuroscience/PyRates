@@ -41,7 +41,7 @@ from pyrates.ir.node import NodeIR
 from pyrates.ir.edge import EdgeIR
 from pyrates.ir.abc import AbstractBaseIR
 from pyrates.backend.parser import parse_equations, replace, get_unique_label
-from pyrates.backend.computegraph import ComputeGraph
+from pyrates.backend.computegraph import ComputeGraph, ComputeVar
 
 __author__ = "Daniel Rose, Richard Gast"
 __status__ = "Development"
@@ -790,7 +790,7 @@ class CircuitIR(AbstractBaseIR):
     """Custom graph data structure that represents a backend of nodes and edges with associated equations
     and variables."""
 
-    __slots__ = ["label", "label_map", "graph", "_t", "_verbose"]
+    __slots__ = ["label", "_front_to_back", "graph", "_t", "_verbose"]
 
     def __init__(self, label: str = "circuit", nodes: Dict[str, NodeIR] = None, edges: list = None,
                  template: str = None, step_size_adaptation: bool = False, step_size: float = None,
@@ -813,7 +813,6 @@ class CircuitIR(AbstractBaseIR):
         """
 
         # TODO: create and return a label map that maps between the provided node/edge names and the variable names in the compute graph
-        # TODO: rebuild the init and the whole IR such that the graph is a compute graph instance and the
 
         # filter displayed warnings
         filterwarnings("ignore", category=FutureWarning)
@@ -821,6 +820,7 @@ class CircuitIR(AbstractBaseIR):
         # set main attributes
         super().__init__(label=label, template=template)
         self._verbose = verbose
+        self._front_to_back = dict()
 
         # translate the network into a networkx graph
         net = NetworkGraph(nodes=nodes, edges=edges, label=label, step_size=step_size,
@@ -831,7 +831,7 @@ class CircuitIR(AbstractBaseIR):
         if verbose:
             print("\t(3) Parsing the model equations into a compute graph...")
 
-        self.graph = self.network_to_computegraph(graph=net, **kwargs)
+        self.graph = self.network_to_computegraph(graph=net, backend=backend, **kwargs)
 
         if verbose:
             print("\t\t...finished.")
@@ -840,11 +840,6 @@ class CircuitIR(AbstractBaseIR):
         # TODO: Create useful properties such as 'nodes'
         #  and edges and a label map that translates between the compute graph nodes and the nodes/edges provided by
         #  the user.
-
-        # create time variable
-        _, t = self.backend.add_var("t", vtype="state_var", dtype="float32" if step_size_adaptation else "int32",
-                                    shape=())
-        self._t = t
 
     def __getitem__(self, key: str):
         """
@@ -1038,14 +1033,16 @@ class CircuitIR(AbstractBaseIR):
 
     def get_run_func(self, func_name: str, file_name: str, **kwargs):
 
-        run_info = self.backend.compile(func_name=func_name, file_name=file_name, **kwargs)
+        run_info = self.graph.compile(func_name=func_name, file_name=file_name, **kwargs)
         return run_info['func'], run_info['func_args']
 
     def network_to_computegraph(self, graph: NetworkGraph, **kwargs):
 
-        # TODO: rework parsing such that the NetworkGraph instance is passed to the methods below and
-        #  a ComputeGraph instance is created and returned intow which all operations are parsed
+        # initialize compute graph
         cg = ComputeGraph(**kwargs)
+
+        # add global time variable to compute graph
+        cg.add_var(label="t", vtype="state_var", value=0.0 if graph.step_size_adaptation else 0)
 
         # node operators
         self._parse_op_layers_into_computegraph(graph, cg, layers=[], exclude=True, op_identifier="edge_from_",
@@ -1102,21 +1099,21 @@ class CircuitIR(AbstractBaseIR):
                             [op for op in ops if op_identifier in op]
                     else:
                         ops_tmp = ops
-                    op_eqs, op_vars = self._collect_ops(ops_tmp, node_name=node_name)
+                    op_eqs, op_vars = self._collect_ops(ops_tmp, node_name=node_name, graph=net, compute_graph=cg)
 
                     # parse equations and variables into computegraph
                     variables = parse_equations(op_eqs, op_vars, cg=cg, **kwargs)
 
-                    # store parsed variables on graph
+                    # remember mapping between frontend variable names and node keys in compute graph
                     for key, var in variables.items():
-                        if key.split('/')[-1] != 'inputs':
-                            self[key].update(var)
+                        if key.split('/')[-1] != 'inputs' and isinstance(var, ComputeVar):
+                            self._front_to_back[key] = var
 
                 # remove parsed operators from graph
                 g.remove_nodes_from(ops)
                 i += 1
 
-    def _collect_ops(self, ops: List[str], node_name: str) -> tuple:
+    def _collect_ops(self, ops: List[str], node_name: str, graph: NetworkGraph, compute_graph: ComputeGraph) -> tuple:
         """Adds a number of operations to the backend graph.
 
         Parameters
@@ -1125,6 +1122,8 @@ class CircuitIR(AbstractBaseIR):
             Names of the operators that should be parsed into the graph.
         node_name
             Name of the node that the operators belong to.
+        graph
+        compute_graph
 
         Returns
         -------
@@ -1144,7 +1143,7 @@ class CircuitIR(AbstractBaseIR):
 
             # retrieve operator and operator args
             scope = f"{node_name}/{op_name}"
-            op_info = self[f"{node_name}/{op_name}"]
+            op_info = graph[f"{node_name}/{op_name}"]
             op_args = deepcopy(op_info['variables'])
             op_args['inputs'] = {}
 
@@ -1166,9 +1165,9 @@ class CircuitIR(AbstractBaseIR):
                     for i, in_op in enumerate(inp['sources']):
 
                         # collect single input to op
-                        in_var = in_var_tmp if in_var_tmp else self[f"{in_node}/{in_op}"]['output']
+                        in_var = in_var_tmp if in_var_tmp else graph[f"{in_node}/{in_op}"]['output']
                         try:
-                            in_val = self[f"{in_node}/{in_op}/{in_var}"]
+                            in_val = graph[f"{in_node}/{in_op}/{in_var}"]
                         except KeyError:
                             in_val = None
                         in_ops_col[f"{in_node}/{in_op}/{in_var}"] = in_val
@@ -1192,11 +1191,11 @@ class CircuitIR(AbstractBaseIR):
             for key, var in op_args.items():
                 full_key = f"{scope}/{key}"
                 if key == "t":
-                    variables[full_key] = self._t
+                    variables[full_key] = compute_graph.get_var('t')
                 elif key == 'inputs' and var:
                     variables[f"{scope}/inputs"].update(var)
                     for in_var in var.values():
-                        variables[in_var] = self[in_var]
+                        variables[in_var] = graph[in_var]
                 elif full_key not in variables:
                     variables[full_key] = var
             try:
