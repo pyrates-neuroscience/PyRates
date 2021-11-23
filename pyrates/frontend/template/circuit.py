@@ -63,8 +63,10 @@ class CircuitTemplate(AbstractBaseTemplate):
     def __init__(self, name: str, path: str, description: str = "A circuit template.", circuits: dict = None,
                  nodes: dict = None, edges: List[tuple] = None):
 
+        # initialize base template clase
         super().__init__(name, path, description)
 
+        # ensure that either only nodes or only circuits exist on template for consistency of the node hierarchy
         if nodes and circuits:
             raise ValueError('CircuitTemplate has been initialized with both sub-circuits and nodes. However, all '
                              'nodes in a circuit must have the same hierarchical depth. Please provide only a node or '
@@ -72,6 +74,7 @@ class CircuitTemplate(AbstractBaseTemplate):
                              'sub-circuit or node by constructing a CircuitTemplate that takes only a single other '
                              'CircuitTemplate as input.')
 
+        # add nodes to the template
         self.nodes = {}  # type: Dict[str, NodeTemplate]
         if nodes:
             for key, node in nodes.items():
@@ -81,6 +84,7 @@ class CircuitTemplate(AbstractBaseTemplate):
                 else:
                     self.nodes[key] = node
 
+        # add circuits to the template
         self.circuits = {}
         if circuits:
             for key, circuit in circuits.items():
@@ -90,15 +94,18 @@ class CircuitTemplate(AbstractBaseTemplate):
                 else:
                     self.circuits[key] = circuit
 
+        # add edges to the template
         self._edge_map = {}
         if edges:
             self.edges = self._load_edge_templates(edges)
         else:
             self.edges = []
 
+        # private attributes
         self._ir = None
         self._depth = self._get_hierarchy_depth()
-        self._ir_map = {}
+        self._vectorization_labels = {}
+        self._vectorization_indices = {}
 
     def update_template(self, name: str = None, path: str = None, description: str = None, circuits: dict = None,
                         nodes: dict = None, edges: List[tuple] = None):
@@ -192,20 +199,25 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         if not apply_kwargs:
             apply_kwargs = {}
-        _, _, ir_indices = net.apply(adaptive_steps=adaptive_steps, vectorize=vectorize, verbose=verbose,
-                                     backend=backend, step_size=step_size, **apply_kwargs)
+
+        # apply template (translate into compute graph, optional vectorization process)
+        net.apply(adaptive_steps=adaptive_steps, vectorize=vectorize, verbose=verbose, backend=backend,
+                  step_size=step_size, **apply_kwargs)
+
+        # extract vectorization indices
+        vector_indices = self._vectorization_indices
 
         # perform simulation via the graph representation
         #################################################
 
         # create mapping between requested output variables and the current network variables
         if type(outputs) is dict:
-            output_map, outputs_ir = net._map_output_variables(outputs, indices=ir_indices)
+            output_map, outputs_ir = net._map_output_variables(outputs)
         else:
             output_map = {}
             outputs_ir = {}
             for output in outputs:
-                out_map_tmp, out_vars_tmp = net._map_output_variables(output, indices=ir_indices)
+                out_map_tmp, out_vars_tmp = net._map_output_variables(output)
                 output_map.update(out_map_tmp)
                 outputs_ir.update(out_vars_tmp)
 
@@ -270,8 +282,7 @@ class CircuitTemplate(AbstractBaseTemplate):
         # translate circuit template into a graph representation
         if not apply_kwargs:
             apply_kwargs = {}
-        _, _, ir_indices = net.apply(adaptive_steps=adaptive_steps, verbose=verbose, backend=backend,
-                                     step_size=step_size, **apply_kwargs)
+        net.apply(adaptive_steps=adaptive_steps, verbose=verbose, backend=backend, step_size=step_size, **apply_kwargs)
 
         # generate the run function
         func, args = net._ir.get_run_func(step_size=step_size, out_dir=out_dir, **kwargs)
@@ -283,9 +294,8 @@ class CircuitTemplate(AbstractBaseTemplate):
         return func, args
 
     def apply(self, adaptive_steps: bool = None, label: str = None, node_values: dict = None, edge_values: dict = None,
-              vectorize: bool = True, verbose: bool = True, **kwargs) -> tuple:
-        """Create a Circuit graph instance based on the template
-
+              vectorize: bool = True, verbose: bool = True, **kwargs) -> None:
+        """Create a `CircuitIR` instance based on the template.
 
         Parameters
         ----------
@@ -308,10 +318,8 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         Returns
         -------
-        tuple
+        None
         """
-
-        # TODO: Test whether vectorization can be turned of properly at this stage
 
         if not label:
             label = self.name
@@ -333,15 +341,14 @@ class CircuitTemplate(AbstractBaseTemplate):
                     values[n]["/".join((op, var))] = value
 
         # go through node templates and transform them into intermediate representations
-        nodes, indices, label_map = self._apply_nodes(node_keys=self.get_nodes(['all']), values=values,
-                                                      vectorize=vectorize)
+        nodes = self._apply_nodes(node_keys=self.get_nodes(['all']), values=values, vectorize=vectorize)
 
         # reformat edge templates to EdgeIR instances
         #############################################
 
         # group edges that should be vectorized
         old_edges = self.collect_edges(delay_info=True)
-        edge_col = self._group_edges(edges=old_edges, label_map=label_map, indices=indices)
+        edge_col = self._group_edges(edges=old_edges)
 
         # create final set of vectorized edges
         edges = []
@@ -391,14 +398,15 @@ class CircuitTemplate(AbstractBaseTemplate):
                 # create edge ir
                 n = len(source_idx)
                 if n == 1:
-                    edge_ir = self._apply_edge(template, values=values, nodes=nodes, label_map=label_map,
-                                               vectorize=vectorize)
+                    edge_ir = self._apply_edge(template, values=values, nodes=nodes, vectorize=vectorize,
+                                               label_map=self._vectorization_labels)
                 else:
                     edge_ir = self._apply_edge(template, values={key: v[0] for key, v in values.items()},
-                                               nodes=nodes, label_map=label_map, vectorize=vectorize)
+                                               nodes=nodes, label_map=self._vectorization_labels, vectorize=vectorize)
                     for i in range(1, n):
                         edge_ir = self._apply_edge(template, values={key: v[i] for key, v in values.items()},
-                                                   nodes=nodes, label_map=label_map, vectorize=vectorize)
+                                                   nodes=nodes, label_map=self._vectorization_labels,
+                                                   vectorize=vectorize)
 
                 # project inputs to edge ir node
                 if not sources:
@@ -407,7 +415,7 @@ class CircuitTemplate(AbstractBaseTemplate):
 
                 edge_idx = np.arange(edge_ir.length - n, edge_ir.length).tolist()
 
-                edge_ir_sources = self._extract_sources_from_edge_dict(sources, orig_source=source, label_map=label_map)
+                edge_ir_sources = self._extract_sources_from_edge_dict(sources, orig_source=source)
                 for edge_source, edge_target in edge_ir_sources.items():
 
                     # add edge from source node to the new edge node
@@ -423,9 +431,6 @@ class CircuitTemplate(AbstractBaseTemplate):
         # instantiate an intermediate representation of the circuit template
         self._ir = CircuitIR(label, nodes=nodes, edges=edges, verbose=verbose, adaptive_steps=adaptive_steps,
                              **kwargs)
-        self._ir_map = label_map
-
-        return self._ir, self._ir_map, indices
 
     def get_nodes(self, node_identifier: Union[str, list, tuple], var_identifier: Optional[tuple] = None) -> list:
         """Extracts nodes from the CircuitTemplate that match the provided identifier.
@@ -608,14 +613,10 @@ class CircuitTemplate(AbstractBaseTemplate):
         return self._ir
 
     @property
-    def backend(self):
-        return self._ir.backend
-
-    @property
     def compute_graph(self):
-        return self._ir.backend.graph
+        return self._ir.graph
 
-    def _apply_nodes(self, node_keys: list, values: dict, vectorize: bool = True) -> tuple:
+    def _apply_nodes(self, node_keys: list, values: dict, vectorize: bool = True) -> dict:
         nodes = {}
         indices = {}
         label_map = {}
@@ -631,7 +632,11 @@ class CircuitTemplate(AbstractBaseTemplate):
                 if node != node_ir.label:
                     label_map[node] = node_ir.label
 
-        return nodes, indices, label_map
+        # save label map and indices on instance
+        self._vectorization_labels = label_map
+        self._vectorization_indices = indices
+
+        return nodes
 
     def _load_edge_templates(self, edges: List[Union[tuple, dict]]):
         """
@@ -746,10 +751,11 @@ class CircuitTemplate(AbstractBaseTemplate):
                 raise e
         return final_nodes
 
-    def _map_output_variables(self, outputs: Union[dict, str], indices: dict) -> tuple:
+    def _map_output_variables(self, outputs: Union[dict, str]) -> tuple:
 
         out_map = {}
         out_vars = {}
+        indices = self._vectorization_indices
 
         if type(outputs) is dict:
             for key, out in outputs.items():
@@ -762,7 +768,7 @@ class CircuitTemplate(AbstractBaseTemplate):
                 if len(target_nodes) == 1:
 
                     # extract index for single output node
-                    backend_key = self._relabel_var(f"{target_nodes[0]}/{out_op}/{out_var}", self._ir_map)
+                    backend_key = self._relabel_var(f"{target_nodes[0]}/{out_op}/{out_var}", self._vectorization_labels)
                     idx = indices[target_nodes[0]]
                     out_map[key] = [idx]
                     out_vars[key] = backend_key
@@ -773,21 +779,21 @@ class CircuitTemplate(AbstractBaseTemplate):
                     out_map[key] = {}
                     for t in target_nodes:
                         key2 = f"{t}/{out_op}/{out_var}"
-                        backend_key = self._relabel_var(key2, self._ir_map)
+                        backend_key = self._relabel_var(key2, self._vectorization_labels)
                         idx = indices[t]
                         out_map[key][key2] = [idx]
                         out_vars[key2] = backend_key
 
         else:
 
-            outputs = self._relabel_var(outputs, self._ir_map)
+            outputs = self._relabel_var(outputs, self._vectorization_labels)
             *out_nodes, out_op, out_var = outputs.split('/')
             target_nodes = self.get_nodes(out_nodes, var_identifier=(out_op, out_var))
 
             # extract index for single output node
             for t in target_nodes:
                 key = f"{t}/{out_op}/{out_var}"
-                backend_key = self._relabel_var(key, self._ir_map)
+                backend_key = self._relabel_var(key, self._vectorization_labels)
                 idx = indices[t]
                 out_map[key] = [idx]
                 out_vars[key] = backend_key
@@ -802,7 +808,12 @@ class CircuitTemplate(AbstractBaseTemplate):
             net = net.circuits[list(net.circuits)[0]]
         return circuit_lvls
 
-    def _group_edges(self, edges: list, label_map: dict, indices: dict) -> dict:
+    def _group_edges(self, edges: list) -> dict:
+
+        # get label map and indices from self
+        label_map = self._vectorization_labels
+        indices = self._vectorization_indices
+
         edge_col = {}
         for source, target, template, edge_dict, delayed in edges:
 
@@ -848,7 +859,9 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         return edge_col
 
-    def _extract_sources_from_edge_dict(self, edge_dict: dict, orig_source: str, label_map: dict) -> dict:
+    def _extract_sources_from_edge_dict(self, edge_dict: dict, orig_source: str) -> dict:
+
+        label_map = self._vectorization_labels
 
         edge_sources = {}
         for key, value in edge_dict.copy().items():

@@ -790,7 +790,7 @@ class CircuitIR(AbstractBaseIR):
     """Custom graph data structure that represents a backend of nodes and edges with associated equations
     and variables."""
 
-    __slots__ = ["label", "_front_to_back", "graph", "_t", "_verbose"]
+    __slots__ = ["label", "_front_to_back", "graph", "_t", "_verbose", "_dt", "_dt_adapt"]
 
     def __init__(self, label: str = "circuit", nodes: Dict[str, NodeIR] = None, edges: list = None,
                  template: str = None, step_size_adaptation: bool = False, step_size: float = None,
@@ -812,8 +812,6 @@ class CircuitIR(AbstractBaseIR):
             was used.
         """
 
-        # TODO: create and return a label map that maps between the provided node/edge names and the variable names in the compute graph
-
         # filter displayed warnings
         filterwarnings("ignore", category=FutureWarning)
 
@@ -821,6 +819,8 @@ class CircuitIR(AbstractBaseIR):
         super().__init__(label=label, template=template)
         self._verbose = verbose
         self._front_to_back = dict()
+        self._dt = step_size
+        self._dt_adapt = step_size_adaptation
 
         # translate the network into a networkx graph
         net = NetworkGraph(nodes=nodes, edges=edges, label=label, step_size=step_size,
@@ -836,10 +836,6 @@ class CircuitIR(AbstractBaseIR):
         if verbose:
             print("\t\t...finished.")
             print("\tModel compilation was finished.")
-
-        # TODO: Create useful properties such as 'nodes'
-        #  and edges and a label map that translates between the compute graph nodes and the nodes/edges provided by
-        #  the user.
 
     def __getitem__(self, key: str):
         """
@@ -868,6 +864,27 @@ class CircuitIR(AbstractBaseIR):
             for key in key_iter:
                 item = item.getitem_from_iterator(key, key_iter)
         return item
+
+    def get_var(self, var: str, get_key: bool = False) -> Union[str, ComputeVar]:
+        """Extracts variable from the backend (i.e. the `ComputeGraph` instance).
+
+        Parameters
+        ----------
+        var
+            Name of the variable.
+        get_key
+            If true, the backend variable name will be returned
+
+        Returns
+        -------
+        Union[str, ComputeVar]
+            Either the backend variable or its name.
+        """
+        try:
+            v = self[var]
+        except KeyError:
+            v = self._front_to_back[var]
+        return v.name if get_key else v
 
     def add_edges_from_matrix(self, source_var: str, target_var: str, nodes: list, weight=None, delay=None,
                               template=None, **attr) -> None:
@@ -1010,7 +1027,7 @@ class CircuitIR(AbstractBaseIR):
 
             # extract backend variables that correspond to requested output variables
             for key, val in outputs.items():
-                outputs_col[key] = self.backend.get_var(val, get_key=True)
+                outputs_col[key] = self.get_var(val, get_key=True)
 
             if self._verbose:
                 print("\t\t...finished.")
@@ -1021,7 +1038,7 @@ class CircuitIR(AbstractBaseIR):
         if self._verbose:
             print("\t (2) Performing the simulation...")
 
-        discrete_time = False if self._adaptive_steps else True
+        discrete_time = False if self._dt_adapt else True
         results = self.backend.run(T=simulation_time, dt=self.step_size, dts=sampling_step_size,
                                    out_dir=out_dir, outputs=outputs_col, solver=solver,  discrete_time=discrete_time,
                                    **kwargs)
@@ -1033,8 +1050,7 @@ class CircuitIR(AbstractBaseIR):
 
     def get_run_func(self, func_name: str, file_name: str, **kwargs):
 
-        run_info = self.graph.compile(func_name=func_name, file_name=file_name, **kwargs)
-        return run_info['func'], run_info['func_args']
+        return self.graph.to_func(func_name=func_name, file_name=file_name, **kwargs)
 
     def network_to_computegraph(self, graph: NetworkGraph, **kwargs):
 
@@ -1042,7 +1058,7 @@ class CircuitIR(AbstractBaseIR):
         cg = ComputeGraph(**kwargs)
 
         # add global time variable to compute graph
-        cg.add_var(label="t", vtype="state_var", value=0.0 if graph.step_size_adaptation else 0)
+        cg.add_var(label="t", vtype="state_var", value=0.0 if self._dt_adapt else 0)
 
         # node operators
         self._parse_op_layers_into_computegraph(graph, cg, layers=[], exclude=True, op_identifier="edge_from_",
@@ -1053,6 +1069,9 @@ class CircuitIR(AbstractBaseIR):
                                                 **kwargs)
 
         return cg
+
+    def getitem_from_iterator(self, key: str, key_iter: Iterator[str]):
+        return self.graph.get_var(key)
 
     def clear(self):
         """Clears the backend graph from all operations and variables.
@@ -1205,66 +1224,6 @@ class CircuitIR(AbstractBaseIR):
 
         return equations, variables
 
-    def _add_edge_input_collector(self, node: str, op: str, var: str, idx: int, edge: tuple) -> None:
-        """Adds an input collector variable to an edge.
-
-        Parameters
-        ----------
-        node
-            Name of the target node of the edge.
-        op
-            Name of the target operator of the edge.
-        var
-            Name of the target variable of the edge.
-        idx
-            Index of the input collector variable on that edge.
-        edge
-            Edge identifier (source_name, target_name, edge_idx).
-
-        Returns
-        -------
-        None
-
-        """
-
-        target_shape = self[f"{node}/{op}/{var}"]['shape']
-        node_ir = self[node]
-
-        # create collector equation
-        eqs = [f"{var} = {var}_col_{idx}"]
-
-        # create collector variable definition
-        val_dict = {'vtype': 'state_var',
-                    'dtype': self.backend._float_def,
-                    'shape': target_shape,
-                    'value': 0.
-                    }
-        var_dict = {f'{var}_col_{idx}': val_dict.copy(),
-                    var: val_dict.copy()}
-        # added the actual output variable as well.
-
-        # add collector operator to operator graph
-        node_ir.add_op(f'{op}_{var}_col_{idx}',
-                       inputs={},
-                       output=var,
-                       equations=eqs,
-                       variables=var_dict)
-        node_ir.add_op_edge(f'{op}_{var}_col_{idx}', op)
-
-        # add input information to target operator
-        op_inputs = self[f"{node}/{op}"]['inputs']
-        if var in op_inputs.keys():
-            op_inputs[var]['sources'].add(f'{op}_{var}_col_{idx}')
-        else:
-            op_inputs[var] = {'sources': {f'{op}_{var}_col_{idx}'},
-                              'reduce_dim': True}
-
-        # update edge target information
-        if len(edge) > 3:
-            edge = edge[:3]
-        s, t, e = edge
-        self.edges[s, t, e]['target_var'] = f'{op}_{var}_col_{idx}/{var}_col_{idx}'
-
     @staticmethod
     def _map_multiple_inputs(inputs: dict, reduce_dim: bool, scope: str) -> tuple:
         """Creates mapping between multiple input variables and a single output variable.
@@ -1313,6 +1272,16 @@ class CircuitIR(AbstractBaseIR):
             else:
                 input_expr = f"stack({','.join(new_input_vars)})"
         return input_expr, input_mapping
+
+    @property
+    def nodes(self):
+        """Shortcut to self.graph.nodes. See documentation of `networkx.MultiDiGraph.nodes`."""
+        return self.graph.nodes
+
+    @property
+    def edges(self):
+        """Shortcut to self.graph.edges. See documentation of `networkx.MultiDiGraph.edges`."""
+        return self.graph.edges
 
 
 def get_indexed_var_str(var: str, idx: Union[tuple, str], var_length: int = None):

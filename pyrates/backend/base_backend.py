@@ -105,6 +105,8 @@ class CodeGen:
 
 def sort_equations(lhs_vars: list, rhs_expressions: list) -> tuple:
 
+    # TODO: get rid of this shit
+
     vars_new, expressions_new, defined_vars, all_vars = [], [], [], []
     lhs_vars_old, expressions_old = lhs_vars.copy(), rhs_expressions.copy()
 
@@ -147,24 +149,30 @@ def sort_equations(lhs_vars: list, rhs_expressions: list) -> tuple:
 #######################################
 
 
-class BaseBackend(object):
-    """
-
+class BaseBackend(CodeGen):
+    """Default backend class. Transforms all network equations into their numpy equivalents. Based on a Python code
+    generator.
     """
 
     def __init__(self,
                  ops: Optional[Dict[str, str]] = None,
                  dtypes: Optional[Dict[str, object]] = None,
-                 name: str = 'net_0',
                  float_default_type: str = 'float32',
                  imports: Optional[List[str]] = None,
-                 build_dir: str = None,
-                 compute_graph: ComputeGraph = None,
                  **kwargs
                  ) -> None:
         """Instantiates the standard, numpy-based backend, i.e. a compute graph with numpy operations.
+
+        Parameters
+        ----------
+        ops
+        dtypes
+        float_default_type
+        imports
+        kwargs
         """
 
+        # call to super method (initializes code generator)
         super().__init__()
 
         # define operations and datatypes of the backend
@@ -234,29 +242,88 @@ class BaseBackend(object):
         if dtypes:
             self.dtypes.update(dtypes)
 
-    #     # initialize compute graph
-    #     self.graph = compute_graph if compute_graph else ComputeGraph(**kwargs)
-    #
-    #     # further attributes
-    #     self._var_map = dict()
-    #     self._float_def = self.dtypes[float_default_type]
-    #     self.name = name
-    #     self._imports = ["from numpy import *", "from pyrates.backend.base_funcs import *"]
-    #     if imports:
-    #         for imp in imports:
-    #             if imp not in self._imports:
-    #                 self._imports.append(imp)
-    #     self._input_names = []
-    #     self.type = 'numpy'
-    #     self._orig_dir = None
-    #     self._build_dir = None
-    #     self._func_name = 'rhs_func'
-    #     self._file_name = kwargs.pop('file_name', name)
-    #     self._code_gen = kwargs.pop('code_gen', CodeGen())
-    #     self._idx = "[]"
-    #     self._file_ending = ".py"
-    #     self._start_idx = 0
-    #
+        # further attributes
+        self._float_def = self.dtypes[float_default_type]
+        self.imports = ["from numpy import *", "from pyrates.backend.base_funcs import *"]
+        if imports:
+            for imp in imports:
+                if imp not in self.imports:
+                    self.imports.append(imp)
+        self._idx_left = "["
+        self._idx_right = "]"
+        self._file_ending = ".py"
+        self._start_idx = 0
+
+    def expr_to_str(self, expr: Any, expr_str: str = None) -> str:
+
+        if not expr_str:
+            expr_str = str(expr)
+            for arg in expr.args:
+                expr_str = expr_str.replace(str(arg), self.expr_to_str(arg))
+
+        while 'pr_base_index(' in expr_str:
+
+            # replace `index` calls with brackets-based indexing
+            start = expr_str.find('pr_base_index(')
+            end = expr_str[start:].find(')') + 1
+            idx = expr.args[1]
+            expr_str = expr_str.replace(expr_str[start:start+end], f"{expr.args[0]}{self.create_index_str(idx)}")
+
+        while 'pr_2d_index(' in expr_str:
+
+            # replace `index` calls with brackets-based indexing
+            start = expr_str.find('pr_2d_index(')
+            end = expr_str[start:].find(')') + 1
+            idx = (expr.args[1], expr.args[2])
+            expr_str = expr_str.replace(expr_str[start:start + end], f"{expr.args[0]}{self.create_index_str(idx)}")
+
+        while 'pr_range_index(' in expr_str:
+
+            # replace `index` calls with brackets-based indexing
+            start = expr_str.find('pr_range_index(')
+            end = expr_str[start:].find(')') + 1
+            idx = (expr.args[1], f"{expr.args[2]}")
+            expr_str = expr_str.replace(expr_str[start:start + end],
+                                        f"{expr.args[0]}{self.create_index_str(idx, separator=':')}")
+
+        while 'pr_axis_index(' in expr_str:
+
+            # replace `index` calls with brackets-based indexing
+            start = expr_str.find('pr_axis_index(')
+            end = expr_str[start:].find(')') + 1
+            if len(expr.args) == 1:
+                expr_str = expr_str.replace(expr_str[start:start + end], f"{expr.args[0]}{self.create_index_str(':')}")
+            else:
+                idx = tuple([':' for _ in range(expr.args[2])] + [expr.args[1]])
+                expr_str = expr_str.replace(expr_str[start:start + end], f"{expr.args[0]}{self.create_index_str(idx)}")
+
+        while 'pr_identity(' in expr_str:
+
+            # replace `no_op` calls with first argument to the function call
+            start = expr_str.find('pr_identity(')
+            end = expr_str[start:].find(')') + 1
+            expr_str = expr_str.replace(expr_str[start:start+end], f"{expr.args[0]}")
+
+        return expr_str
+
+    def create_index_str(self, idx: Union[str, int, tuple], separator: str = ',') -> str:
+
+        # case: multiple indices
+        if type(idx) is tuple:
+            for i in range(len(idx)):
+                try:
+                    idx[i] += self._start_idx
+                except TypeError:
+                    pass
+            return f"{self._idx_left}{separator.join(idx)}{self._idx_right}"
+
+        # case: single index
+        try:
+            idx += self._start_idx
+        except TypeError:
+            pass
+        return f"{self._idx_left}{idx}{self._idx_right}"
+
     #     # create build dir
     #     self._orig_dir = os.getcwd()
     #     self._build_dir = f"{build_dir}/{self.name}" if build_dir else self._orig_dir
@@ -270,125 +337,6 @@ class BaseBackend(object):
     #         sys.path.append(self._build_dir)
     #     else:
     #         sys.path.append(self._orig_dir)
-    #
-    # def add_var(self,
-    #             name: str,
-    #             vtype: str,
-    #             value: Optional[Any] = None,
-    #             shape: Optional[Union[tuple, list, np.shape]] = None,
-    #             dtype: Optional[Union[str, np.dtype]] = None,
-    #             **kwargs
-    #             ) -> tuple:
-    #     """Adds a variable to the backend.
-    #
-    #     Parameters
-    #     ----------
-    #     vtype
-    #         Variable type. Can be
-    #             - `state_var` for variables that can change over time.
-    #             - `constant` for non-changing variables.
-    #     name
-    #         Name of the variable.
-    #     value
-    #         Value of the variable. Not needed for placeholders.
-    #     shape
-    #         Shape of the variable.
-    #     dtype
-    #         Datatype of the variable.
-    #     kwargs
-    #         Additional keyword arguments passed to `computegraph.ComputeGraph.add_var`.
-    #
-    #     Returns
-    #     -------
-    #     tuple
-    #         (1) variable name, (2) dictionary with all variable information.
-    #
-    #     """
-    #
-    #     # extract variable scope
-    #     scope = kwargs.pop('scope', None)
-    #     if scope:
-    #         label = f'{scope}/{name}'
-    #     else:
-    #         label = name
-    #
-    #     # if variable already exists, return it
-    #     try:
-    #         return name, self.get_var(label, get_key=False)
-    #     except KeyError:
-    #         pass
-    #
-    #     # create variable
-    #     var, label = self.create_backend_var(vtype=vtype, dtype=dtype, shape=shape, value=value, name=label,
-    #                                          backend=self, squeeze=kwargs.pop('squeeze', False))
-    #
-    #     # add variable to compute graph
-    #     name, cg_var = self.graph.add_var(label=name, value=var, vtype=vtype, **kwargs)
-    #
-    #     # save to dict
-    #     self._var_map[label] = name
-    #
-    #     return name, cg_var
-    #
-    # def add_op(self,
-    #            inputs: Union[list, tuple],
-    #            name: str,
-    #            **kwargs
-    #            ) -> tuple:
-    #     """Add operation to the backend.
-    #
-    #     Parameters
-    #     ----------
-    #     inputs
-    #         List with the names of all compute graph nodes that should enter as input in this operation.
-    #     name
-    #         Key of the operation. If it is a key of `backend.ops`, the function call at `backend.ops[name]['func']` will
-    #          be used.
-    #     kwargs
-    #         Additional keyword arguments passed to `computegraph.ComputeGraph.add_op`.
-    #
-    #     Returns
-    #     -------
-    #     tuple
-    #         (1) The key for extracting the operator from the compute graph,
-    #         (2) the dictionary of the compute graph operator node.
-    #
-    #     """
-    #
-    #     # extract operator scope
-    #     scope = kwargs.pop('scope', None)
-    #     if scope:
-    #         name = f'{scope}/{name}'
-    #
-    #     # add operator to compute graph
-    #     return self.graph.add_op(inputs, label=name, **kwargs)
-    #
-    # def get_var(self, name: str, get_key: bool = False, **kwargs) -> Union[dict, str]:
-    #     """Retrieve variable from graph.
-    #
-    #     Parameters
-    #     ----------
-    #     name
-    #         Identifier of the variable.
-    #     get_key
-    #         If true, only the name of the variable in the compute graph is returned.
-    #
-    #     Returns
-    #     -------
-    #     Union[dict, str]
-    #         Variable dictionary from graph.
-    #
-    #     """
-    #
-    #     # extract operator scope
-    #     scope = kwargs.pop('scope', None)
-    #     label = f'{scope}/{name}' if scope else name
-    #     try:
-    #         return self._var_map[label] if get_key else self.graph.nodes[self._var_map[label]]
-    #     except KeyError:
-    #         if get_key:
-    #             return name
-    #         return self.graph.nodes[name]
     #
     # def run(self, T: float, dt: float, dts: float = None, outputs: dict = None, solver: str = 'euler',
     #         in_place: bool = True, func_name: str = None, file_name: str = None, compile_kwargs: dict = None, **kwargs
@@ -465,163 +413,6 @@ class BaseBackend(object):
     #     # clear code generator
     #     self._code_gen.clear()
     #
-    # def compile(self, in_place: bool = True, func_name: str = None, file_name: str = None, **kwargs) -> dict:
-    #
-    #     # finalize compute graph
-    #     self.graph = self.graph.compile(in_place=in_place)
-    #
-    #     # create state variable vector and state variable update vector
-    #     ###############################################################
-    #
-    #     vars, indices, updates, old_state_vars = [], [], [], []
-    #     idx = 0
-    #     for var, update in self.graph.var_updates['DEs'].items():
-    #
-    #         # extract left-hand side and right-hand side nodes from graph
-    #         lhs, rhs, shape = self._process_var_update(var, update)
-    #         vars.append(lhs), updates.append(rhs)
-    #
-    #         # store information of the original, non-vectorized state variable
-    #         old_state_vars.append(var)
-    #         indices.append((idx, idx+shape) if shape > 1 else idx)
-    #         idx += shape
-    #
-    #     # add vectorized state variables and updates to the backend
-    #     state_vec = self.ops['concat']['func'](vars, axis=0)
-    #     state_var_key, state_var = self.add_var(vtype='state_var', name='state_vec', value=state_vec, squeeze=False)
-    #     rhs_var_key, rhs_var = self.add_var(vtype='state_var', name='state_vec_update', value=np.zeros_like(state_vec))
-    #
-    #     return_dict = {'old_state_vars': old_state_vars, 'state_vec': state_var_key, 'vec_indices': indices}
-    #
-    #     if func_name or file_name:
-    #
-    #         if not func_name:
-    #             func_name = self._func_name
-    #
-    #         # generate function body with all equations and assignments
-    #         func_args, code_gen = self._graph_to_str(rhs_indices=indices, state_var=state_var_key, rhs_var=rhs_var_key)
-    #         func_body = code_gen.generate()
-    #         code_gen.clear()
-    #
-    #         # generate function head
-    #         func_args, code_gen = self._generate_func_head(func_name=func_name, code_gen=code_gen,
-    #                                                        state_var=state_var_key, func_args=func_args,
-    #                                                        imports=self._imports)
-    #
-    #         # add lines from function body after function head
-    #         code_gen.add_linebreak()
-    #         code_gen.add_code_line(func_body)
-    #         code_gen.add_linebreak()
-    #
-    #         # generate function tail
-    #         code_gen = self._generate_func_tail(code_gen=code_gen, rhs_var=rhs_var_key)
-    #
-    #         # finalize function string
-    #         func_str = code_gen.generate()
-    #
-    #         # write function string to file
-    #         func = self._generate_func(func_str, func_name=func_name, file_name=file_name, build_dir=self._build_dir,
-    #                                    **kwargs)
-    #         return_dict['func'] = func
-    #         return_dict['func_args'] = func_args
-    #
-    #     return return_dict
-    #
-    # def _graph_to_str(self, code_gen: CodeGen = None, rhs_indices: list = None, state_var: str = None,
-    #                   rhs_var: str = None, backend_funcs: dict = None):
-    #
-    #     # preparations
-    #     if code_gen is None:
-    #         code_gen = self._code_gen
-    #     if not backend_funcs:
-    #         backend_funcs = {key: val['str'] for key, val in self.ops.items()}
-    #
-    #     # extract state variable from state vector if necessary
-    #     rhs_indices_str = []
-    #     if rhs_indices:
-    #
-    #         for idx, var in zip(rhs_indices, self.graph.var_updates['DEs']):
-    #             idx_str = f'{idx}' if type(idx) is int else f'{idx[0]}:{idx[1]}'
-    #             code_gen.add_code_line(f"{var} = {state_var}{self._idx[0]}{idx_str}{self._idx[1]}")
-    #             rhs_indices_str.append(idx_str)
-    #
-    #         code_gen.add_linebreak()
-    #
-    #     # get equation string and argument list for each non-DE node at the end of the compute graph hierarchy
-    #     func_args2, delete_args1, code_gen = self._generate_update_equations(code_gen,
-    #                                                                          nodes=self.graph.var_updates['non-DEs'],
-    #                                                                          funcs=backend_funcs)
-    #     code_gen.add_linebreak()
-    #
-    #     # get equation string and argument list for each DE node at the end of the compute graph hierarchy
-    #     func_args1, delete_args2, code_gen = self._generate_update_equations(code_gen,
-    #                                                                          nodes=self.graph.var_updates['DEs'],
-    #                                                                          rhs_var=rhs_var, indices=rhs_indices_str,
-    #                                                                          funcs=backend_funcs)
-    #
-    #     # remove unnecessary function arguments
-    #     func_args = func_args1 + func_args2
-    #     for arg in delete_args1 + delete_args2:
-    #         while arg in func_args:
-    #             func_args.pop(func_args.index(arg))
-    #
-    #     return func_args, code_gen
-    #
-    # def _generate_update_equations(self, code_gen: CodeGen, nodes: dict, rhs_var: str = None, indices: list = None,
-    #                                funcs: dict = None):
-    #
-    #     # collect right-hand side expression and all input variables to these expressions
-    #     func_args, expressions, var_names, defined_vars = [], [], [], []
-    #     for node, update in nodes.items():
-    #
-    #         # collect expression and variables of right-hand side of equation
-    #         expr_args, expr = self.graph.node_to_expr(update, **funcs)
-    #         func_args.extend(expr_args)
-    #         expressions.append(self._expr_to_str(expr))
-    #
-    #         # process left-hand side of equation
-    #         var = self.get_var(node)
-    #         if 'expr' in var:
-    #             # process indexing of left-hand side variable
-    #             idx_args, lhs = self.graph.node_to_expr(node, **funcs)
-    #             func_args.extend(idx_args)
-    #             lhs_var = self._expr_to_str(lhs)
-    #         else:
-    #             # process normal update of left-hand side variable
-    #             lhs_var = var['symbol'].name
-    #         var_names.append(lhs_var)
-    #
-    #     # add the left-hand side assignments of the collected right-hand side expressions to the code generator
-    #     if rhs_var:
-    #
-    #         # differential equation (DE) update
-    #         if not indices:
-    #             raise ValueError('State variables need to be stored in a single state vector, for which the indices '
-    #                              'have to be passed to this method.')
-    #
-    #         # DE updates stored in a state-vector
-    #         for idx, expr in zip(indices, expressions):
-    #             code_gen.add_code_line(f"{rhs_var}{self._idx[0]}{idx}{self._idx[1]} = {expr}")
-    #
-    #         # add rhs var to function arguments
-    #         func_args = [rhs_var] + func_args
-    #
-    #     else:
-    #
-    #         # non-differential equation update
-    #         var_names, expressions, undefined_vars, defined_vars = sort_equations(var_names, expressions)
-    #         func_args.extend(undefined_vars)
-    #
-    #         if indices:
-    #             raise ValueError('Indices to non-state variables should be defined in the respective equations, not'
-    #                              'be passed to this method.')
-    #
-    #         # non-DE update stored in a single variable
-    #         for target_var, expr in zip(var_names, expressions):
-    #             code_gen.add_code_line(f"{target_var} = {expr}")
-    #
-    #     return func_args, defined_vars, code_gen
-    #
     # def _process_var_update(self, var: str, update: str) -> tuple:
     #
     #     # extract nodes
@@ -666,52 +457,6 @@ class BaseBackend(object):
     #         rhs_eval = decorator(rhs_eval, **kwargs)
     #
     #     return rhs_eval
-    #
-    # def _expr_to_str(self, expr: Any, expr_str: str = None) -> str:
-    #     if not expr_str:
-    #         expr_str = str(expr)
-    #         for arg in expr.args:
-    #             expr_str = expr_str.replace(str(arg), self._expr_to_str(arg))
-    #     while 'pr_base_index(' in expr_str:
-    #         # replace `index` calls with brackets-based indexing
-    #         start = expr_str.find('pr_base_index(')
-    #         end = expr_str[start:].find(')') + 1
-    #         new_idx = expr.args[1] + self._start_idx
-    #         expr_str = expr_str.replace(expr_str[start:start+end],
-    #                                     f"{expr.args[0]}{self._idx[0]}{new_idx}{self._idx[1]}")
-    #     while 'pr_2d_index(' in expr_str:
-    #         # replace `index` calls with brackets-based indexing
-    #         start = expr_str.find('pr_2d_index(')
-    #         end = expr_str[start:].find(')') + 1
-    #         new_idx1 = expr.args[1] + self._start_idx
-    #         new_idx2 = expr.args[2] + self._start_idx
-    #         expr_str = expr_str.replace(expr_str[start:start + end],
-    #                                     f"{expr.args[0]}{self._idx[0]}{new_idx1}, {new_idx2}{self._idx[1]}")
-    #     while 'pr_range_index(' in expr_str:
-    #         # replace `index` calls with brackets-based indexing
-    #         start = expr_str.find('pr_range_index(')
-    #         end = expr_str[start:].find(')') + 1
-    #         new_idx1 = expr.args[1] + self._start_idx
-    #         new_idx2 = expr.args[2]
-    #         expr_str = expr_str.replace(expr_str[start:start + end],
-    #                                     f"{expr.args[0]}{self._idx[0]}{new_idx1}:{new_idx2}{self._idx[1]}")
-    #     while 'pr_axis_index(' in expr_str:
-    #         # replace `index` calls with brackets-based indexing
-    #         start = expr_str.find('pr_axis_index(')
-    #         end = expr_str[start:].find(')') + 1
-    #         if len(expr.args) == 1:
-    #             expr_str = expr_str.replace(expr_str[start:start + end], f"{expr.args[0]}{self._idx[0]}:{self._idx[1]}")
-    #         else:
-    #             idx = f','.join([':' for _ in range(expr.args[2])])
-    #             idx = f'{idx},{expr.args[1] + self._start_idx}'
-    #             expr_str = expr_str.replace(expr_str[start:start + end],
-    #                                         f"{expr.args[0]}{self._idx[0]}{idx}{self._idx[1]}")
-    #     while 'pr_identity(' in expr_str:
-    #         # replace `no_op` calls with first argument to the function call
-    #         start = expr_str.find('pr_identity(')
-    #         end = expr_str[start:].find(')') + 1
-    #         expr_str = expr_str.replace(expr_str[start:start+end], f"{expr.args[0]}")
-    #     return expr_str
     #
     # def _solve_ivp(self, solver: str, T: float, state_vec: np.ndarray, rhs: np.ndarray, dt: float,
     #                eval_times: np.ndarray, dts: float, rhs_func: Callable, *args, **kwargs) -> np.ndarray:

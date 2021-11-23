@@ -74,65 +74,6 @@ class ComputeNode:
         self.shape = shape
         self._value = self._get_value(shape=shape, dtype=dtype)
 
-        # # check whether necessary arguments were provided
-        # if all([arg is None for arg in [shape, value, dtype]]):
-        #     raise ValueError('Either `value` or `shape` and `dtype` need to be provided')
-        #
-        # # get shape
-        # if not shape:
-        #     shape = value.shape if hasattr(value, 'shape') else np.shape(value)
-        #
-        # # get data type
-        # if not dtype:
-        #     if hasattr(value, 'dtype'):
-        #         dtype = value.dtype
-        #     else:
-        #         try:
-        #             dtype = np.dtype(value)
-        #         except TypeError:
-        #             dtype = type(value)
-        # dtype = dtype.name if hasattr(dtype, 'name') else str(dtype)
-        # if dtype in backend.dtypes:
-        #     dtype = backend.dtypes[dtype]
-        # else:
-        #     for dtype_tmp in backend.dtypes:
-        #         if dtype_tmp in dtype:
-        #             dtype = backend.dtypes[dtype_tmp]
-        #             break
-        #     else:
-        #         dtype = backend._float_def
-        #         warnings.warn(f'WARNING! Unknown data type of variable {name}: {dtype}. '
-        #                       f'Datatype will be set to default type: {dtype}.')
-        #
-        # # create variable
-        # if vtype == 'state_var' and 1 in tuple(shape) and squeeze:
-        #     idx = tuple(shape).index(1)
-        #     shape = list(shape)
-        #     shape.pop(idx)
-        #     shape = tuple(shape)
-        # if callable(value):
-        #     obj = value
-        # else:
-        #     try:
-        #         # normal variable
-        #         value = cls._get_value(value, dtype, shape)
-        #         if squeeze:
-        #             value = cls.squeeze(value)
-        #         obj = cls._get_var(value, name, dtype)
-        #     except TypeError:
-        #         # list of callables
-        #         obj = cls._get_var(value, name, dtype)
-        #
-        # # store additional attributes on variable object
-        # obj.short_name = name.split('/')[-1]
-        # if not hasattr(obj, 'name'):
-        #     obj.name = name
-        # else:
-        #     name = obj.name
-        # obj.vtype = vtype
-        #
-        # return obj, name
-
     def reshape(self, shape: tuple, **kwargs):
 
         self._value = self.value.reshape(shape, **kwargs)
@@ -318,122 +259,184 @@ class ComputeGraph(MultiDiGraph):
             self.remove_subgraph(inp)
         self.remove_node(n)
 
-    def compile(self, in_place: bool = True):
-
-        G = self if in_place else deepcopy(self)
+    def compile(self):
 
         # evaluate constant-based operations
-        out_nodes = [node for node, out_degree in G.out_degree if out_degree == 0]
+        out_nodes = [node for node, out_degree in self.out_degree if out_degree == 0]
         for node in out_nodes:
 
             # process inputs of node
-            for inp in G.predecessors(node):
-                if G.nodes[inp]['vtype'] == 'constant':
-                    G.eval_subgraph(inp)
+            for inp in self.predecessors(node):
+                if self.nodes[inp]['vtype'] == 'constant':
+                    self.eval_subgraph(inp)
 
             # evaluate node if all its inputs are constants
-            if all([G.nodes[inp]['vtype'] == 'constant' for inp in G.predecessors(node)]):
-                G.eval_subgraph(node)
+            if all([self.nodes[inp]['vtype'] == 'constant' for inp in G.predecessors(node)]):
+                self.eval_subgraph(node)
 
         # remove unconnected nodes and constants from graph
-        G._prune()
+        self._prune()
 
-        # broadcast all variable shapes to a common number of dimensions
-        # for node in [node for node, out_degree in G.out_degree if out_degree == 0]:
-        #     G.broadcast_op_inputs(node, squeeze=False)
+        return self
 
-        return G
+    def to_func(self, func_name: str, file_name: str, **kwargs):
 
-    def broadcast_op_inputs(self, n, squeeze: bool = False, target_shape: tuple = None, depth=0, max_depth=20,
-                            target_dtype: np.dtype = np.float32):
+        # finalize compute graph
+        self.compile()
 
-        try:
+        # create state variable vector and state variable update vector
+        ###############################################################
 
-            # attempt to perform graph operation
-            if target_shape:
-                raise ValueError
-            return self.eval_node(n)
+        variables, indices, updates, old_state_vars = [], [], [], []
+        idx = 0
+        for var, update in self.var_updates['DEs'].items():
 
-        except (ValueError, IndexError, TypeError) as e:
+            # extract left-hand side and right-hand side nodes from graph
+            lhs, rhs = self._process_var_update(var, update)
+            variables.append(lhs), updates.append(rhs)
 
-            # TODO: re-work broadcasting. Issue: broadcasting needs to be applied to all variables that may be affected
-            #  by it across all network equations
-            if depth > max_depth:
-                raise e
+            # store information of the original, non-vectorized state variable
+            old_state_vars.append(var)
+            indices.append((idx, idx+lhs.shape) if lhs.shape > 1 else idx)
+            idx += lhs.shape
 
-            # collect inputs to operator node
-            inputs, nodes, shapes = [], [], []
-            for inp in self.predecessors(n):
+        # add vectorized state variables and updates to the backend
+        state_vec = self.ops['concat']['func'](variables, axis=0)
+        state_var_key, y = self.add_var(label='y', vtype='state_var', value=state_vec)
+        rhs_var_key, dy = self.add_var(label='dy', vtype='state_var', value=np.zeros_like(state_vec))
 
-                # ensure the whole operation tree of input is broadcasted to matching shapes
-                inp_eval = self.broadcast_op_inputs(inp, depth=depth+1)
+        # create a string containing all computations and variable updates represented by the compute graph
+        func_args, code_gen = self._to_str(state_vec_indices=indices)
+        func_body = code_gen.generate()
+        code_gen.clear()
 
-                inputs.append(inp_eval)
-                nodes.append(inp)
-                shapes.append(len(inp_eval.shape) if hasattr(inp_eval, 'shape') else 1)
+        # generate function head
+        # TODO: move function generation methods to compute graph
+        func_args, code_gen = self._generate_func_head(func_name=func_name, code_gen=code_gen,
+                                                       state_var=state_var_key, func_args=func_args,
+                                                       imports=self.backend.imports)
 
-            if isinstance(e, ValueError):
+        # add lines from function body after function head
+        code_gen.add_linebreak()
+        code_gen.add_code_line(func_body)
+        code_gen.add_linebreak()
 
-                # broadcast shapes of inputs
-                if not target_shape:
-                    target_shape = inputs[np.argmax(shapes)].shape
-                for i in range(len(inputs)):
+        #
+        #         # generate function tail
+        #         code_gen = self._generate_func_tail(code_gen=code_gen, rhs_var=rhs_var_key)
+        #
+        #         # finalize function string
+        #         func_str = code_gen.generate()
+        #
+        #         # write function string to file
+        #         func = self._generate_func(func_str, func_name=func_name, file_name=file_name, build_dir=self._build_dir,
+        #                                    **kwargs)
+        #         return_dict['func'] = func
+        #         return_dict['func_args'] = func_args
 
-                    inp_eval = inputs[i]
+    def _to_str(self, state_vec_indices: list):
 
-                    # get new shape of input
-                    new_shape = self._broadcast_shapes(target_shape, inp_eval.shape, squeeze=squeeze)
+        # preparations
+        code_gen = self.backend
+        backend_funcs = {key: val['str'] for key, val in self.ops.items()}
 
-                    # reshape input
-                    if new_shape != inp_eval.shape:
-                        if 'func' in self.nodes[nodes[i]]:
-                            self.broadcast_op_inputs(nodes[i], squeeze=squeeze, target_shape=new_shape, depth=depth+1)
-                        else:
-                            inp_eval = inp_eval.reshape(new_shape)
-                            self.nodes[nodes[i]]['value'] = inp_eval
+        # extract state variable from state vector
+        rhs_indices_str = []
+        for idx, var in zip(state_vec_indices, self.var_updates['DEs']):
 
-                if n in self.var_updates['non-DEs']:
-                    return self.broadcast_op_inputs(self.var_updates['non-DEs'][n], squeeze=True, depth=depth+1)
-                return self.broadcast_op_inputs(n, squeeze=True, depth=depth+1)
+            # turn index to string
+            idx_str = f'{idx}' if type(idx) is int else f'{idx[0]}:{idx[1]}'
 
-            elif isinstance(e, TypeError):
+            # extract state variable from state vector
+            code_gen.add_code_line(f"{var} = y{code_gen.create_index_str(idx_str)}")
+            rhs_indices_str.append(idx_str)
 
-                for node, var in zip(nodes, inputs):
-                    var = var.astype(target_dtype)
-                    self.nodes[node]['value'] = var
-                return self.broadcast_op_inputs(n, depth=depth+1)
+        code_gen.add_linebreak()
 
+        # get equation string and argument list for each non-DE node at the end of the compute graph hierarchy
+        func_args2, delete_args1, code_gen = self._generate_update_equations(code_gen,
+                                                                             differential_equations=False,
+                                                                             funcs=backend_funcs)
+        code_gen.add_linebreak()
+
+        # get equation string and argument list for each DE node at the end of the compute graph hierarchy
+        func_args1, delete_args2, code_gen = self._generate_update_equations(code_gen,
+                                                                             differential_equations=True,
+                                                                             funcs=backend_funcs)
+
+        # remove unnecessary function arguments
+        func_args = func_args1 + func_args2
+        for arg in delete_args1 + delete_args2:
+            while arg in func_args:
+                func_args.pop(func_args.index(arg))
+
+        return func_args, code_gen
+
+    def _generate_update_equations(self, code_gen, differential_equations: bool, funcs: dict = None,
+                                   indices: list = None):
+
+        # collect right-hand side expression and all input variables to these expressions
+        nodes = self.graph.var_updates['DEs' if differential_equations else 'non-DEs']
+        func_args, expressions, var_names, defined_vars = [], [], [], []
+        for node, update in nodes.items():
+
+            # collect expression and variables of right-hand side of equation
+            expr_args, expr = self.graph.node_to_expr(update, **funcs)
+            func_args.extend(expr_args)
+            expressions.append(self.backend.expr_to_str(expr))
+
+            # process left-hand side of equation
+            var = self.get_var(node)
+            if 'expr' in var:
+                # process indexing of left-hand side variable
+                idx_args, lhs = self.graph.node_to_expr(node, **funcs)
+                func_args.extend(idx_args)
+                lhs_var = self.backend.expr_to_str(lhs)
             else:
+                # process normal update of left-hand side variable
+                lhs_var = var['symbol'].name
+            var_names.append(lhs_var)
 
-                # broadcast shape of variable that an index should be applied to
-                if not target_shape:
-                    target_shape = inputs[0].shape + (1,)
+        # add the left-hand side assignments of the collected right-hand side expressions to the code generator
+        if differential_equations:
 
-                # get new shape of indexed variable
-                inp_eval = inputs[0]
-                new_shape = self._broadcast_shapes(target_shape, inp_eval.shape, squeeze=squeeze)
+            # differential equation (DE) update
+            if not indices:
+                raise ValueError('State variables need to be stored in a single state vector, for which the indices '
+                                 'have to be passed to this method.')
 
-                # update right-hand side of non-DE instead of the target variable, if suitable
-                if nodes[0] in self.var_updates['non-DEs']:
-                    return self.broadcast_op_inputs(self.var_updates['non-DEs'][nodes[0]], target_shape=new_shape,
-                                                    depth=depth + 1)
+            # DE updates stored in a state-vector
+            for idx, expr in zip(indices, expressions):
+                code_gen.add_code_line(f"dy{code_gen.create_index_str(idx)} = {expr}")
 
-                # reshape variable
-                if new_shape != inp_eval.shape:
-                    if 'func' in self.nodes[nodes[0]]:
-                        self.broadcast_op_inputs(nodes[0], squeeze=squeeze, target_shape=new_shape, depth=depth + 1)
-                    else:
-                        inp_eval = inp_eval.reshape(new_shape)
-                        self.nodes[nodes[0]]['value'] = inp_eval
+            # add rhs var to function arguments
+            func_args = ['dy'] + func_args
 
-                return self.broadcast_op_inputs(n, squeeze=True, depth=depth + 1)
+        else:
 
-    def node_to_expr(self, n: str, **kwargs) -> tuple:
+            # TODO: implement graph-based method for getting the order of the non-DEs right.
+            # non-differential equation update
+            var_names, expressions, undefined_vars, defined_vars = sort_equations(var_names, expressions)
+            func_args.extend(undefined_vars)
+
+            if indices:
+                raise ValueError('Indices to non-state variables should be defined in the respective equations, not'
+                                 'be passed to this method.')
+
+            # non-DE update stored in a single variable
+            for target_var, expr in zip(var_names, expressions):
+                code_gen.add_code_line(f"{target_var} = {expr}")
+
+        return func_args, defined_vars, code_gen
+
+    def _node_to_expr(self, n: str, **kwargs) -> tuple:
+
+        # TODO: Improve this method as much as possible
 
         expr_args = []
         try:
             expr = self.nodes[n]['expr']
-            expr_info = {self.nodes[inp]['symbol']: self.node_to_expr(inp, **kwargs) for inp in self.predecessors(n)}
+            expr_info = {self.nodes[inp]['symbol']: self._node_to_expr(inp, **kwargs) for inp in self.predecessors(n)}
             for expr_old, (args, expr_new) in expr_info.items():
                 expr = expr.replace(expr_old, expr_new)
                 expr_args.extend(args)
@@ -445,6 +448,23 @@ class ComputeGraph(MultiDiGraph):
             if self.nodes[n]['vtype'] in ['constant', 'input']:
                 expr_args.append(n)
             return expr_args, self.nodes[n]['symbol']
+
+    def _process_var_update(self, var: str, update: str) -> tuple:
+
+        # extract nodes
+        lhs = self.get_var(var)
+        rhs = self.graph.eval_node(update)
+
+        # extract common shape
+        if not lhs.shape:
+            lhs.reshape((1,))
+        if not rhs.shape:
+            rhs = np.reshape(rhs, (1,))
+        if lhs.shape == rhs.shape:
+            return lhs, rhs
+        raise ValueError(
+            f"Shapes of state variable {var} and its right-hand side update {rhs.expr} do not"
+            " match.")
 
     def _prune(self):
 
@@ -469,30 +489,6 @@ class ComputeGraph(MultiDiGraph):
             return self._generate_unique_label(new_label)
         else:
             return label
-
-    @staticmethod
-    def _broadcast_shapes(s1: tuple, s2: tuple, squeeze: bool):
-
-        new_shape = []
-        for j, s in enumerate(s1):
-            if squeeze:
-                try:
-                    if s2[j] == s1[j] or s2[j] == 1:
-                        new_shape.append(s1[j])
-                    else:
-                        new_shape.append(1)
-                except IndexError:
-                    pass
-            else:
-                try:
-                    if s2[j] == s1[j] or s1[j] == 1:
-                        new_shape.append(s2[j])
-                    else:
-                        new_shape.append(1)
-                except IndexError:
-                    new_shape.append(1)
-
-        return tuple(new_shape)
 
     def get_var(self, var: str):
         return self.nodes[var]['node']
