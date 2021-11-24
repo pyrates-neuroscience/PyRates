@@ -37,7 +37,7 @@ PyRates backend module including the following sub-modules:
     Interface to the backends available in PyRates.
 """
 
-from .parser import ExpressionParser, SympyParser, parse_equations
+from .parser import parse_equations
 from .base_funcs import *
 
 

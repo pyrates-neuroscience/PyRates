@@ -243,7 +243,7 @@ class BaseBackend(CodeGen):
             self.dtypes.update(dtypes)
 
         # further attributes
-        self._float_def = self.dtypes[float_default_type]
+        self._file_ending = ".py"
         self.imports = ["from numpy import *", "from pyrates.backend.base_funcs import *"]
         if imports:
             for imp in imports:
@@ -251,7 +251,6 @@ class BaseBackend(CodeGen):
                     self.imports.append(imp)
         self._idx_left = "["
         self._idx_right = "]"
-        self._file_ending = ".py"
         self._start_idx = 0
 
     def expr_to_str(self, expr: Any, expr_str: str = None) -> str:
@@ -323,6 +322,51 @@ class BaseBackend(CodeGen):
         except TypeError:
             pass
         return f"{self._idx_left}{idx}{self._idx_right}"
+
+    def get_fname(self, f: str) -> tuple:
+
+        f_split = f.split('.')
+        if len(f_split) > 2:
+            raise ValueError(f'File name {f} has wrong format. Only one `.` can be used to separate file name from '
+                             f'file ending.')
+        if len(f_split) == 2:
+            *path, file = f_split[0].split('/')
+            return '/'.join(path), file, f_split[1]
+        else:
+            *path, file = f.split('/')
+            return '/'.join(path), file, self._file_ending
+
+    @staticmethod
+    def generate_func_head(func_name: str, code_gen: CodeGen, state_var: str = None, func_args: list = None,
+                            imports: list = None):
+
+        if not func_args:
+            func_args = []
+        state_vars = ['t', state_var]
+        _, indices = np.unique(func_args, return_index=True)
+        func_args = state_vars + [func_args[idx] for idx in np.sort(indices)]
+
+        if imports:
+
+            # add imports at beginning of file
+            for imp in imports:
+                code_gen.add_code_line(imp)
+            code_gen.add_linebreak()
+
+        # add function header
+        code_gen.add_linebreak()
+        code_gen.add_code_line(f"def {func_name}({','.join(func_args)}):")
+        code_gen.add_indent()
+
+        return func_args, code_gen
+
+    @staticmethod
+    def generate_func_tail(code_gen: CodeGen, rhs_var: str = None):
+
+        code_gen.add_code_line(f"return {rhs_var}")
+        code_gen.remove_indent()
+
+        return code_gen
 
     #     # create build dir
     #     self._orig_dir = os.getcwd()
@@ -433,31 +477,6 @@ class BaseBackend(CodeGen):
     #         f"Shapes of state variable {var} and its right-hand side update {update_info['expr']} do not"
     #         " match.")
     #
-    # def _generate_func(self, func_str: str, func_name: str = None, file_name: str = None, build_dir: str = None,
-    #                    decorator: Any = None, **kwargs):
-    #
-    #     if not file_name:
-    #         file_name = self._file_name
-    #     if not build_dir:
-    #         build_dir = self._build_dir
-    #     if not func_name:
-    #         func_name = self._func_name
-    #
-    #     # save rhs function to file
-    #     with open(f'{build_dir}/{file_name}{self._file_ending}', 'w') as f:
-    #         f.writelines(func_str)
-    #         f.close()
-    #
-    #     # import function from file
-    #     exec(f"from {file_name} import {func_name}", globals())
-    #     rhs_eval = globals().pop(func_name)
-    #
-    #     # apply function decorator
-    #     if decorator:
-    #         rhs_eval = decorator(rhs_eval, **kwargs)
-    #
-    #     return rhs_eval
-    #
     # def _solve_ivp(self, solver: str, T: float, state_vec: np.ndarray, rhs: np.ndarray, dt: float,
     #                eval_times: np.ndarray, dts: float, rhs_func: Callable, *args, **kwargs) -> np.ndarray:
     #
@@ -477,38 +496,6 @@ class BaseBackend(CodeGen):
     #         results = solve_ivp(fun=rhs_func, t_span=(t, T), y0=state_vec, first_step=dt, args=args, **kwargs)
     #
     #         return results['y'].T
-    #
-    # @staticmethod
-    # def _generate_func_head(func_name: str, code_gen: CodeGen, state_var: str = None, func_args: list = None,
-    #                         imports: list = None):
-    #
-    #     if not func_args:
-    #         func_args = []
-    #     state_vars = ['t', state_var]
-    #     _, indices = np.unique(func_args, return_index=True)
-    #     func_args = state_vars + [func_args[idx] for idx in np.sort(indices)]
-    #
-    #     if imports:
-    #
-    #         # add imports at beginning of file
-    #         for imp in imports:
-    #             code_gen.add_code_line(imp)
-    #         code_gen.add_linebreak()
-    #
-    #     # add function header
-    #     code_gen.add_linebreak()
-    #     code_gen.add_code_line(f"def {func_name}({','.join(func_args)}):")
-    #     code_gen.add_indent()
-    #
-    #     return func_args, code_gen
-    #
-    # @staticmethod
-    # def _generate_func_tail(code_gen: CodeGen, rhs_var: str = None):
-    #
-    #     code_gen.add_code_line(f"return {rhs_var}")
-    #     code_gen.remove_indent()
-    #
-    #     return code_gen
     #
     # @staticmethod
     # def get_var_shape(v):

@@ -30,6 +30,7 @@
 """
 
 # external imports
+import os
 from typing import Any, Callable, Union, Iterable, Optional
 from networkx import MultiDiGraph
 from sympy import Symbol, Expr, Function
@@ -83,11 +84,18 @@ class ComputeNode:
         self._value = self.value.squeeze(axis=axis)
         return self
 
+    def set_value(self, v: Union[float, np.ndarray]):
+        self._value = v
+
     @property
     def value(self):
         """Returns current value of BaseVar.
         """
         return self._value
+
+    @property
+    def is_constant(self):
+        raise NotImplementedError("This method has to be defined by each child class.")
 
     def _is_equal_to(self, v):
         for attr in self.__slots__:
@@ -146,6 +154,10 @@ class ComputeVar(ComputeNode):
         # adjust variable value
         self._value = self._get_value(value=value, shape=shape, dtype=dtype)
 
+    @property
+    def is_constant(self):
+        return self.vtype == 'constant'
+
 
 class ComputeOp(ComputeNode):
     """Class for ComputeGraph nodes that represent mathematical operations.
@@ -160,6 +172,10 @@ class ComputeOp(ComputeNode):
         super().__init__(name=name, symbol=symbol, dtype=dtype, shape=shape)
         self.func = func
         self.expr = expr
+
+    @property
+    def is_constant(self):
+        return False
 
 
 # networkx-based graph class
@@ -190,6 +206,7 @@ class ComputeGraph(MultiDiGraph):
         self.backend = backend(**kwargs)
         self.var_updates = {'DEs': dict(), 'non-DEs': dict()}
         self._eq_nodes = []
+        self._dir = os.getcwd()
 
     def add_var(self, label: str, value: Any, vtype: str, **kwargs):
 
@@ -235,9 +252,10 @@ class ComputeGraph(MultiDiGraph):
     def eval_node(self, n):
 
         inputs = [self.eval_node(inp) for inp in self.predecessors(n)]
-        if 'func' in self.nodes[n]:
-            return self.nodes[n]['func'](*tuple(inputs))
-        return self.nodes[n]['value']
+        node = self.get_var(n)
+        if isinstance(node, ComputeOp):
+            return node.func(*tuple(inputs))
+        return node.value
 
     def eval_subgraph(self, n):
 
@@ -247,11 +265,11 @@ class ComputeGraph(MultiDiGraph):
             inputs.append(self.eval_subgraph(inp))
             self.remove_node(inp)
 
-        node = self.nodes[n]
+        node = self.get_var(n)
         if inputs:
-            node['value'] = node['func'](*tuple(inputs))
+            node.set_value(node.func(*tuple(inputs)))
 
-        return node['value']
+        return node.value
 
     def remove_subgraph(self, n):
 
@@ -267,11 +285,11 @@ class ComputeGraph(MultiDiGraph):
 
             # process inputs of node
             for inp in self.predecessors(node):
-                if self.nodes[inp]['vtype'] == 'constant':
+                if self.get_var(inp).is_constant:
                     self.eval_subgraph(inp)
 
             # evaluate node if all its inputs are constants
-            if all([self.nodes[inp]['vtype'] == 'constant' for inp in G.predecessors(node)]):
+            if all([self.get_var(inp).is_constant for inp in self.predecessors(node)]):
                 self.eval_subgraph(node)
 
         # remove unconnected nodes and constants from graph
@@ -279,7 +297,7 @@ class ComputeGraph(MultiDiGraph):
 
         return self
 
-    def to_func(self, func_name: str, file_name: str, **kwargs):
+    def to_func(self, func_name: str, to_file: bool = True, **kwargs):
 
         # finalize compute graph
         self.compile()
@@ -293,12 +311,13 @@ class ComputeGraph(MultiDiGraph):
 
             # extract left-hand side and right-hand side nodes from graph
             lhs, rhs = self._process_var_update(var, update)
-            variables.append(lhs), updates.append(rhs)
+            variables.append(lhs.value), updates.append(rhs)
 
             # store information of the original, non-vectorized state variable
             old_state_vars.append(var)
-            indices.append((idx, idx+lhs.shape) if lhs.shape > 1 else idx)
-            idx += lhs.shape
+            vshape = sum(lhs.shape)
+            indices.append((idx, idx+vshape) if vshape > 1 else idx)
+            idx += vshape
 
         # add vectorized state variables and updates to the backend
         state_vec = self.ops['concat']['func'](variables, axis=0)
@@ -311,28 +330,59 @@ class ComputeGraph(MultiDiGraph):
         code_gen.clear()
 
         # generate function head
-        # TODO: move function generation methods to compute graph
-        func_args, code_gen = self._generate_func_head(func_name=func_name, code_gen=code_gen,
-                                                       state_var=state_var_key, func_args=func_args,
-                                                       imports=self.backend.imports)
+        func_args = code_gen.generate_func_head(func_name=func_name, code_gen=code_gen, state_var=state_var_key,
+                                                func_args=func_args, imports=self.backend.imports)
 
         # add lines from function body after function head
         code_gen.add_linebreak()
         code_gen.add_code_line(func_body)
         code_gen.add_linebreak()
 
-        #
-        #         # generate function tail
-        #         code_gen = self._generate_func_tail(code_gen=code_gen, rhs_var=rhs_var_key)
-        #
-        #         # finalize function string
-        #         func_str = code_gen.generate()
-        #
-        #         # write function string to file
-        #         func = self._generate_func(func_str, func_name=func_name, file_name=file_name, build_dir=self._build_dir,
-        #                                    **kwargs)
-        #         return_dict['func'] = func
-        #         return_dict['func_args'] = func_args
+        # generate function tail
+        code_gen.generate_func_tail(code_gen=code_gen, rhs_var=rhs_var_key)
+
+        # finalize function string
+        func_str = code_gen.generate()
+
+        # generate the function (and write to file, optionally)
+        func = self._generate_func(func_str, func_name=func_name, to_file=to_file, **kwargs)
+
+        return func, func_args
+
+    def _generate_func(self, func_str: str, func_name: str, to_file: bool = True, decorator: Any = None, **kwargs):
+
+        if to_file:
+
+            # extract file name
+            try:
+                fname = kwargs.pop('file_name')
+            except KeyError:
+                raise ValueError('Please provide a `file_name` for PyRates to write the network run function to, or '
+                                 'turn off the `to_file` option.')
+            path, fname, fend = self.backend.get_fname(fname)
+            self._dir = path
+
+            # save rhs function to file
+            file = f'{path}/{fname}' if path else fname
+            with open(f'{file}{fend}', 'w') as f:
+                f.writelines(func_str)
+                f.close()
+
+            # import function from file
+            exec(f"from {fname} import {func_name}", globals())
+
+        else:
+
+            # just execute the function string, without writing it to file
+            exec(func_str, globals())
+
+        rhs_eval = globals().pop(func_name)
+
+        # apply function decorator
+        if decorator:
+            rhs_eval = decorator(rhs_eval, **kwargs)
+
+        return rhs_eval
 
     def _to_str(self, state_vec_indices: list):
 
@@ -362,7 +412,8 @@ class ComputeGraph(MultiDiGraph):
         # get equation string and argument list for each DE node at the end of the compute graph hierarchy
         func_args1, delete_args2, code_gen = self._generate_update_equations(code_gen,
                                                                              differential_equations=True,
-                                                                             funcs=backend_funcs)
+                                                                             funcs=backend_funcs,
+                                                                             indices=rhs_indices_str)
 
         # remove unnecessary function arguments
         func_args = func_args1 + func_args2
@@ -375,26 +426,33 @@ class ComputeGraph(MultiDiGraph):
     def _generate_update_equations(self, code_gen, differential_equations: bool, funcs: dict = None,
                                    indices: list = None):
 
+        # extract relevant compute graph nodes and bring them into the correct order
+        nodes = self.var_updates['DEs' if differential_equations else 'non-DEs']
+        nodes, updates, defined_vars = self._sort_var_updates(nodes=nodes, differential_equations=differential_equations)
+
         # collect right-hand side expression and all input variables to these expressions
-        nodes = self.graph.var_updates['DEs' if differential_equations else 'non-DEs']
-        func_args, expressions, var_names, defined_vars = [], [], [], []
-        for node, update in nodes.items():
+        func_args, expressions, var_names = [], [], []
+        for node, update in zip(nodes, updates):
 
             # collect expression and variables of right-hand side of equation
-            expr_args, expr = self.graph.node_to_expr(update, **funcs)
+            expr_args, expr = self._node_to_expr(update, **funcs)
             func_args.extend(expr_args)
             expressions.append(self.backend.expr_to_str(expr))
 
             # process left-hand side of equation
             var = self.get_var(node)
-            if 'expr' in var:
+            if isinstance(var, ComputeOp):
+
                 # process indexing of left-hand side variable
-                idx_args, lhs = self.graph.node_to_expr(node, **funcs)
+                idx_args, lhs = self._node_to_expr(node, **funcs)
                 func_args.extend(idx_args)
                 lhs_var = self.backend.expr_to_str(lhs)
+
             else:
+
                 # process normal update of left-hand side variable
-                lhs_var = var['symbol'].name
+                lhs_var = var.name
+
             var_names.append(lhs_var)
 
         # add the left-hand side assignments of the collected right-hand side expressions to the code generator
@@ -414,11 +472,7 @@ class ComputeGraph(MultiDiGraph):
 
         else:
 
-            # TODO: implement graph-based method for getting the order of the non-DEs right.
             # non-differential equation update
-            var_names, expressions, undefined_vars, defined_vars = sort_equations(var_names, expressions)
-            func_args.extend(undefined_vars)
-
             if indices:
                 raise ValueError('Indices to non-state variables should be defined in the respective equations, not'
                                  'be passed to this method.')
@@ -434,9 +488,10 @@ class ComputeGraph(MultiDiGraph):
         # TODO: Improve this method as much as possible
 
         expr_args = []
+        node = self.get_var(n)
         try:
-            expr = self.nodes[n]['expr']
-            expr_info = {self.nodes[inp]['symbol']: self._node_to_expr(inp, **kwargs) for inp in self.predecessors(n)}
+            expr = node.expr
+            expr_info = {self.get_var(inp).symbol: self._node_to_expr(inp, **kwargs) for inp in self.predecessors(n)}
             for expr_old, (args, expr_new) in expr_info.items():
                 expr = expr.replace(expr_old, expr_new)
                 expr_args.extend(args)
@@ -444,16 +499,16 @@ class ComputeGraph(MultiDiGraph):
             for expr_old, expr_new in kwargs.items():
                 expr = expr.replace(Function(expr_old), Function(expr_new))
             return expr_args, expr
-        except KeyError:
-            if self.nodes[n]['vtype'] in ['constant', 'input']:
+        except AttributeError:
+            if node.is_constant:
                 expr_args.append(n)
-            return expr_args, self.nodes[n]['symbol']
+            return expr_args, node.symbol
 
     def _process_var_update(self, var: str, update: str) -> tuple:
 
         # extract nodes
         lhs = self.get_var(var)
-        rhs = self.graph.eval_node(update)
+        rhs = self.eval_node(update)
 
         # extract common shape
         if not lhs.shape:
@@ -466,11 +521,49 @@ class ComputeGraph(MultiDiGraph):
             f"Shapes of state variable {var} and its right-hand side update {rhs.expr} do not"
             " match.")
 
+    def _sort_var_updates(self, nodes: dict, differential_equations: bool = True) -> tuple:
+
+        # for differential equations, do not perform any sorting
+        if differential_equations:
+            return list(nodes.keys()), list(nodes.values()), []
+
+        # for non-differential equations, sort them according to their graph connections
+        keys, values, defined_vars = [], [], []
+        while nodes:
+
+            for node, update in nodes.copy().items():
+
+                # go through node inputs and check whether other it depends on other equations to be evaluated first
+                dependent = False
+                for inp in self._get_inputs(update):
+                    if inp in nodes:
+                        dependent = True
+                        break
+
+                # decide whether this equation can evaluated now
+                if dependent:
+                    continue
+                else:
+                    nodes.pop(node)
+                    keys.append(node)
+                    values.append(update)
+                    if isinstance(self.get_var(node), ComputeVar):
+                        defined_vars.append(node)
+
+        return keys, values, defined_vars
+
+    def _get_inputs(self, n: str):
+
+        inputs = []
+        for inp in self.predecessors(n):
+            inputs.extend([inp] if isinstance(self.get_var(inp), ComputeVar) else self._get_inputs(inp))
+        return inputs
+
     def _prune(self):
 
         # remove all subgraphs that contain constants only
         for n in [node for node, out_degree in self.out_degree if out_degree == 0]:
-            if self.nodes[n]['vtype'] == 'constant' and n not in self._eq_nodes:
+            if self.get_var(n).is_constant and n not in self._eq_nodes:
                 self.remove_subgraph(n)
 
         # remove all unconnected nodes

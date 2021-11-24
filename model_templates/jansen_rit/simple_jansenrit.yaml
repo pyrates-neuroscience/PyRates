@@ -70,7 +70,7 @@ JRC_op:
     io_ratio:
       default: 3.0
     u:
-      default: 220.0
+      default: variable(220.0)
 
 
 JRC_driven_op:

@@ -29,6 +29,7 @@
 """
 
 # external imports
+import os
 from typing import Union, Dict, Iterator, Optional, List, Tuple
 from warnings import filterwarnings
 from networkx import MultiDiGraph, subgraph, DiGraph
@@ -523,8 +524,7 @@ class NetworkGraph(AbstractBaseIR):
         for succ in node_ir.op_graph.succ[op]:
             inputs = self[f"{node}/{succ}"]['inputs']
             if var not in inputs.keys():
-                inputs[var] = {'sources': {op},
-                               'reduce_dim': True}
+                inputs[var] = {'sources': {op}}
 
         # update edge information
         idx_l = 0
@@ -611,7 +611,6 @@ class NetworkGraph(AbstractBaseIR):
         in_edge_indices[target_node] += 1
         target_node_ir.add_op(op_name,
                               inputs={svar: {'sources': [sop],
-                                             'reduce_dim': True,
                                              'node': source_node,
                                              'var': svar}},
                               output=tvar,
@@ -626,8 +625,7 @@ class NetworkGraph(AbstractBaseIR):
         if tvar in inputs.keys():
             inputs[tvar]['sources'].add(op_name)
         else:
-            inputs[tvar] = {'sources': [op_name],
-                            'reduce_dim': True}
+            inputs[tvar] = {'sources': [op_name]}
 
     def _process_delays(self, d, discretize=True):
         if type(d) is list:
@@ -1011,45 +1009,37 @@ class CircuitIR(AbstractBaseIR):
         if self._verbose:
             print("Simulation Progress")
             print("-------------------")
-
-        # prepare simulation
-        ####################
-
-        if self._verbose:
             print("\t (1) Processing output variables...")
 
-        # collect backend output variables
-        ##################################
+        # collect backend variables and functions
+        #########################################
 
         outputs_col = {}
 
+        # extract backend variables that correspond to requested output variables
         if outputs:
-
-            # extract backend variables that correspond to requested output variables
             for key, val in outputs.items():
                 outputs_col[key] = self.get_var(val, get_key=True)
-
-            if self._verbose:
-                print("\t\t...finished.")
-
-        # run simulation
-        ################
-
-        if self._verbose:
-            print("\t (2) Performing the simulation...")
-
-        discrete_time = False if self._dt_adapt else True
-        results = self.backend.run(T=simulation_time, dt=self.step_size, dts=sampling_step_size,
-                                   out_dir=out_dir, outputs=outputs_col, solver=solver,  discrete_time=discrete_time,
-                                   **kwargs)
 
         if self._verbose:
             print("\t\t...finished.")
 
-        return results
+        # generate run function
+        if self._verbose:
+            print("\t (2) Generating the network run function...")
 
-    def get_run_func(self, func_name: str, file_name: str, **kwargs):
+        func_name = kwargs.pop('func_name', 'run')
+        func, func_args = self.get_run_func(func_name, **kwargs)
 
+        if self._verbose:
+            print("\t\t...finished.")
+
+        return {}
+
+    def get_run_func(self, func_name: str, file_name: Optional[str] = None, **kwargs) -> tuple:
+
+        if not file_name:
+            file_name = f"pyrates_func"
         return self.graph.to_func(func_name=func_name, file_name=file_name, **kwargs)
 
     def network_to_computegraph(self, graph: NetworkGraph, **kwargs):
@@ -1061,12 +1051,15 @@ class CircuitIR(AbstractBaseIR):
         cg.add_var(label="t", vtype="state_var", value=0.0 if self._dt_adapt else 0)
 
         # node operators
+        parsing_kwargs = ['method']
+        parsing_kwargs = {key: kwargs.pop(key) for key in parsing_kwargs if key in kwargs}
+
         self._parse_op_layers_into_computegraph(graph, cg, layers=[], exclude=True, op_identifier="edge_from_",
-                                                **kwargs)
+                                                **parsing_kwargs)
 
         # edge operators
         self._parse_op_layers_into_computegraph(graph, cg, layers=[0], exclude=False, op_identifier="edge_from_",
-                                                **kwargs)
+                                                **parsing_kwargs)
 
         return cg
 
@@ -1166,9 +1159,6 @@ class CircuitIR(AbstractBaseIR):
             op_args = deepcopy(op_info['variables'])
             op_args['inputs'] = {}
 
-            if getattr(op_info, 'collected', False):
-                break
-
             # handle operator inputs
             in_ops = {}
             for var_name, inp in op_info['inputs'].items():
@@ -1177,7 +1167,6 @@ class CircuitIR(AbstractBaseIR):
                 if inp['sources']:
 
                     in_ops_col = {}
-                    reduce_inputs = inp['reduce_dim'] if type(inp['reduce_dim']) is bool else False
                     in_node = inp['node'] if 'node' in inp else node_name
                     in_var_tmp = inp.pop('var', None)
 
@@ -1185,14 +1174,15 @@ class CircuitIR(AbstractBaseIR):
 
                         # collect single input to op
                         in_var = in_var_tmp if in_var_tmp else graph[f"{in_node}/{in_op}"]['output']
+                        in_key = f"{in_node}/{in_op}/{in_var}"
                         try:
-                            in_val = graph[f"{in_node}/{in_op}/{in_var}"]
+                            in_val = self._front_to_back[in_key]
                         except KeyError:
-                            in_val = None
-                        in_ops_col[f"{in_node}/{in_op}/{in_var}"] = in_val
+                            in_val = graph[in_key]
+                        in_ops_col[in_key] = in_val
 
                     if len(in_ops_col) > 1:
-                        in_ops[var_name] = self._map_multiple_inputs(in_ops_col, reduce_inputs, scope=scope)
+                        in_ops[var_name] = self._map_multiple_inputs(in_ops_col, scope=scope)
                     else:
                         key, _ = in_ops_col.popitem()
                         *in_node, in_op, in_var = key.split("/")
@@ -1208,32 +1198,40 @@ class CircuitIR(AbstractBaseIR):
             variables[f"{scope}/inputs"] = {}
             equations += [(eq, scope) for eq in op_info['equations']]
             for key, var in op_args.items():
+
                 full_key = f"{scope}/{key}"
+
+                # case I: global time variable
                 if key == "t":
                     variables[full_key] = compute_graph.get_var('t')
+
+                # case II: input variables
                 elif key == 'inputs' and var:
                     variables[f"{scope}/inputs"].update(var)
                     for in_var in var.values():
-                        variables[in_var] = graph[in_var]
-                elif full_key not in variables:
-                    variables[full_key] = var
-            try:
-                setattr(op_info, 'collected', True)
-            except AttributeError:
-                op_info['collected'] = True
+                        try:
+                            variables[in_var] = self._front_to_back[in_var]
+                        except KeyError:
+                            variables[in_var] = graph[in_var]
+
+                else:
+                    try:
+                        # case III: variables that have already been processed
+                        variables[full_key] = self._front_to_back[full_key]
+                    except KeyError:
+                        # case IV: new variables
+                        variables[full_key] = var
 
         return equations, variables
 
     @staticmethod
-    def _map_multiple_inputs(inputs: dict, reduce_dim: bool, scope: str) -> tuple:
+    def _map_multiple_inputs(inputs: dict, scope: str) -> tuple:
         """Creates mapping between multiple input variables and a single output variable.
 
         Parameters
         ----------
         inputs
             Input variables.
-        reduce_dim
-            If true, input variables will be summed up, if false, they will be concatenated.
         scope
             Scope of the input variables
 
@@ -1244,33 +1242,31 @@ class CircuitIR(AbstractBaseIR):
 
         """
 
+        # preparations
         if scope not in in_edge_vars:
             in_edge_vars[scope] = []
         inputs_unique = in_edge_vars[scope]
         input_mapping = {}
         new_input_vars = []
+
+        # go through all inputs
         for key, var in inputs.items():
-            *node, in_op, in_var = key.split('/')
-            if 'symbol' in var and 'expr' not in var:
+
+            # get a unique label for the input variable
+            try:
+                in_var = var.name
+            except AttributeError:
                 in_var = var['symbol'].name
             inp = get_unique_label(in_var, inputs_unique)
+
+            # store input-related information
             new_input_vars.append(inp)
             inputs_unique.append(inp)
             input_mapping[inp] = key
 
-        if reduce_dim:
-            input_expr = f"sum(({','.join(new_input_vars)}), 0)"
-        else:
-            idx = 0
-            var = inputs[input_mapping[new_input_vars[idx]]]
-            while not hasattr(var, 'shape'):
-                idx += 1
-                var = inputs[input_mapping[new_input_vars[idx]]]
-            shape = var['shape']
-            if len(shape) > 0:
-                input_expr = f"reshape(({','.join(new_input_vars)}), ({len(new_input_vars) * shape[0],}))"
-            else:
-                input_expr = f"stack({','.join(new_input_vars)})"
+        # sum up all inputs
+        input_expr = f"sum(({','.join(new_input_vars)}), 0)"
+
         return input_expr, input_mapping
 
     @property
