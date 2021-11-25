@@ -32,7 +32,7 @@
 # pyrates internal imports
 import gc
 
-from .base_backend import BaseBackend, CodeGen, sort_equations
+from .base_backend import BaseBackend, CodeGen
 from .fortran_funcs import get_fortran_func, fortran_identifiers
 from .base_funcs import *
 

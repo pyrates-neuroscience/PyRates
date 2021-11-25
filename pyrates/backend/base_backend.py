@@ -48,6 +48,7 @@ from .base_funcs import *
 # external imports
 from typing import Optional, Dict, List, Union, Any, Callable
 import numpy as np
+from numba import njit
 
 
 # Helper Functions and Classes
@@ -374,28 +375,3 @@ class BaseBackend(CodeGen):
             y += dt * rhs
 
         return state_rec
-
-    # def clear(self) -> None:
-    #     """Deletes build directory and removes all compute graph nodes
-    #     """
-    #
-    #     # delete compute graph nodes
-    #     nodes = [n for n in self.graph.nodes]
-    #     for n in nodes:
-    #         self.graph.remove_subgraph(n)
-    #     self._var_map.clear()
-    #
-    #     # remove files and directories that have been created during simulation process
-    #     if self._build_dir != self._orig_dir:
-    #         rmtree(f"{self._orig_dir}/{self._build_dir}")
-    #     else:
-    #         try:
-    #             os.remove(f"{self._orig_dir}/{self._file_name}{self._file_ending}")
-    #         except FileNotFoundError:
-    #             pass
-    #
-    #     if self._file_name in sys.modules:
-    #         del sys.modules[self._file_name]
-    #
-    #     # clear code generator
-    #     self._code_gen.clear()

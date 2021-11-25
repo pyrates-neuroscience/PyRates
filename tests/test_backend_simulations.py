@@ -447,29 +447,26 @@ def test_2_6_vectorization():
     :method:`CircuitTemplate.run` for a documentation of the keyword argument `vectorize`.
     """
 
-    backends = ['default', 'fortran']
+    backends = ['default']
 
-    dt = 5e-4
-    dts = 1e-3
+    dt = 1e-4
+    dts = 1e-2
     T = 1.0
     inp = np.zeros((int(np.round(T/dt)),)) + 220.0
 
     for i, b in enumerate(backends):
 
-        # TODO: ensure a proper handling of all kwards passed through the front-to-back chain
-
         # simulation without vectorization of the network equations
         r1 = simulate("model_templates.jansen_rit.simple_jansenrit.JRC_delaycoupled", vectorize=False,
                       inputs={"JRC2/JRC_op/u": inp}, outputs={"r": "JRC1/JRC_op/PSP_ein"}, backend=b,
                       solver='euler', step_size=dt, clear=True, simulation_time=T, sampling_step_size=dts,
-                      apply_kwargs={'backend_kwargs': {'file_name': f'vec{i + 1}'}}
-                      )
+                      file_name=f'vec{i + 1}')
 
         # simulation with vectorized network equations
         r2 = simulate("model_templates.jansen_rit.simple_jansenrit.JRC_delaycoupled", vectorize=True,
                       inputs={"JRC2/JRC_op/u": inp}, outputs={"r": "JRC1/JRC_op/PSP_ein"}, backend=b,
                       solver='euler', step_size=dt, clear=True, simulation_time=T, sampling_step_size=dts,
-                      apply_kwargs={'backend_kwargs': {'file_name': f'novec{i + 1}'}}
+                      file_name=f'novec{i + 1}'
                       )
 
         assert np.mean(r1.values - r2.values) == pytest.approx(0.0, rel=1e-4, abs=1e-4)

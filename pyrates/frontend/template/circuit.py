@@ -183,26 +183,21 @@ class CircuitTemplate(AbstractBaseTemplate):
     def run(self, simulation_time: float, step_size: float, inputs: Optional[dict] = None,
             outputs: Optional[Union[dict, list]] = None, sampling_step_size: Optional[float] = None,
             solver: str = 'euler', backend: str = None, out_dir: Optional[str] = None, vectorize: bool = True,
-            verbose: bool = True, clear: bool = True, apply_kwargs: dict = None, **kwargs) -> pd.DataFrame:
+            verbose: bool = True, clear: bool = True, **kwargs) -> pd.DataFrame:
+
+        # translate circuit template into a graph representation
+        ########################################################
 
         # add extrinsic inputs to network
-        #################################
-
         adaptive_steps = is_integration_adaptive(solver, **kwargs)
         net = self
         if inputs:
             for target, in_array in inputs.items():
                 net = net._add_input(target, in_array, adaptive_steps, simulation_time)
 
-        # translate circuit template into a graph representation
-        ########################################################
-
-        if not apply_kwargs:
-            apply_kwargs = {}
-
         # apply template (translate into compute graph, optional vectorization process)
         net.apply(adaptive_steps=adaptive_steps, vectorize=vectorize, verbose=verbose, backend=backend,
-                  step_size=step_size, **apply_kwargs)
+                  step_size=step_size, **kwargs)
 
         # perform simulation via the graph representation
         #################################################

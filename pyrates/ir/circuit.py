@@ -972,7 +972,6 @@ class CircuitIR(AbstractBaseIR):
             outputs: Optional[dict] = None,
             sampling_step_size: Optional[float] = None,
             solver: str = 'euler',
-            out_dir: Optional[str] = None,
             **kwargs
             ) -> Union[dict, Tuple[dict, float]]:
         """Simulate the backend behavior over time via a tensorflow session.
@@ -991,8 +990,6 @@ class CircuitIR(AbstractBaseIR):
             Numerical solving scheme to use for differential equations. Currently supported ODE solving schemes:
             - 'euler' for the explicit Euler method
             - 'scipy' for integration via the `scipy.integrate.solve_ivp` method.
-        out_dir
-            Directory in which to store outputs.
         kwargs
             Keyword arguments that are passed on to the chosen solver.
 
@@ -1017,7 +1014,7 @@ class CircuitIR(AbstractBaseIR):
 
         # generate run function
         func_name = kwargs.pop('func_name', 'run')
-        func, func_args = self.get_run_func(func_name, file_name=out_dir, **kwargs)
+        func, func_args = self.get_run_func(func_name, **kwargs)
 
         # extract backend variables that correspond to requested output variables
         if self._verbose:
@@ -1090,6 +1087,7 @@ class CircuitIR(AbstractBaseIR):
     def clear(self):
         """Clears the backend graph from all operations and variables.
         """
+        self._front_to_back.clear()
         self.graph.clear()
         in_edge_indices.clear()
         in_edge_vars.clear()

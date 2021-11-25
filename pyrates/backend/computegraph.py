@@ -31,10 +31,11 @@
 
 # external imports
 import os
+import sys
+from shutil import rmtree
 from typing import Any, Callable, Union, Iterable, Optional
 from networkx import MultiDiGraph
 from sympy import Symbol, Expr, Function
-from copy import deepcopy
 import numpy as np
 
 # meta infos
@@ -108,23 +109,28 @@ class ComputeNode:
                    shape: Optional[tuple] = None):
         """Defines initial value of variable.
         """
+
+        # case I: create new array from shape and dtype
         if value is None:
             return np.zeros(shape=shape, dtype=dtype)
-        elif not hasattr(value, 'shape'):
+
+        # case II: transform values into an array
+        if not hasattr(value, 'shape'):
             if type(value) is list:
                 return np.asarray(value, dtype=dtype).reshape(shape)
-            else:
-                return np.zeros(shape=shape, dtype=dtype) + value
-        elif shape:
+            return np.zeros(shape=shape, dtype=dtype) + value
+
+        # case III: match given shape with the shape of the given value array
+        if shape:
             if value.shape == shape:
                 return value
-            elif sum(shape) < sum(value.shape):
+            if sum(shape) < sum(value.shape):
                 return value.squeeze()
-            else:
-                idx = ",".join("None" if s == 1 else ":" for s in shape)
-                return eval(f'value[{idx}]')
-        else:
-            return np.asarray(value, dtype=dtype)
+            idx = ",".join("None" if s == 1 else ":" for s in shape)
+            return eval(f'value[{idx}]')
+
+        # case IV: just ensure the correct data type of the value array
+        return np.asarray(value, dtype=dtype)
 
     def __deepcopy__(self, memodict: dict):
         node = ComputeNode(name=self.name, symbol=self.symbol, dtype=self.dtype, shape=self.shape)
@@ -202,12 +208,21 @@ class ComputeGraph(MultiDiGraph):
             from pyrates.backend.base_backend import BaseBackend
             backend = BaseBackend
 
-        # set attributes
+        # backend-related attributes
         self.backend = backend(**kwargs)
         self.var_updates = {'DEs': dict(), 'non-DEs': dict()}
         self._eq_nodes = []
-        self._dir = os.getcwd()
         self._state_var_indices = dict()
+
+        # file-creation-related attributes
+        fdir, fname, fend = self.backend.get_fname(kwargs.pop('file_name', 'run'))
+        if fdir:
+            sys.path.append(fdir)
+        else:
+            sys.path.append(os.getcwd())
+        self._fdir = fdir
+        self._fname = fname
+        self._fend = fend
 
     def add_var(self, label: str, value: Any, vtype: str, **kwargs):
 
@@ -374,27 +389,45 @@ class ComputeGraph(MultiDiGraph):
         return self.backend.run(func=func, func_args=args, T=T, dt=dt, dts=dts, y0=y, outputs=outputs, solver=solver,
                                 **kwargs)
 
-    def _generate_func(self, func_str: str, func_name: str, to_file: bool = True, decorator: Any = None, **kwargs):
+    def clear(self) -> None:
+        """Deletes build directory and removes all compute graph nodes
+        """
+
+        # delete network nodes and variables from the compute graph
+        for n in list(self.nodes.keys()):
+            self.remove_subgraph(n)
+        self.var_updates.clear()
+        self._state_var_indices.clear()
+        self._eq_nodes.clear()
+
+        # remove files and directories that have been created during simulation process
+        if self._fdir:
+            rmtree(self._fdir)
+        else:
+            try:
+                os.remove(f"{self._fname}{self._fend}")
+            except FileNotFoundError:
+                pass
+
+        # delete loaded modules from the system
+        if self._fname in sys.modules:
+            del sys.modules[self._fname]
+
+        # clear code generator
+        self.backend.clear()
+
+    def _generate_func(self, func_str: str, func_name: str, to_file: bool = True, **kwargs):
 
         if to_file:
 
-            # extract file name
-            try:
-                fname = kwargs.pop('file_name')
-            except KeyError:
-                raise ValueError('Please provide a `file_name` for PyRates to write the network run function to, or '
-                                 'turn off the `to_file` option.')
-            path, fname, fend = self.backend.get_fname(fname)
-            self._dir = path
-
             # save rhs function to file
-            file = f'{path}/{fname}' if path else fname
-            with open(f'{file}{fend}', 'w') as f:
+            file = f'{self._fdir}/{self._fname}' if self._fdir else self._fname
+            with open(f'{file}{self._fend}', 'w') as f:
                 f.writelines(func_str)
                 f.close()
 
             # import function from file
-            exec(f"from {fname} import {func_name}", globals())
+            exec(f"from {self._fname} import {func_name}", globals())
 
         else:
 
@@ -404,8 +437,10 @@ class ComputeGraph(MultiDiGraph):
         rhs_eval = globals().pop(func_name)
 
         # apply function decorator
+        decorator = kwargs.pop('decorator', None)
         if decorator:
-            rhs_eval = decorator(rhs_eval, **kwargs)
+            decorator_kwargs = kwargs.pop('decorator_kwargs', dict())
+            rhs_eval = decorator(rhs_eval, **decorator_kwargs)
 
         return rhs_eval
 
