@@ -471,6 +471,15 @@ def parse_equations(equations: list, equation_args: dict, cg: ComputeGraph, **kw
 
                 elif var_name not in in_vars:
 
+                    # change the variable type of input variables that did not receive any extrinsic input
+                    try:
+                        if var['vtype'] == 'input' and var_name not in equation_args['inputs']:
+                            var['vtype'] = 'constant'
+                    except KeyError:
+                        var['vtype'] = 'constant'
+                    except TypeError:
+                        pass
+
                     # include variable information in operator arguments
                     op_args[var_name] = var
 

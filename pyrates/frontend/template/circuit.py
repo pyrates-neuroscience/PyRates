@@ -204,9 +204,6 @@ class CircuitTemplate(AbstractBaseTemplate):
         net.apply(adaptive_steps=adaptive_steps, vectorize=vectorize, verbose=verbose, backend=backend,
                   step_size=step_size, **apply_kwargs)
 
-        # extract vectorization indices
-        vector_indices = self._vectorization_indices
-
         # perform simulation via the graph representation
         #################################################
 

@@ -596,6 +596,7 @@ class NetworkGraph(AbstractBaseIR):
         dtype = sval["dtype"]
         args['weight'] = {'vtype': 'constant', 'dtype': dtype, 'value': weight}
         args[tvar] = deepcopy(tval)
+        args[tvar]['vtype'] = 'variable'
         if len(d):
             args['target_idx'] = {'vtype': 'constant',
                                   'value': np.array(d, dtype=float_precision if len(
