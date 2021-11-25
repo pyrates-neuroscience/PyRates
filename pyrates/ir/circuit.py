@@ -1006,17 +1006,23 @@ class CircuitIR(AbstractBaseIR):
 
         filterwarnings("ignore", category=FutureWarning)
 
-        if self._verbose:
-            print("Simulation Progress")
-            print("-------------------")
-            print("\t (1) Processing output variables...")
-
         # collect backend variables and functions
         #########################################
 
-        outputs_col = {}
+        if self._verbose:
+            print("Simulation Progress")
+            print("-------------------")
+            print("\t (1) Generating the network run function...")
+
+        # generate run function
+        func_name = kwargs.pop('func_name', 'run')
+        func, func_args = self.get_run_func(func_name, file_name=out_dir, **kwargs)
 
         # extract backend variables that correspond to requested output variables
+        if self._verbose:
+            print("\t (2) Processing output variables...")
+
+        outputs_col = {}
         if outputs:
             for key, val in outputs.items():
                 outputs_col[key] = self.get_var(val, get_key=True)
@@ -1024,17 +1030,31 @@ class CircuitIR(AbstractBaseIR):
         if self._verbose:
             print("\t\t...finished.")
 
-        # generate run function
-        if self._verbose:
-            print("\t (2) Generating the network run function...")
+        # perform simulation
+        ####################
 
-        func_name = kwargs.pop('func_name', 'run')
-        func, func_args = self.get_run_func(func_name, **kwargs)
+        if self._verbose:
+            print("\t (3) Running the simulation...")
+
+        # call backend run function
+        results = self.graph.run(func=func, func_args=func_args, T=simulation_time, dt=self._dt, dts=sampling_step_size,
+                                 outputs=outputs_col, solver=solver, **kwargs)
 
         if self._verbose:
             print("\t\t...finished.")
 
-        return {}
+        # return simulation results if outputs have been passed
+        if outputs_col:
+            return results
+
+        # else, find the frontend variable names of the returned results and create a new results dict to return
+        for key in results.copy():
+            v = self.get_var(key)
+            front_keys = list(self._front_to_back.keys())
+            front_vs = list(self._front_to_back.values())
+            idx = front_vs.index(v)
+            results[front_keys[idx]] = results.pop(key)
+        return results
 
     def get_run_func(self, func_name: str, file_name: Optional[str] = None, **kwargs) -> tuple:
 

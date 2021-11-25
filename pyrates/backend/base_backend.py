@@ -44,14 +44,9 @@ Currently supported backends:
 
 # pyrates internal imports
 from .base_funcs import *
-from .parser import var_in_expression, extract_var
-from .computegraph import ComputeGraph
 
 # external imports
 from typing import Optional, Dict, List, Union, Any, Callable
-import os
-import sys
-from shutil import rmtree
 import numpy as np
 
 
@@ -103,47 +98,6 @@ class CodeGen:
         self.code.clear()
 
 
-def sort_equations(lhs_vars: list, rhs_expressions: list) -> tuple:
-
-    # TODO: get rid of this shit
-
-    vars_new, expressions_new, defined_vars, all_vars = [], [], [], []
-    lhs_vars_old, expressions_old = lhs_vars.copy(), rhs_expressions.copy()
-
-    # first, collect all variables that do not appear in any other equations
-    while lhs_vars_old:
-        for var, expr in zip(lhs_vars, rhs_expressions):
-            appears_in_rhs = False
-            v_tmp, indexed = extract_var(var)
-            for expr_tmp in rhs_expressions:
-                if var_in_expression(v_tmp, expr_tmp):
-                    appears_in_rhs = True
-                    break
-            if not appears_in_rhs:
-                idx = lhs_vars_old.index(var)
-                var = lhs_vars_old.pop(idx)
-                vars_new.append(var)
-                expressions_new.append(expr)
-                expressions_old.pop(idx)
-                if not indexed and v_tmp not in defined_vars:
-                    defined_vars.append(v_tmp)
-
-            if v_tmp not in all_vars:
-                all_vars.append(v_tmp)
-
-        if lhs_vars and lhs_vars == lhs_vars_old:
-            break
-        else:
-            lhs_vars = lhs_vars_old
-            rhs_expressions = expressions_old
-
-    # next, collect all other variables
-    vars_new.extend(lhs_vars_old[::-1])
-    expressions_new.extend(expressions_old[::-1])
-
-    return vars_new[::-1], expressions_new[::-1], [v for v in all_vars if v not in defined_vars], defined_vars
-
-
 #######################################
 # classes for backend functionalities #
 #######################################
@@ -157,7 +111,6 @@ class BaseBackend(CodeGen):
     def __init__(self,
                  ops: Optional[Dict[str, str]] = None,
                  dtypes: Optional[Dict[str, object]] = None,
-                 float_default_type: str = 'float32',
                  imports: Optional[List[str]] = None,
                  **kwargs
                  ) -> None:
@@ -336,9 +289,9 @@ class BaseBackend(CodeGen):
             *path, file = f.split('/')
             return '/'.join(path), file, self._file_ending
 
-    @staticmethod
-    def generate_func_head(func_name: str, code_gen: CodeGen, state_var: str = None, func_args: list = None,
-                            imports: list = None):
+    def generate_func_head(self, func_name: str, state_var: str = None, func_args: list = None):
+
+        imports = self.imports
 
         if not func_args:
             func_args = []
@@ -350,88 +303,78 @@ class BaseBackend(CodeGen):
 
             # add imports at beginning of file
             for imp in imports:
-                code_gen.add_code_line(imp)
-            code_gen.add_linebreak()
+                self.add_code_line(imp)
+            self.add_linebreak()
 
         # add function header
-        code_gen.add_linebreak()
-        code_gen.add_code_line(f"def {func_name}({','.join(func_args)}):")
-        code_gen.add_indent()
+        self.add_linebreak()
+        self.add_code_line(f"def {func_name}({','.join(func_args)}):")
+        self.add_indent()
 
-        return func_args, code_gen
+        return func_args
+
+    def generate_func_tail(self, rhs_var: str = None):
+
+        self.add_code_line(f"return {rhs_var}")
+        self.remove_indent()
+
+    def run(self, func: Callable, func_args: tuple, T: float, dt: float, dts: float, y0: np.ndarray, outputs: dict,
+            solver: str, **kwargs) -> dict:
+
+        # simulation specs
+        times = np.arange(0, T, dts) if dts else np.arange(0, T, dt)
+
+        # perform simulation
+        ####################
+
+        # perform integration via scipy solver (mostly Runge-Kutta methods)
+        if solver == 'euler':
+
+            # solve ivp via forward euler method (fixed integration step-size)
+            results = self._solve_euler(func, func_args, T, dt, dts, y0)
+
+        else:
+
+            # solve ivp via scipy methods (solvers of various orders with adaptive step-size)
+            from scipy.integrate import solve_ivp
+            t = 0.0
+            kwargs['t_eval'] = times
+
+            # call scipy solver
+            results = solve_ivp(fun=func, t_span=(t, T), y0=y0, first_step=dt, args=func_args, **kwargs)
+            results = results['y'].T
+
+        # reduce state recordings to requested state variables
+        for key, idx in outputs.items():
+            if type(idx) is tuple and idx[1] - idx[0] == 1:
+                idx = (idx[0],)
+            elif type(idx) is int:
+                idx = (idx,)
+            outputs[key] = results[:, idx] if len(idx) == 1 else results[:, idx[0]:idx[1]]
+        outputs['time'] = times
+
+        return outputs
 
     @staticmethod
-    def generate_func_tail(code_gen: CodeGen, rhs_var: str = None):
+    def _solve_euler(func: Callable, args: tuple, T: float, dt: float, dts: float, y: np.ndarray):
 
-        code_gen.add_code_line(f"return {rhs_var}")
-        code_gen.remove_indent()
+        # preparations for fixed step-size integration
+        idx = 0
+        steps = int(np.round(T / dt))
+        store_steps = int(np.round(T / dts))
+        store_step = int(np.round(dts / dt))
+        state_rec = np.zeros((store_steps, y.shape[0]))
 
-        return code_gen
+        # solve ivp for forward Euler method
+        for step in range(steps):
+            if step % store_step == 0:
+                state_rec[idx, :] = y
+                idx += 1
+            rhs = func(step, y, *args)
+            y += dt * rhs
 
-    #     # create build dir
-    #     self._orig_dir = os.getcwd()
-    #     self._build_dir = f"{build_dir}/{self.name}" if build_dir else self._orig_dir
-    #     if build_dir:
-    #         os.makedirs(build_dir, exist_ok=True)
-    #         try:
-    #             os.mkdir(self._build_dir)
-    #         except FileExistsError:
-    #             rmtree(self._build_dir)
-    #             os.mkdir(self._build_dir)
-    #         sys.path.append(self._build_dir)
-    #     else:
-    #         sys.path.append(self._orig_dir)
-    #
-    # def run(self, T: float, dt: float, dts: float = None, outputs: dict = None, solver: str = 'euler',
-    #         in_place: bool = True, func_name: str = None, file_name: str = None, compile_kwargs: dict = None, **kwargs
-    #         ) -> dict:
-    #
-    #     # preparations
-    #     ##############
-    #
-    #     if not compile_kwargs:
-    #         compile_kwargs = dict()
-    #     if not func_name and solver:
-    #         func_name = self._func_name
-    #     if not file_name and solver:
-    #         file_name = self._file_name
-    #     if not dts:
-    #         dts = dt
-    #     self._func_name = func_name
-    #     self._file_name = file_name
-    #
-    #     # network specs
-    #     run_info = self.compile(in_place=in_place, func_name=func_name, file_name=file_name, **compile_kwargs)
-    #     state_vec = self.get_var(run_info['state_vec'])['value']
-    #     rhs = self.ops['cast']['func'](self.ops['zeros']['func'](shape=tuple(state_vec.shape)))
-    #
-    #     # simulation specs
-    #     times = np.arange(0, T, dts) if dts else np.arange(0, T, dt)
-    #
-    #     # perform simulation
-    #     ####################
-    #
-    #     rhs_func = run_info['func']
-    #     func_args = run_info['func_args'][3:]
-    #     args = tuple([self.get_var(arg)['value'] for arg in func_args])
-    #
-    #     # perform integration via scipy solver (mostly Runge-Kutta methods)
-    #     state_rec = self._solve_ivp(solver, T, state_vec, rhs, dt, times, dts, rhs_func, *args, **kwargs)
-    #
-    #     # reduce state recordings to requested state variables
-    #     final_results = {}
-    #     for key, var in outputs.items():
-    #         idx = run_info['old_state_vars'].index(var)
-    #         idx = run_info['vec_indices'][idx]
-    #         if type(idx) is tuple and idx[1] - idx[0] == 1:
-    #             idx = (idx[0],)
-    #         elif type(idx) is int:
-    #             idx = (idx,)
-    #         final_results[key] = state_rec[:, idx] if len(idx) == 1 else state_rec[:, idx[0]:idx[1]]
-    #     final_results['time'] = times
-    #
-    #     return final_results
-    #
+        return state_rec
+
     # def clear(self) -> None:
     #     """Deletes build directory and removes all compute graph nodes
     #     """
@@ -456,70 +399,3 @@ class BaseBackend(CodeGen):
     #
     #     # clear code generator
     #     self._code_gen.clear()
-    #
-    # def _process_var_update(self, var: str, update: str) -> tuple:
-    #
-    #     # extract nodes
-    #     var_info = self.get_var(var)
-    #     update_info = self.get_var(update)
-    #
-    #     # extract common shape
-    #     lhs = var_info['value']
-    #     if not lhs.shape:
-    #         lhs = np.reshape(lhs, (1,))
-    #     rhs = self.graph.eval_node(update)
-    #     if not rhs.shape:
-    #         rhs = np.reshape(rhs, (1,))
-    #     s1, s2 = self.get_var_shape(lhs), self.get_var_shape(rhs)
-    #     if s1 == s2:
-    #         return lhs, rhs, s1
-    #     raise ValueError(
-    #         f"Shapes of state variable {var} and its right-hand side update {update_info['expr']} do not"
-    #         " match.")
-    #
-    # def _solve_ivp(self, solver: str, T: float, state_vec: np.ndarray, rhs: np.ndarray, dt: float,
-    #                eval_times: np.ndarray, dts: float, rhs_func: Callable, *args, **kwargs) -> np.ndarray:
-    #
-    #     if solver == 'euler':
-    #
-    #         # solve ivp via forward euler method (fixed integration step-size)
-    #         return self._solve_euler(T, state_vec, rhs, dt, eval_times, dts, rhs_func, *args, **kwargs)
-    #
-    #     else:
-    #
-    #         # solve ivp via scipy methods (solvers of various orders with adaptive step-size)
-    #         from scipy.integrate import solve_ivp
-    #         t = 0.0
-    #         kwargs['t_eval'] = eval_times
-    #
-    #         # call scipy solver
-    #         results = solve_ivp(fun=rhs_func, t_span=(t, T), y0=state_vec, first_step=dt, args=args, **kwargs)
-    #
-    #         return results['y'].T
-    #
-    # @staticmethod
-    # def get_var_shape(v):
-    #     if not v.shape:
-    #         v = np.reshape(v, (1,))
-    #     return v.shape[0]
-    #
-    # @staticmethod
-    # def _solve_euler(T: float, state_vec: np.ndarray, rhs: np.ndarray, dt: float, eval_times: np.ndarray, dts: float,
-    #                  rhs_func: Callable, *args, **kwargs):
-    #
-    #     # preparations for fixed step-size integration
-    #     idx = 0
-    #     steps = int(np.round(T / dt))
-    #     store_steps = int(np.round(T / dts))
-    #     store_step = int(np.round(dts / dt))
-    #     state_rec = np.zeros((store_steps, state_vec.shape[0]))
-    #
-    #     # solve ivp for forward Euler method
-    #     for step in range(steps):
-    #         if step % store_step == 0:
-    #             state_rec[idx, :] = state_vec
-    #             idx += 1
-    #         rhs_func(step, state_vec, rhs, *args)
-    #         state_vec += dt * rhs
-    #
-    #     return state_rec

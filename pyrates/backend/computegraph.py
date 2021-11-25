@@ -207,6 +207,7 @@ class ComputeGraph(MultiDiGraph):
         self.var_updates = {'DEs': dict(), 'non-DEs': dict()}
         self._eq_nodes = []
         self._dir = os.getcwd()
+        self._state_var_indices = dict()
 
     def add_var(self, label: str, value: Any, vtype: str, **kwargs):
 
@@ -305,7 +306,7 @@ class ComputeGraph(MultiDiGraph):
         # create state variable vector and state variable update vector
         ###############################################################
 
-        variables, indices, updates, old_state_vars = [], [], [], []
+        variables, updates, old_state_vars = [], [], []
         idx = 0
         for var, update in self.var_updates['DEs'].items():
 
@@ -316,7 +317,7 @@ class ComputeGraph(MultiDiGraph):
             # store information of the original, non-vectorized state variable
             old_state_vars.append(var)
             vshape = sum(lhs.shape)
-            indices.append((idx, idx+vshape) if vshape > 1 else idx)
+            self._state_var_indices[var] = (idx, idx+vshape) if vshape > 1 else idx
             idx += vshape
 
         # add vectorized state variables and updates to the backend
@@ -325,13 +326,12 @@ class ComputeGraph(MultiDiGraph):
         rhs_var_key, dy = self.add_var(label='dy', vtype='state_var', value=np.zeros_like(state_vec))
 
         # create a string containing all computations and variable updates represented by the compute graph
-        func_args, code_gen = self._to_str(state_vec_indices=indices)
+        func_args, code_gen = self._to_str()
         func_body = code_gen.generate()
         code_gen.clear()
 
         # generate function head
-        func_args = code_gen.generate_func_head(func_name=func_name, code_gen=code_gen, state_var=state_var_key,
-                                                func_args=func_args, imports=self.backend.imports)
+        func_args = code_gen.generate_func_head(func_name=func_name, state_var=state_var_key, func_args=func_args)
 
         # add lines from function body after function head
         code_gen.add_linebreak()
@@ -339,7 +339,7 @@ class ComputeGraph(MultiDiGraph):
         code_gen.add_linebreak()
 
         # generate function tail
-        code_gen.generate_func_tail(code_gen=code_gen, rhs_var=rhs_var_key)
+        code_gen.generate_func_tail(rhs_var=rhs_var_key)
 
         # finalize function string
         func_str = code_gen.generate()
@@ -348,6 +348,31 @@ class ComputeGraph(MultiDiGraph):
         func = self._generate_func(func_str, func_name=func_name, to_file=to_file, **kwargs)
 
         return func, func_args
+
+    def run(self, func: Callable, func_args: tuple, T: float, dt: float, dts: Optional[float] = None,
+            outputs: Optional[dict] = None, **kwargs):
+
+        # pre-process outputs
+        if outputs is None:
+            outputs = {key: key for key in self.state_vars}
+        for key in outputs.copy():
+            var = outputs.pop(key)
+            outputs[key] = self._state_var_indices[var]
+
+        # handle other arguments
+        if dts is None:
+            dts = dt
+        solver = kwargs.pop('solver', 'euler')
+
+        # extract state vector
+        y = self.get_var('y').value
+
+        # extract required function arguments from graph
+        args = tuple(self.get_var(v).value for v in func_args[2:])
+
+        # call backend method
+        return self.backend.run(func=func, func_args=args, T=T, dt=dt, dts=dts, y0=y, outputs=outputs, solver=solver,
+                                **kwargs)
 
     def _generate_func(self, func_str: str, func_name: str, to_file: bool = True, decorator: Any = None, **kwargs):
 
@@ -384,7 +409,7 @@ class ComputeGraph(MultiDiGraph):
 
         return rhs_eval
 
-    def _to_str(self, state_vec_indices: list):
+    def _to_str(self):
 
         # preparations
         code_gen = self.backend
@@ -392,7 +417,10 @@ class ComputeGraph(MultiDiGraph):
 
         # extract state variable from state vector
         rhs_indices_str = []
-        for idx, var in zip(state_vec_indices, self.var_updates['DEs']):
+        for var in self.state_vars:
+
+            # extract index of variable in state vector
+            idx = self._state_var_indices[var]
 
             # turn index to string
             idx_str = f'{idx}' if type(idx) is int else f'{idx[0]}:{idx[1]}'
@@ -404,16 +432,12 @@ class ComputeGraph(MultiDiGraph):
         code_gen.add_linebreak()
 
         # get equation string and argument list for each non-DE node at the end of the compute graph hierarchy
-        func_args2, delete_args1, code_gen = self._generate_update_equations(code_gen,
-                                                                             differential_equations=False,
-                                                                             funcs=backend_funcs)
+        func_args2, delete_args1 = self._generate_update_equations(differential_equations=False, funcs=backend_funcs)
         code_gen.add_linebreak()
 
         # get equation string and argument list for each DE node at the end of the compute graph hierarchy
-        func_args1, delete_args2, code_gen = self._generate_update_equations(code_gen,
-                                                                             differential_equations=True,
-                                                                             funcs=backend_funcs,
-                                                                             indices=rhs_indices_str)
+        func_args1, delete_args2 = self._generate_update_equations(differential_equations=True, funcs=backend_funcs,
+                                                                   indices=rhs_indices_str)
 
         # remove unnecessary function arguments
         func_args = func_args1 + func_args2
@@ -423,8 +447,10 @@ class ComputeGraph(MultiDiGraph):
 
         return func_args, code_gen
 
-    def _generate_update_equations(self, code_gen, differential_equations: bool, funcs: dict = None,
-                                   indices: list = None):
+    def _generate_update_equations(self, differential_equations: bool, funcs: dict = None, indices: list = None
+                                   ) -> tuple:
+
+        code_gen = self.backend
 
         # extract relevant compute graph nodes and bring them into the correct order
         nodes = self.var_updates['DEs' if differential_equations else 'non-DEs']
@@ -445,6 +471,8 @@ class ComputeGraph(MultiDiGraph):
 
                 # process indexing of left-hand side variable
                 idx_args, lhs = self._node_to_expr(node, **funcs)
+                if lhs.args[0].name not in defined_vars:
+                    idx_args.append(lhs.args[0].name)
                 func_args.extend(idx_args)
                 lhs_var = self.backend.expr_to_str(lhs)
 
@@ -481,27 +509,38 @@ class ComputeGraph(MultiDiGraph):
             for target_var, expr in zip(var_names, expressions):
                 code_gen.add_code_line(f"{target_var} = {expr}")
 
-        return func_args, defined_vars, code_gen
+        return func_args, defined_vars
 
     def _node_to_expr(self, n: str, **kwargs) -> tuple:
 
-        # TODO: Improve this method as much as possible
-
         expr_args = []
         node = self.get_var(n)
+
+        # case I: node is a mathematical operation and its inputs need to be treated
         try:
-            expr = node.expr
+
+            # process node inputs
             expr_info = {self.get_var(inp).symbol: self._node_to_expr(inp, **kwargs) for inp in self.predecessors(n)}
+
+            # replace old inputs with its processed versions
+            expr = node.expr
             for expr_old, (args, expr_new) in expr_info.items():
                 expr = expr.replace(expr_old, expr_new)
                 expr_args.extend(args)
-            # TODO: check beforehand, whether next step is necessary (e.g. indicate existence of undefined functions)
+
+            # replace generic function calls with the backend-specific function calls
             for expr_old, expr_new in kwargs.items():
                 expr = expr.replace(Function(expr_old), Function(expr_new))
+
             return expr_args, expr
+
+        # case II: node is a simple variable or constant
         except AttributeError:
+
+            # add constants to the expression arguments list
             if node.is_constant:
                 expr_args.append(n)
+
             return expr_args, node.symbol
 
     def _process_var_update(self, var: str, update: str) -> tuple:
@@ -593,3 +632,7 @@ class ComputeGraph(MultiDiGraph):
     @property
     def dtypes(self):
         return self.backend.dtypes
+
+    @property
+    def state_vars(self):
+        return list(self.var_updates['DEs'].keys())

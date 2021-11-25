@@ -1007,7 +1007,7 @@ def create_input_node(var: str, inp: np.ndarray, continuous: bool, T: float) -> 
         eqs = [f"{var_name} = interp(time, {var}_input, t)"]
         var_dict = {
             var_name: {'default': 'output', 'value': y_new},
-            f"{var}_input": {'default': 'input_variable', 'value': inp},
+            f"{var}_input": {'default': 'constant', 'value': inp, 'shape': inp.shape},
             't': {'default': 'variable', 'value': 0.0},
             'time': {'default': 'input_variable', 'value': time, 'shape': time.shape}
         }
@@ -1017,7 +1017,7 @@ def create_input_node(var: str, inp: np.ndarray, continuous: bool, T: float) -> 
         eqs = [f"{var_name} = index({var}_input,t)"]
         var_dict = {
             var_name: {'default': 'output', 'value': inp[0]},
-            f"{var}_input": {'default': 'input_variable', 'value': inp},
+            f"{var}_input": {'default': 'constant', 'value': inp, 'shape': inp.shape},
             't': {'default': 'variable', 'value': 0, 'dtype': 'int32'}
         }
 
