@@ -43,7 +43,6 @@ __status__ = "development"
 # function definitions
 ######################
 
-@njit
 def neg_one(x):
     return -1*x
 
@@ -56,11 +55,9 @@ def pr_softmax(x, axis=0):
     x_exp = np.exp(x)
     return x_exp/np.sum(x_exp, axis=axis)
 
-@njit
 def pr_identity(x):
     return x
 
-@njit
 def pr_interp_nd_linear(x, y, x_new, y_idx, t):
     return np.asarray([np.interp(t - x_new_tmp, x, y[i, :]) for i, x_new_tmp in zip(y_idx, x_new)])
 
@@ -84,19 +81,15 @@ def pr_interp_nd(x, y, x_new, y_idx, t):
 def pr_interp(x, y, x_new):
     return np.interp(x_new, x, y)
 
-@njit
 def pr_base_index(x, idx):
     return x[idx]
 
-@njit
 def pr_2d_index(x, idx1, idx2):
     return x[idx1, idx2]
 
-@njit
 def pr_range_index(x, idx1, idx2):
     return x[idx1:idx2]
 
-@njit
 def pr_axis_index(x, idx=None, axis=0):
     if idx:
         return x[idx] if axis == 0 else x[:, idx]

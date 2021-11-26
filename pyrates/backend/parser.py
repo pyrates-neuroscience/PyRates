@@ -186,7 +186,7 @@ class ExpressionParser:
     cg
         ComputeGraph instance in which to parse all variables and operations.
         See `pyrates.backend.computegraph.ComputeGraph` for a full documentation of its methods and attributes.
-    method
+    parsing_method
         Name of the parsing method to use. Valid options: `sympy` for a sympy-based parser, `pyrates` for the
         pyrates-internal, pyparsing-based parser.
 
@@ -211,28 +211,29 @@ class ExpressionParser:
 
     _constant_counter = 0
 
-    def __init__(self, expr_str: str, args: dict, cg: ComputeGraph, def_shape: tuple, method: str = 'sympy') -> None:
+    def __init__(self, expr_str: str, args: dict, cg: ComputeGraph, def_shape: tp.Optional[tuple] = None,
+                 parsing_method: str = 'sympy') -> None:
         """Instantiates expression parser.
         """
-        
-        # preprocess the expression string
-        self.lhs, self.rhs, self._diff_eq, self._assign_type, self.lhs_key = self._preprocess_expr_str(expr_str)
 
-        # define the parsing function
-        if method == 'sympy':
-            self.parse_func = sympify
-        elif method == 'pyrates':
-            a = Algebra()
-            self.parse_func = a.parseString
-        else:
-            raise ValueError(f'Invalid identifier for the parsing method: {method}.')
-        
-        # remaining attributes
+        # main attributes
         self.vars = args.copy()
         self.expr_str = expr_str
         self.expr_stack = []
         self.cg = cg
         self._def_shape = def_shape
+
+        # preprocess the expression string
+        self.lhs, self.rhs, self._diff_eq, self._assign_type, self.lhs_key = self._preprocess_expr_str(expr_str)
+
+        # define the parsing function
+        if parsing_method == 'sympy':
+            self.parse_func = sympify
+        elif parsing_method == 'pyrates':
+            a = Algebra()
+            self.parse_func = a.parseString
+        else:
+            raise ValueError(f'Invalid identifier for the parsing method: {parsing_method}.')
 
     def parse_expr(self) -> dict:
         """Parses string-based mathematical expression/equation.
@@ -251,7 +252,7 @@ class ExpressionParser:
             self.vars[c] = {'vtype': 'input',
                             'value': self.expr_stack if is_boolean(self.expr_stack) else float(self.expr_stack)}
             self.expr_stack = self.parse_func(expr)
-            SympyParser._constant_counter += 1
+            self._constant_counter += 1
         if self.expr_stack.is_symbol:
             self.expr_stack = self.parse_func(f"no_op({self.rhs})")
 

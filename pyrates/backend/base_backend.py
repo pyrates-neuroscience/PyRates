@@ -332,7 +332,6 @@ class BaseBackend(CodeGen):
         if solver == 'euler':
 
             # solve ivp via forward euler method (fixed integration step-size)
-            func = njit(func)
             results = self._solve_euler(func, func_args, T, dt, dts, y0)
 
         else:
@@ -358,7 +357,6 @@ class BaseBackend(CodeGen):
         return outputs
 
     @staticmethod
-    @njit
     def _solve_euler(func: Callable, args: tuple, T: float, dt: float, dts: float, y: np.ndarray):
 
         # preparations for fixed step-size integration

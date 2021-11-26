@@ -29,10 +29,10 @@
 """
 
 # external imports
-import os
+import time
 from typing import Union, Dict, Iterator, Optional, List, Tuple
 from warnings import filterwarnings
-from networkx import MultiDiGraph, subgraph, DiGraph
+from networkx import MultiDiGraph, DiGraph
 import numpy as np
 from copy import deepcopy
 
@@ -1034,13 +1034,15 @@ class CircuitIR(AbstractBaseIR):
 
         if self._verbose:
             print("\t (3) Running the simulation...")
+        t0 = time.perf_counter()
 
         # call backend run function
         results = self.graph.run(func=func, func_args=func_args, T=simulation_time, dt=self._dt, dts=sampling_step_size,
                                  outputs=outputs_col, solver=solver, **kwargs)
 
         if self._verbose:
-            print("\t\t...finished.")
+            t1 = time.perf_counter()
+            print(f"\t\t...finished after {t1-t0}s.")
 
         # return simulation results if outputs have been passed
         if outputs_col:
@@ -1070,7 +1072,7 @@ class CircuitIR(AbstractBaseIR):
         cg.add_var(label="t", vtype="state_var", value=0.0 if self._dt_adapt else 0)
 
         # node operators
-        parsing_kwargs = ['method']
+        parsing_kwargs = ['parsing_method']
         parsing_kwargs = {key: kwargs.pop(key) for key in parsing_kwargs if key in kwargs}
 
         self._parse_op_layers_into_computegraph(graph, cg, layers=[], exclude=True, op_identifier="edge_from_",

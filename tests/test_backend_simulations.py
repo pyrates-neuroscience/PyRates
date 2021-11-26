@@ -453,6 +453,7 @@ def test_2_6_vectorization():
     dts = 1e-2
     T = 1.0
     inp = np.zeros((int(np.round(T/dt)),)) + 220.0
+    from numba import njit
 
     for i, b in enumerate(backends):
 
@@ -466,8 +467,7 @@ def test_2_6_vectorization():
         r2 = simulate("model_templates.jansen_rit.simple_jansenrit.JRC_delaycoupled", vectorize=True,
                       inputs={"JRC2/JRC_op/u": inp}, outputs={"r": "JRC1/JRC_op/PSP_ein"}, backend=b,
                       solver='euler', step_size=dt, clear=True, simulation_time=T, sampling_step_size=dts,
-                      file_name=f'novec{i + 1}'
-                      )
+                      file_name=f'novec{i + 1}')
 
         assert np.mean(r1.values - r2.values) == pytest.approx(0.0, rel=1e-4, abs=1e-4)
 
