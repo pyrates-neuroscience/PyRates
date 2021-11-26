@@ -13,6 +13,11 @@ from pyrates import simulate
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
 
+# set backends to run the tests for
+backends = ['default']
+
+# set accuracy for all tests
+accuracy = 1e-4
 
 ###########
 # Utility #
@@ -61,9 +66,6 @@ def test_2_1_operator():
     :method:`add_operator`: Detailed documentation of method for adding operations to instance of `ComputeGraph`.
     """
 
-    backends = ["fortran", "numpy"]
-    accuracy = 1e-4
-
     # simulation parameters
     dt = 1e-1
     sim_time = 10.0
@@ -77,8 +79,7 @@ def test_2_1_operator():
 
         # simulate operator behavior
         results = simulate("model_templates.test_resources.test_backend.net0", simulation_time=sim_time, step_size=dt,
-                           outputs={'a': 'pop0/op0/a'}, vectorize=True, backend=b, clear=True,
-                           apply_kwargs={'backend_kwargs': {'name': 'net_0'}})
+                           outputs={'a': 'pop0/op0/a'}, vectorize=True, backend=b, clear=True, file_name='net0')
 
         # generate target values
         update0_1 = lambda x: x * 0.5
@@ -87,13 +88,6 @@ def test_2_1_operator():
         for i in range(sim_steps-1):
             targets[i + 1, 0] = targets[i, 0] + dt * update0_0(targets[i, 1])
             targets[i + 1, 1] = targets[i, 1] + dt * update0_1(targets[i, 0])
-
-        # compare results with target values
-        import matplotlib.pyplot as plt
-        plt.plot(results['a'].values[:])
-        plt.plot(targets[:, 1])
-        plt.legend(['r', 't'])
-        plt.show()
 
         diff = results['a'].values[:] - targets[:, 1]
         assert np.mean(np.abs(diff)) == pytest.approx(0., rel=accuracy, abs=accuracy)
@@ -104,7 +98,7 @@ def test_2_1_operator():
         # simulate operator behavior
         results = simulate("model_templates.test_resources.test_backend.net1", simulation_time=sim_time, step_size=dt,
                            inputs={'pop0/op1/u': inp}, outputs={'a': 'pop0/op1/a'}, vectorize=True, backend=b,
-                           clear=True, apply_kwargs={'backend_kwargs': {'name': 'net_1'}})
+                           clear=True, file_name='net1')
 
         # calculate operator behavior from hand
         update1 = lambda x, y: x + dt * (y - x)
@@ -120,7 +114,7 @@ def test_2_1_operator():
 
         results = simulate("model_templates.test_resources.test_backend.net2", simulation_time=sim_time,
                            outputs={'a': 'pop0/op2/a'}, step_size=dt, vectorization=True, backend=b,
-                           clear=True, apply_kwargs={'backend_kwargs': {'name': 'net_2'}})
+                           clear=True, file_name='net_2')
 
         # calculate operator behavior from hand
         update2 = lambda x: 1. / (1. + np.exp(-x))
@@ -137,8 +131,7 @@ def test_2_1_operator():
 
         results = simulate("model_templates.test_resources.test_backend.net3", simulation_time=sim_time,
                            outputs={'b': 'pop0/op3/b'}, inputs={'pop0/op3/u': inp}, out_dir="/tmp/log",
-                           step_size=dt, vectorization=True, backend=b, clear=True,
-                           apply_kwargs={'backend_kwargs': {'name': 'net_3'}})
+                           step_size=dt, vectorization=True, backend=b, clear=True, file_name='net_3')
 
         # calculate operator behavior from hand
         update3_0 = lambda a, b, u: a + dt * (-10. * a + b ** 2 + u)
@@ -160,12 +153,9 @@ def test_2_2_node():
     :method:`add_node`: Detailed documentation of method for adding nodes to instance of `ComputeGraph`.
     """
 
-    backends = ['numpy', 'fortran']
-
     dt = 1e-1
     sim_time = 10.
     sim_steps = int(np.round(sim_time/dt))
-    accuracy = 1e-4
 
     for b in backends:
 
@@ -251,8 +241,6 @@ def test_2_3_edge():
 
     """
 
-    backends = ['numpy', 'fortran']
-    accuracy = 1e-4
     dt = 1e-1
     sim_time = 10.
     sim_steps = int(np.round(sim_time/dt))
@@ -305,28 +293,24 @@ def test_2_3_edge():
         # test correct numerical evaluation of graph with 2 bidirectionally delay-coupled nodes
         #######################################################################################
 
-        try:
-            results = simulate("model_templates.test_resources.test_backend.net10", simulation_time=sim_time,
-                               outputs={'a': 'pop0/op8/a', 'b': 'pop1/op8/a'}, step_size=dt, vectorization=True,
-                               backend=b, clear=True)
+        results = simulate("model_templates.test_resources.test_backend.net10", simulation_time=sim_time,
+                           outputs={'a': 'pop0/op8/a', 'b': 'pop1/op8/a'}, step_size=dt, vectorization=True,
+                           backend=b, clear=True)
 
-            # calculate edge behavior from hand
-            delay0 = int(0.5 / dt)
-            delay1 = int(1. / dt)
-            targets = np.zeros((sim_steps, 2), dtype=np.float32)
-            update4 = lambda x, y: x + dt * (2.0 + y)
-            for i in range(sim_steps-1):
-                inp0 = 0. if i < delay0 else targets[i - delay0, 1]
-                inp1 = 0. if i < delay1 else targets[i - delay1, 0]
-                targets[i + 1, 0] = update4(targets[i, 0], inp0 * 0.5)
-                targets[i + 1, 1] = update4(targets[i, 1], inp1 * 2.0)
+        # calculate edge behavior from hand
+        delay0 = int(0.5 / dt)
+        delay1 = int(1. / dt)
+        targets = np.zeros((sim_steps, 2), dtype=np.float32)
+        update4 = lambda x, y: x + dt * (2.0 + y)
+        for i in range(sim_steps-1):
+            inp0 = 0. if i < delay0 else targets[i - delay0, 1]
+            inp1 = 0. if i < delay1 else targets[i - delay1, 0]
+            targets[i + 1, 0] = update4(targets[i, 0], inp0 * 0.5)
+            targets[i + 1, 1] = update4(targets[i, 1], inp1 * 2.0)
 
-            diff = np.mean(np.abs(results['a'].values[:] - targets[:, 0])) + \
-                   np.mean(np.abs(results['b'].values[:] - targets[:, 1]))
-            assert diff == pytest.approx(0., rel=accuracy, abs=accuracy)
-
-        except NotImplementedError:
-            pass
+        diff = np.mean(np.abs(results['a'].values[:] - targets[:, 0])) + \
+               np.mean(np.abs(results['b'].values[:] - targets[:, 1]))
+        assert diff == pytest.approx(0., rel=accuracy, abs=accuracy)
 
         # test correct numerical evaluation of graph with delay distributions
         #####################################################################
@@ -352,8 +336,6 @@ def test_2_4_solver():
     `NumpyBackend`.
     """
 
-    backends = ['numpy', 'fortran']
-
     # define input
     dt = 1e-3
     sim_time = 100.
@@ -365,16 +347,14 @@ def test_2_4_solver():
         # standard euler solver (trusted)
         r = simulate("model_templates.test_resources.test_backend.net13", simulation_time=sim_time,
                      outputs={'a1': 'p1/op9/a', 'a2': 'p2/op10/a'}, inputs={'p1/op9/I_ext': inp},
-                     vectorization=True, step_size=dt, backend=b, solver='euler', clear=True,
-                     apply_kwargs={'backend_kwargs': {'file_name': 'euler_solver'}})
+                     vectorization=True, step_size=dt, backend=b, solver='euler', clear=True, file_name='euler_solver')
 
         # scipy solver (tested)
         r2 = simulate("model_templates.test_resources.test_backend.net13", simulation_time=sim_time,
                       outputs={'a1': 'p1/op9/a', 'a2': 'p2/op10/a'}, inputs={'p1/op9/I_ext': inp}, method='RK23',
-                      vectorization=True, step_size=dt, backend=b, solver='scipy', clear=True,
-                      apply_kwargs={'backend_kwargs': {'file_name': 'scipy_solver'}})
+                      vectorization=True, step_size=dt, backend=b, solver='scipy', clear=True, file_name='scipy_solver')
 
-        assert np.mean(r.loc[:, 'a2'].values - r2.loc[:, 'a2'].values) == pytest.approx(0., rel=1e-4, abs=1e-4)
+        assert np.mean(r.loc[:, 'a2'].values - r2.loc[:, 'a2'].values) == pytest.approx(0., rel=accuracy, abs=accuracy)
 
 
 def test_2_5_inputs_outputs():
@@ -385,8 +365,6 @@ def test_2_5_inputs_outputs():
     :method:`CircuitIR.run` detailed documentation of how to use the arguments `inputs` and `outputs`.
 
     """
-
-    backends = ['fortran', 'numpy']
 
     dt = 1e-3
     sim_time = 100.
@@ -401,8 +379,7 @@ def test_2_5_inputs_outputs():
         # perform simulation
         r1 = simulate("model_templates.test_resources.test_backend.net13", simulation_time=sim_time,
                       outputs={'a1': 'p1/op9/a'}, inputs={'p1/op9/I_ext': inp}, vectorization=True, step_size=dt,
-                      backend=b, solver='scipy', clear=True, method='RK45', atol=1e-7, rtol=1e-6,
-                      apply_kwargs={'backend_kwargs': {'file_name': 'inout_1'}})
+                      backend=b, solver='scipy', clear=True, method='RK45', atol=1e-7, rtol=1e-6, file_name='inout_1')
 
         # define input and output for both populations simultaneously
         #############################################################
@@ -410,10 +387,9 @@ def test_2_5_inputs_outputs():
         # perform simulation
         r2 = simulate("model_templates.test_resources.test_backend.net13", simulation_time=sim_time, outputs=['all/op9/a'],
                       inputs={'all/op9/I_ext': inp}, vectorization=True, step_size=dt, backend=b, solver='scipy',
-                      clear=True, method='RK45', atol=1e-7, rtol=1e-6,
-                      apply_kwargs={'backend_kwargs': {'file_name': 'inout_2'}})
+                      clear=True, method='RK45', atol=1e-7, rtol=1e-6, file_name='inout_2')
 
-        assert np.mean(r1.values.flatten() - r2.values.flatten()) == pytest.approx(0., rel=1e-4, abs=1e-4)
+        assert np.mean(r1.values.flatten() - r2.values.flatten()) == pytest.approx(0., rel=accuracy, abs=accuracy)
 
         # repeat in a network with 2 hierarchical levels of node organization
         #####################################################################
@@ -426,16 +402,15 @@ def test_2_5_inputs_outputs():
                       step_size=dt, backend=b, solver='scipy', clear=True, method='RK45', atol=1e-7, rtol=1e-6,
                       outputs={'a1': 'c1/p1/op9/a', 'a2': 'c1/p2/op10/a', 'a3': 'c2/p1/op9/a', 'a4': 'c2/p2/op10/a'},
                       inputs={'c1/p1/op9/I_ext': inp, 'c1/p2/op10/I_ext': inp2, 'c2/p1/op9/I_ext': inp,
-                              'c2/p2/op10/I_ext': inp2}, apply_kwargs={'backend_kwargs': {'file_name': 'inout_3'}})
+                              'c2/p2/op10/I_ext': inp2}, file_name='inout_3')
 
         # perform simulation
         r2 = simulate("model_templates.test_resources.test_backend.net14", simulation_time=sim_time,
                       outputs={'a1': 'all/all/op9/a', 'a2': 'all/all/op10/a'}, method='RK45', atol=1e-7, rtol=1e-6,
                       inputs={'all/all/op9/I_ext': inp, 'all/all/op10/I_ext': inp2},
-                      vectorization=True, step_size=dt, backend=b, solver='scipy', clear=True,
-                      apply_kwargs={'backend_kwargs': {'file_name': 'inout_4'}})
+                      vectorization=True, step_size=dt, backend=b, solver='scipy', clear=True, file_name='inout_4')
 
-        assert np.mean(r1.values.flatten() - r2.values.flatten()) == pytest.approx(0., rel=1e-4, abs=1e-4)
+        assert np.mean(r1.values.flatten() - r2.values.flatten()) == pytest.approx(0., rel=accuracy, abs=accuracy)
 
 
 def test_2_6_vectorization():
@@ -469,7 +444,7 @@ def test_2_6_vectorization():
                       solver='euler', step_size=dt, clear=True, simulation_time=T, sampling_step_size=dts,
                       file_name=f'novec{i + 1}')
 
-        assert np.mean(r1.values - r2.values) == pytest.approx(0.0, rel=1e-4, abs=1e-4)
+        assert np.mean(r1.values - r2.values) == pytest.approx(0.0, rel=accuracy, abs=accuracy)
 
 
 def test_2_7_backends():
@@ -480,22 +455,18 @@ def test_2_7_backends():
     :method:`CircuitIR.__init__` for documentation of the available backend options.
     """
 
-    backends = ['fortran']
-
     dt = 5e-4
     dts = 1e-3
     T = 10.
 
     r0 = simulate("model_templates.montbrio.simple_montbrio.QIF_sfa", simulation_time=T, sampling_step_size=dts,
                   inputs=None, outputs={"r": "p/Op_sfa/r"}, solver='euler', step_size=dt, clear=True,
-                  apply_kwargs={'backend_kwargs': {'file_name': 'm0'}})
+                  file_name='m0')
 
     for i, b in enumerate(backends):
 
         r = simulate("model_templates.montbrio.simple_montbrio.QIF_sfa",
                      inputs=None, outputs={"r": "p/Op_sfa/r"}, backend=b, solver='euler', step_size=dt, clear=True,
-                     simulation_time=T, sampling_step_size=dts,
-                     apply_kwargs={'backend_kwargs': {'file_name': f'm{i+1}', 'auto_dir': '~/PycharmProjects/auto-07p'}}
-                     )
+                     simulation_time=T, sampling_step_size=dts, file_name=f'm{i+1}')
 
-        assert np.mean(r0.values - r.values) == pytest.approx(0.0, rel=1e-4, abs=1e-4)
+        assert np.mean(r0.values - r.values) == pytest.approx(0.0, rel=accuracy, abs=accuracy)

@@ -578,16 +578,19 @@ class ComputeGraph(MultiDiGraph):
             for expr_old, expr_new in kwargs.items():
                 expr = expr.replace(Function(expr_old), Function(expr_new))
 
-            return expr_args, expr
-
         # case II: node is a simple variable or constant
         except AttributeError:
 
             # add constants to the expression arguments list
             if node.is_constant:
                 expr_args.append(n)
+                expr = node.symbol
+            elif 'dummy_constant' in node.name:
+                expr = Symbol(str(float(node.value)))
+            else:
+                expr = node.symbol
 
-            return expr_args, node.symbol
+        return expr_args, expr
 
     def _process_var_update(self, var: str, update: str) -> tuple:
 

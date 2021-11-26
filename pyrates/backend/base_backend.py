@@ -244,10 +244,10 @@ class BaseBackend(CodeGen):
             # replace `index` calls with brackets-based indexing
             start = expr_str.find('pr_axis_index(')
             end = expr_str[start:].find(')') + 1
-            if len(expr.args) == 1:
+            if len(expr.args) < 2:
                 expr_str = expr_str.replace(expr_str[start:start + end], f"{expr.args[0]}{self.create_index_str(':')}")
             else:
-                idx = tuple([':' for _ in range(expr.args[2])] + [expr.args[1]])
+                idx = ','.join([':' for _ in range(expr.args[2])] + [f"{expr.args[1]}"])
                 expr_str = expr_str.replace(expr_str[start:start + end], f"{expr.args[0]}{self.create_index_str(idx)}")
 
         while 'pr_identity(' in expr_str:
@@ -268,6 +268,7 @@ class BaseBackend(CodeGen):
                     idx[i] += self._start_idx
                 except TypeError:
                     pass
+            idx = tuple([f"{i}" for i in idx])
             return f"{self._idx_left}{separator.join(idx)}{self._idx_right}"
 
         # case: single index

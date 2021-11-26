@@ -246,11 +246,12 @@ class ExpressionParser:
 
         # extract symbols and operations from equations right-hand side
         self.expr_stack = self.parse_func(self.rhs)
-        if is_boolean(self.expr_stack) or self.expr_stack.is_number:
+        if self.expr_stack.is_number:
             c = f"dummy_constant_{self._constant_counter}"
             expr = f"no_op({c})"
             self.vars[c] = {'vtype': 'input',
-                            'value': self.expr_stack if is_boolean(self.expr_stack) else float(self.expr_stack)}
+                            'value': float(self.expr_stack),
+                            'shape': ()}
             self.expr_stack = self.parse_func(expr)
             self._constant_counter += 1
         if self.expr_stack.is_symbol:
@@ -720,7 +721,3 @@ def get_unique_label(label: str, labels: list) -> str:
         except ValueError:
             label = f"{label}_0"
     return label
-
-
-def is_boolean(v):
-    return type(v) is bool or v.is_Boolean

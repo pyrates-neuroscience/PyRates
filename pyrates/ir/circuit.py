@@ -99,6 +99,34 @@ class NetworkGraph(AbstractBaseIR):
         if verbose:
             print("\t\t...finished.")
 
+    def __getitem__(self, key: str):
+        """
+        Custom implementation of __getitem__ that dissolves strings of form "key1/key2/key3" into
+        lookups of form self[key1][key2][key3].
+
+        Parameters
+        ----------
+        key
+
+        Returns
+        -------
+        item
+        """
+
+        try:
+            return super().__getitem__(key)
+        except KeyError:
+            keys = key.split('/')
+            for i in range(len(keys)):
+                if "/".join(keys[:i+1]) in self.nodes:
+                    break
+            key_iter = iter(['/'.join(keys[:i+1])] + keys[i+1:])
+            key = next(key_iter)
+            item = self.getitem_from_iterator(key, key_iter)
+            for key in key_iter:
+                item = item.getitem_from_iterator(key, key_iter)
+        return item
+
     def add_edge(self, source: str, target: str, edge_ir: EdgeIR = None, weight: float = 1., delay: float = None,
                  spread: float = None, **data):
         """
@@ -425,11 +453,11 @@ class NetworkGraph(AbstractBaseIR):
                 buffer_shape = (target_shape[0], max_delay + 1)
 
             # create buffer variable definitions
-            var_dict = {f'{var}_buffer': {'vtype': 'input',
+            var_dict = {f'{var}_buffer': {'vtype': 'variable',
                                           'dtype': float_precision,
                                           'shape': buffer_shape,
                                           'value': 0.},
-                        f'{var}_buffered': {'vtype': 'state_var',
+                        f'{var}_buffered': {'vtype': 'variable',
                                             'dtype': float_precision,
                                             'shape': (len(delays),),
                                             'value': 0.},
@@ -464,12 +492,12 @@ class NetworkGraph(AbstractBaseIR):
                 buffer_shape = (target_shape[0], len(times))
 
             # create buffer variable definitions
-            var_dict = {f'{var}_buffer': {'vtype': 'state_var',
+            var_dict = {f'{var}_buffer': {'vtype': 'variable',
                                           'dtype': float_precision,
                                           'shape': buffer_shape,
                                           'value': 0.
                                           },
-                        'times': {'vtype': 'state_var',
+                        'times': {'vtype': 'variable',
                                   'dtype': float_precision,
                                   'shape': (len(times),),
                                   'value': np.asarray(times)
@@ -479,7 +507,7 @@ class NetworkGraph(AbstractBaseIR):
                               'shape': (),
                               'value': 0.0
                               },
-                        f'{var}_buffered': {'vtype': 'state_var',
+                        f'{var}_buffered': {'vtype': 'variable',
                                             'dtype': float_precision,
                                             'shape': (len(delays),),
                                             'value': 0.},
@@ -492,7 +520,7 @@ class NetworkGraph(AbstractBaseIR):
                         f'{var}_maxdelay': {'vtype': 'constant',
                                             'dtype': float_precision,
                                             'value': (max_delay_int + 1) * self.step_size},
-                        f'{var}_idx': {'vtype': 'state_var',
+                        f'{var}_idx': {'vtype': 'variable',
                                        'dtype': 'bool',
                                        'value': True}}
 
@@ -836,34 +864,6 @@ class CircuitIR(AbstractBaseIR):
         if verbose:
             print("\t\t...finished.")
             print("\tModel compilation was finished.")
-
-    def __getitem__(self, key: str):
-        """
-        Custom implementation of __getitem__ that dissolves strings of form "key1/key2/key3" into
-        lookups of form self[key1][key2][key3].
-
-        Parameters
-        ----------
-        key
-
-        Returns
-        -------
-        item
-        """
-
-        try:
-            return super().__getitem__(key)
-        except KeyError:
-            keys = key.split('/')
-            for i in range(len(keys)):
-                if "/".join(keys[:i+1]) in self.nodes:
-                    break
-            key_iter = iter(['/'.join(keys[:i+1])] + keys[i+1:])
-            key = next(key_iter)
-            item = self.getitem_from_iterator(key, key_iter)
-            for key in key_iter:
-                item = item.getitem_from_iterator(key, key_iter)
-        return item
 
     def get_var(self, var: str, get_key: bool = False) -> Union[str, ComputeVar]:
         """Extracts variable from the backend (i.e. the `ComputeGraph` instance).

@@ -31,6 +31,9 @@ def setup_module():
 backends = ['default']
 parsers = [ExpressionParser]
 
+# test accuracy
+accuracy = 1e-4
+
 #########
 # Tests #
 #########
@@ -131,7 +134,7 @@ def test_1_3_expression_parser_math_ops():
             p = parser(expr_str=expr, args={}, cg=cg)
             p.parse_expr()
             result = cg.eval_node(cg.var_updates['non-DEs']['x'])
-            assert result == pytest.approx(target, rel=1e-6)
+            assert result == pytest.approx(target, rel=accuracy, abs=accuracy)
 
 
 def test_1_4_expression_parser_funcs():
@@ -175,7 +178,7 @@ def test_1_4_expression_parser_funcs():
             cg = ComputeGraph(backend=backend)
             parser(expr_str=expr, args=deepcopy(args), cg=cg).parse_expr()
             result = cg.eval_node(cg.var_updates['non-DEs']['x'])
-            assert result == pytest.approx(target, rel=1e-6)
+            assert result == pytest.approx(target, rel=accuracy, abs=accuracy)
 
         # invalid cases
         for expr in expressions_wrong[:-1]:
@@ -232,7 +235,7 @@ def test_1_5_expression_parser_indexing():
             cg = ComputeGraph(backend=backend)
             parser(expr_str=expr, args=deepcopy(arg_dict), cg=cg).parse_expr()
             result = cg.eval_node(cg.var_updates['non-DEs']['x'])
-            assert result == pytest.approx(target, rel=1e-6)
+            assert result == pytest.approx(target, rel=accuracy, abs=accuracy)
 
         # test expression parsers on expression results
         for expr in indexed_expressions_wrong:
@@ -276,4 +279,4 @@ def test_1_7_equation_parsing():
             cg = ComputeGraph(backend=backend)
             parse_equations(equations=[(eq, 'node/op')], equation_args=deepcopy(args), cg=cg, def_shape=())
             result = cg.eval_node(cg.var_updates[tvar[0]][tvar[1]])
-            assert result == pytest.approx(target, rel=1e-4)
+            assert result == pytest.approx(target, rel=accuracy, abs=accuracy)
