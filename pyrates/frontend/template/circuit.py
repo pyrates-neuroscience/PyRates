@@ -317,6 +317,7 @@ class CircuitTemplate(AbstractBaseTemplate):
             label = self.name
         if not edge_values:
             edge_values = {}
+        scalar_shape = (1,) if vectorize else ()
 
         # turn nodes from templates into IRs
         ####################################
@@ -422,7 +423,7 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         # instantiate an intermediate representation of the circuit template
         self._ir = CircuitIR(label, nodes=nodes, edges=edges, verbose=verbose, adaptive_steps=adaptive_steps,
-                             **kwargs)
+                             scalar_shape=scalar_shape, **kwargs)
 
     def get_nodes(self, node_identifier: Union[str, list, tuple], var_identifier: Optional[tuple] = None) -> list:
         """Extracts nodes from the CircuitTemplate that match the provided identifier.

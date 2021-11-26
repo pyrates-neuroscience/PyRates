@@ -66,27 +66,30 @@ class ComputeNode:
     __slots__ = ["name", "symbol", "dtype", "shape", "_value"]
 
     def __init__(self, name: str, symbol: Union[Symbol, Expr, Function], dtype: Optional[str] = None,
-                 shape: Optional[str] = None):
+                 shape: Optional[str] = None, def_shape: Optional[tuple] = None):
         """Instantiates a basic node of a ComputeGraph instance.
         """
 
         self.name = name
         self.symbol = symbol
         self.dtype = dtype
-        self.shape = shape
-        self._value = self._get_value(shape=shape, dtype=dtype)
+        self.shape = self._get_shape(shape, def_shape)
+        self._value = self._get_value(shape=self.shape, dtype=self.dtype)
 
     def reshape(self, shape: tuple, **kwargs):
 
         self._value = self.value.reshape(shape, **kwargs)
+        self.shape = shape
         return self
 
     def squeeze(self, axis=None):
         self._value = self.value.squeeze(axis=axis)
+        self.shape = self._value.shape
         return self
 
     def set_value(self, v: Union[float, np.ndarray]):
         self._value = v
+        self.shape = self.value.shape
 
     @property
     def value(self):
@@ -104,8 +107,7 @@ class ComputeNode:
                 return False
         return True
 
-    @staticmethod
-    def _get_value(value: Optional[Union[list, np.ndarray]] = None, dtype: Optional[str] = None,
+    def _get_value(self, value: Optional[Union[list, np.ndarray]] = None, dtype: Optional[str] = None,
                    shape: Optional[tuple] = None):
         """Defines initial value of variable.
         """
@@ -117,11 +119,11 @@ class ComputeNode:
         # case II: transform values into an array
         if not hasattr(value, 'shape'):
             if type(value) is list:
-                return np.asarray(value, dtype=dtype).reshape(shape)
+                return self._get_value(value=np.asarray(value, dtype=dtype), dtype=dtype, shape=shape)
             return np.zeros(shape=shape, dtype=dtype) + value
 
         # case III: match given shape with the shape of the given value array
-        if shape:
+        if shape is not None:
             if value.shape == shape:
                 return value
             if sum(shape) < sum(value.shape):
@@ -131,6 +133,12 @@ class ComputeNode:
 
         # case IV: just ensure the correct data type of the value array
         return np.asarray(value, dtype=dtype)
+
+    @staticmethod
+    def _get_shape(s: Union[tuple, None], s_def: Union[tuple, None]):
+        if s is None or sum(s) < 2:
+            return s_def
+        return s
 
     def __deepcopy__(self, memodict: dict):
         node = ComputeNode(name=self.name, symbol=self.symbol, dtype=self.dtype, shape=self.shape)
@@ -151,14 +159,15 @@ class ComputeVar(ComputeNode):
     __slots__ = ComputeNode.__slots__ + ["vtype"]
 
     def __init__(self, name: str, symbol: Union[Symbol, Expr, Function], vtype: str, dtype: Optional[str] = None,
-                 shape: Optional[str] = None, value: Optional[Union[list, np.ndarray]] = None):
+                 shape: Optional[str] = None, value: Optional[Union[list, np.ndarray]] = None,
+                 def_shape: Optional[tuple] = None):
 
         # set attributes
-        super().__init__(name=name, symbol=symbol, dtype=dtype, shape=shape)
+        super().__init__(name=name, symbol=symbol, dtype=dtype, shape=shape, def_shape=def_shape)
         self.vtype = vtype
 
         # adjust variable value
-        self._value = self._get_value(value=value, shape=shape, dtype=dtype)
+        self.set_value(self._get_value(value=value, shape=self.shape, dtype=self.dtype))
 
     @property
     def is_constant(self):
@@ -321,22 +330,24 @@ class ComputeGraph(MultiDiGraph):
         # create state variable vector and state variable update vector
         ###############################################################
 
-        variables, updates, old_state_vars = [], [], []
+        variables = []
         idx = 0
         for var, update in self.var_updates['DEs'].items():
 
-            # extract left-hand side and right-hand side nodes from graph
+            # extract left-hand side nodes from graph
             lhs, rhs = self._process_var_update(var, update)
-            variables.append(lhs.value), updates.append(rhs)
+            variables.append(lhs.value)
 
             # store information of the original, non-vectorized state variable
-            old_state_vars.append(var)
-            vshape = sum(lhs.shape)
+            vshape = max(sum(lhs.shape), 1)
             self._state_var_indices[var] = (idx, idx+vshape) if vshape > 1 else idx
             idx += vshape
 
         # add vectorized state variables and updates to the backend
-        state_vec = self.ops['concat']['func'](variables, axis=0)
+        try:
+            state_vec = self.ops['concat']['func'](variables, axis=0)
+        except ValueError:
+            state_vec = self.ops['cast']['func'](variables)
         state_var_key, y = self.add_var(label='y', vtype='state_var', value=state_vec)
         rhs_var_key, dy = self.add_var(label='dy', vtype='state_var', value=np.zeros_like(state_vec))
 
@@ -585,15 +596,15 @@ class ComputeGraph(MultiDiGraph):
         rhs = self.eval_node(update)
 
         # extract common shape
-        if not lhs.shape:
-            lhs.reshape((1,))
-        if not rhs.shape:
-            rhs = np.reshape(rhs, (1,))
         if lhs.shape == rhs.shape:
             return lhs, rhs
-        raise ValueError(
-            f"Shapes of state variable {var} and its right-hand side update {rhs.expr} do not"
-            " match.")
+        try:
+            rhs = np.reshape(rhs, lhs.shape)
+            return lhs, rhs
+        except ValueError:
+            raise ValueError(
+                f"Shapes of state variable {var} and its right-hand side update {self.get_var(update).expr} do not"
+                " match.")
 
     def _sort_var_updates(self, nodes: dict, differential_equations: bool = True) -> tuple:
 

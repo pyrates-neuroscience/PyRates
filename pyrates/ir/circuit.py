@@ -789,12 +789,12 @@ class CircuitIR(AbstractBaseIR):
     """Custom graph data structure that represents a backend of nodes and edges with associated equations
     and variables."""
 
-    __slots__ = ["label", "_front_to_back", "graph", "_t", "_verbose", "_dt", "_dt_adapt"]
+    __slots__ = ["label", "_front_to_back", "graph", "_t", "_verbose", "_dt", "_dt_adapt", "_def_shape"]
 
     def __init__(self, label: str = "circuit", nodes: Dict[str, NodeIR] = None, edges: list = None,
                  template: str = None, step_size_adaptation: bool = False, step_size: float = None,
                  verbose: bool = True, float_precision: str = 'float64', backend: str = None,
-                 **kwargs):
+                 scalar_shape: tuple = None, **kwargs):
         """
         Parameters:
         -----------
@@ -820,6 +820,7 @@ class CircuitIR(AbstractBaseIR):
         self._front_to_back = dict()
         self._dt = step_size
         self._dt_adapt = step_size_adaptation
+        self._def_shape = (1,) if scalar_shape is None else scalar_shape
 
         # translate the network into a networkx graph
         net = NetworkGraph(nodes=nodes, edges=edges, label=label, step_size=step_size,
@@ -1133,7 +1134,7 @@ class CircuitIR(AbstractBaseIR):
                     op_eqs, op_vars = self._collect_ops(ops_tmp, node_name=node_name, graph=net, compute_graph=cg)
 
                     # parse equations and variables into computegraph
-                    variables = parse_equations(op_eqs, op_vars, cg=cg, **kwargs)
+                    variables = parse_equations(op_eqs, op_vars, cg=cg, def_shape=self._def_shape, **kwargs)
 
                     # remember mapping between frontend variable names and node keys in compute graph
                     for key, var in variables.items():

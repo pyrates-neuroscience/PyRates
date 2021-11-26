@@ -211,7 +211,7 @@ class ExpressionParser:
 
     _constant_counter = 0
 
-    def __init__(self, expr_str: str, args: dict, cg: ComputeGraph, method: str = 'sympy') -> None:
+    def __init__(self, expr_str: str, args: dict, cg: ComputeGraph, def_shape: tuple, method: str = 'sympy') -> None:
         """Instantiates expression parser.
         """
         
@@ -232,6 +232,7 @@ class ExpressionParser:
         self.expr_str = expr_str
         self.expr_stack = []
         self.cg = cg
+        self._def_shape = def_shape
 
     def parse_expr(self) -> dict:
         """Parses string-based mathematical expression/equation.
@@ -285,7 +286,7 @@ class ExpressionParser:
                     else:
 
                         # if not parsed already, parse variable into backend
-                        label, var = self.cg.add_var(label=arg.name, **var)
+                        label, var = self.cg.add_var(label=arg.name, def_shape=self._def_shape, **var)
                         self.vars[arg.name] = var
 
                 else:
@@ -389,7 +390,7 @@ class ExpressionParser:
 
             # create backend state variable if it does not exist already
             if not isinstance(v, ComputeNode):
-                _, v = self.cg.add_var(label=lhs_key, **v)
+                _, v = self.cg.add_var(label=lhs_key, def_shape=self._def_shape, **v)
 
         else:
 
@@ -406,7 +407,7 @@ class ExpressionParser:
 ################################
 
 
-def parse_equations(equations: list, equation_args: dict, cg: ComputeGraph, **kwargs) -> dict:
+def parse_equations(equations: list, equation_args: dict, cg: ComputeGraph, def_shape: tuple, **kwargs) -> dict:
     """Parses a system (list) of equations into the backend. Transforms differential equations into the appropriate set
     of right-hand side evaluations that can be solved later on.
 
@@ -418,6 +419,8 @@ def parse_equations(equations: list, equation_args: dict, cg: ComputeGraph, **kw
         Key-value pairs of arguments needed for parsing the equations.
     cg
         ComputeGraph instance that all equations will be parsed into.
+    def_shape
+        Default shape of variables that are scalar. Can either be `(1,)` or `()`.
     kwargs
         Additional keyword arguments to be passed to the backend methods.
 
@@ -492,7 +495,7 @@ def parse_equations(equations: list, equation_args: dict, cg: ComputeGraph, **kw
         instantaneous = is_diff_eq(eq) is False
 
         # initialize parser
-        parser = ExpressionParser(expr_str=eq, args=op_args, cg=cg, **kwargs)
+        parser = ExpressionParser(expr_str=eq, args=op_args, cg=cg, def_shape=def_shape, **kwargs)
 
         # parse expression into compute graph
         variables = parser.parse_expr()
