@@ -73,8 +73,9 @@ class ComputeNode:
         self.name = name
         self.symbol = symbol
         self.dtype = dtype
+        self._value = np.zeros(())
         self.shape = self._get_shape(shape, def_shape)
-        self._value = self._get_value(shape=self.shape, dtype=self.dtype)
+        self._value = np.zeros(self.shape)
 
     def reshape(self, shape: tuple, **kwargs):
 
@@ -124,6 +125,7 @@ class ComputeNode:
 
         # case III: match given shape with the shape of the given value array
         if shape is not None:
+            value = np.asarray(value, dtype=dtype)
             if value.shape == shape:
                 return value
             if sum(shape) < sum(value.shape):
@@ -339,9 +341,13 @@ class ComputeGraph(MultiDiGraph):
             variables.append(lhs.value)
 
             # store information of the original, non-vectorized state variable
-            vshape = max(sum(lhs.shape), 1)
-            self._state_var_indices[var] = (idx, idx+vshape) if vshape > 1 else idx
-            idx += vshape
+            vshape = sum(lhs.shape)
+            if vshape >= 1:
+                self._state_var_indices[var] = (idx, idx+vshape)
+                idx += vshape
+            else:
+                self._state_var_indices[var] = idx
+                idx += 1
 
         # add vectorized state variables and updates to the backend
         try:
@@ -391,10 +397,10 @@ class ComputeGraph(MultiDiGraph):
         solver = kwargs.pop('solver', 'euler')
 
         # extract state vector
-        y = self.get_var('y').value
+        y = self.backend.get_var(self.get_var('y'))
 
         # extract required function arguments from graph
-        args = tuple(self.get_var(v).value for v in func_args[2:])
+        args = tuple(self.backend.get_var(self.get_var(v)) for v in func_args[2:])
 
         # call backend method
         return self.backend.run(func=func, func_args=args, T=T, dt=dt, dts=dts, y0=y, outputs=outputs, solver=solver,
@@ -503,13 +509,22 @@ class ComputeGraph(MultiDiGraph):
         nodes, updates, defined_vars = self._sort_var_updates(nodes=nodes, differential_equations=differential_equations)
 
         # collect right-hand side expression and all input variables to these expressions
-        func_args, expressions, var_names = [], [], []
+        func_args, expressions, var_names, rhs_shapes, lhs_indices = [], [], [], [], []
         for node, update in zip(nodes, updates):
 
             # collect expression and variables of right-hand side of equation
             expr_args, expr = self._node_to_expr(update, **funcs)
             func_args.extend(expr_args)
-            expressions.append(self.backend.expr_to_str(expr))
+            expressions.append(self._expr_to_str(expr))
+
+            # collect shape of the right-hand side variable
+            v = self.get_var(update)
+            try:
+                v_eval = self.eval_node(update)
+                v.set_value(v_eval)
+            except IndexError:
+                pass
+            rhs_shapes.append(v.shape)
 
             # process left-hand side of equation
             var = self.get_var(node)
@@ -520,14 +535,17 @@ class ComputeGraph(MultiDiGraph):
                 if lhs.args[0].name not in defined_vars:
                     idx_args.append(lhs.args[0].name)
                 func_args.extend(idx_args)
-                lhs_var = self.backend.expr_to_str(lhs)
+                lhs_var_indexed = self._expr_to_str(lhs)
+                lhs_var, idx = lhs_var_indexed[:-1].split("[")
 
             else:
 
                 # process normal update of left-hand side variable
                 lhs_var = var.name
+                idx = None
 
             var_names.append(lhs_var)
+            lhs_indices.append(idx)
 
         # add the left-hand side assignments of the collected right-hand side expressions to the code generator
         if differential_equations:
@@ -538,8 +556,8 @@ class ComputeGraph(MultiDiGraph):
                                  'have to be passed to this method.')
 
             # DE updates stored in a state-vector
-            for idx, expr in zip(indices, expressions):
-                code_gen.add_code_line(f"dy{code_gen.create_index_str(idx)} = {expr}")
+            for idx, expr, shape in zip(indices, expressions, rhs_shapes):
+                code_gen.add_var_update(lhs="dy", rhs=expr, lhs_idx=idx, rhs_shape=shape)
 
             # add rhs var to function arguments
             func_args = ['dy'] + func_args
@@ -550,10 +568,11 @@ class ComputeGraph(MultiDiGraph):
             if indices:
                 raise ValueError('Indices to non-state variables should be defined in the respective equations, not'
                                  'be passed to this method.')
+            indices = lhs_indices
 
             # non-DE update stored in a single variable
-            for target_var, expr in zip(var_names, expressions):
-                code_gen.add_code_line(f"{target_var} = {expr}")
+            for target_var, expr, idx, shape in zip(var_names, expressions, indices, rhs_shapes):
+                code_gen.add_var_update(lhs=target_var, rhs=expr, lhs_idx=idx, rhs_shape=shape)
 
         return func_args, defined_vars
 
@@ -592,6 +611,67 @@ class ComputeGraph(MultiDiGraph):
 
         return expr_args, expr
 
+    def _expr_to_str(self, expr: Any, expr_str: str = None) -> str:
+
+        create_index_str = self.backend.create_index_str
+
+        if not expr_str:
+            expr_str = str(expr)
+            for arg in expr.args:
+                expr_str = expr_str.replace(str(arg), self._expr_to_str(arg))
+
+        while 'pr_base_index(' in expr_str:
+
+            # replace `index` calls with brackets-based indexing
+            start = expr_str.find('pr_base_index(')
+            end = expr_str[start:].find(')') + 1
+            v = expr.args[0]
+            idx = self._process_idx(var=v.name, idx=expr.args[1])
+            expr_str = expr_str.replace(expr_str[start:start+end], f"{v}{create_index_str(idx)}")
+
+        while 'pr_2d_index(' in expr_str:
+
+            # replace `index` calls with brackets-based indexing
+            start = expr_str.find('pr_2d_index(')
+            end = expr_str[start:].find(')') + 1
+            v = expr.args[0]
+            idx = (self._process_idx(var=v.name, idx=expr.args[1]),
+                   self._process_idx(var=v.name, idx=expr.args[2]))
+            expr_str = expr_str.replace(expr_str[start:start + end], f"{v}{create_index_str(idx)}")
+
+        while 'pr_range_index(' in expr_str:
+
+            # replace `index` calls with brackets-based indexing
+            start = expr_str.find('pr_range_index(')
+            end = expr_str[start:].find(')') + 1
+            v = expr.args[0]
+            idx = (self._process_idx(var=v.name, idx=expr.args[1]),
+                   self._process_idx(var=v.name, idx=expr.args[2]))
+            expr_str = expr_str.replace(expr_str[start:start + end], f"{v}{create_index_str(idx, separator=':')}")
+
+        while 'pr_axis_index(' in expr_str:
+
+            # replace `index` calls with brackets-based indexing
+            start = expr_str.find('pr_axis_index(')
+            end = expr_str[start:].find(')') + 1
+            v = expr.args[0]
+            if len(expr.args) < 2:
+                idx = self._process_idx(var=v.name, idx=':')
+                expr_str = expr_str.replace(expr_str[start:start + end], f"{v}{create_index_str(idx)}")
+            else:
+                idx = self._process_idx(var=v.name,
+                                        idx=','.join([':' for _ in range(expr.args[2])] + [f"{expr.args[1]}"]))
+                expr_str = expr_str.replace(expr_str[start:start + end], f"{v}{create_index_str(idx)}")
+
+        while 'pr_identity(' in expr_str:
+
+            # replace `no_op` calls with first argument to the function call
+            start = expr_str.find('pr_identity(')
+            end = expr_str[start:].find(')') + 1
+            expr_str = expr_str.replace(expr_str[start:start+end], f"{expr.args[0]}")
+
+        return expr_str
+
     def _process_var_update(self, var: str, update: str) -> tuple:
 
         # extract nodes
@@ -602,7 +682,7 @@ class ComputeGraph(MultiDiGraph):
         if lhs.shape == rhs.shape:
             return lhs, rhs
         try:
-            rhs = np.reshape(rhs, lhs.shape)
+            rhs = rhs.reshape(lhs.shape)
             return lhs, rhs
         except ValueError:
             raise ValueError(
@@ -646,6 +726,15 @@ class ComputeGraph(MultiDiGraph):
         for inp in self.predecessors(n):
             inputs.extend([inp] if isinstance(self.get_var(inp), ComputeVar) else self._get_inputs(inp))
         return inputs
+
+    def _process_idx(self, var: str, idx: str):
+        v = self.get_var(var)
+        try:
+            idx = self.get_var(idx)
+        except KeyError:
+            pass
+        idx = self.backend.process_idx(v=v, idx=idx)
+        return idx
 
     def _prune(self):
 

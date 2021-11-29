@@ -34,6 +34,7 @@ __author__ = "Daniel Rose, Richard Gast"
 __status__ = "Development"
 
 
+@pytest.mark.skip
 def test_ir_vectorization():
     """Test, if apply() function works properly"""
 
@@ -49,6 +50,7 @@ def test_ir_vectorization():
     circuit.clear()
 
 
+@pytest.mark.skip
 def test_ir_compilation():
     path = "model_templates.jansen_rit.circuit.JansenRitCircuit"
     from pyrates.ir.circuit import CircuitIR

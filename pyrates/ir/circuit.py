@@ -63,7 +63,7 @@ class NetworkGraph(AbstractBaseIR):
 
     def __init__(self, label: str = "circuit", nodes: Dict[str, NodeIR] = None, edges: list = None,
                  template: str = None, step_size: float = 1e-3, step_size_adaptation: bool = True, verbose: bool = True,
-                 float_precision: str = "float64", **kwargs):
+                 float_precision: str = "float32", **kwargs):
 
         # TODO: differentiate between vectorized and non-vectorized NetworkGraph
 
@@ -169,7 +169,7 @@ class NetworkGraph(AbstractBaseIR):
     def getitem_from_iterator(self, key: str, key_iter: Iterator[str]):
         return self.graph.nodes[key]["node"]
 
-    def _preprocess_edge_operations(self, float_precision: str = "float64", dde_approx: int = 0, **kwargs):
+    def _preprocess_edge_operations(self, float_precision: str = "float32", dde_approx: int = 0, **kwargs):
         """Restructures network graph to collapse nodes and edges that share the same operator graphs. Variable values
         get an additional vector dimension. References to the respective index is saved in the internal `label_map`."""
 
@@ -198,8 +198,8 @@ class NetworkGraph(AbstractBaseIR):
         for source, targets in self.graph.adjacency():
             for target, edges in targets.items():
                 for idx, data in edges.items():
-                    self._generate_edge_equation(source_node=source, target_node=target, edge_idx=idx, data=data,
-                                                 **kwargs)
+                    self._generate_edge_equation(source_node=source, target_node=target, data=data,
+                                                 float_precision=float_precision, **kwargs)
 
     def _sort_edges(self, edges: List[tuple], attr: str, data_included: bool = False) -> dict:
         """Sorts edges according to the given edge attribute.
@@ -282,7 +282,7 @@ class NetworkGraph(AbstractBaseIR):
         return means, stds, nodes, add_delay
 
     def _add_edge_buffer(self, node: str, op: str, var: str, edges: list, delays: list, nodes: list,
-                         spreads: Optional[list] = None, dde_approx: int = 0, float_precision: str = "float_precision"
+                         spreads: Optional[list] = None, dde_approx: int = 0, float_precision: str = "float32"
                          ) -> None:
         """Adds a buffer variable to an edge.
 
@@ -564,8 +564,8 @@ class NetworkGraph(AbstractBaseIR):
                 self.edges[s, t, e]['source_idx'] = list(range(idx_l, idx_h))
                 idx_l = idx_h
 
-    def _generate_edge_equation(self, source_node: str, target_node: str, edge_idx: int, data: dict,
-                                matrix_sparseness: float = 0.1, float_precision: str = "float64"):
+    def _generate_edge_equation(self, source_node: str, target_node: str, data: dict,
+                                matrix_sparseness: float = 0.1, float_precision: str = "float32"):
 
         # extract edge information
         weight = data['weight']
@@ -589,14 +589,14 @@ class NetworkGraph(AbstractBaseIR):
             # check whether the weight matrix is dense enough for this edge realization to be efficient
             if 1 - len(weight) / (n * m) < matrix_sparseness and n > 1 and m > 1:
 
-                weight_mat = np.zeros((n, m), dtype=np.float32)
+                weight_mat = np.zeros((n, m))
                 if not tidx:
                     tidx = [0 for _ in range(len(sidx))]
                 for row, col, w in zip(tidx, sidx, weight):
                     weight_mat[row, col] = w
 
                 # set up weights and edge projection equation
-                eq = f"{tvar} = matmul(weight,{svar})"
+                eq = f"{tvar} = matvec(weight,{svar})"
                 weight = weight_mat
                 dot_edge = True
 
@@ -614,7 +614,7 @@ class NetworkGraph(AbstractBaseIR):
         svar_final = f"index({svar},source_idx)" if index_svar else svar
         if not dot_edge:
             if len(d) > 1:
-                eq = f"{tvar} = matmul(target_idx, {svar_final}*weight)"
+                eq = f"{tvar} = matvec(target_idx, {svar_final}*weight)"
             elif len(d):
                 eq = f"index({tvar},target_idx) = {svar_final} * weight"
             else:
@@ -821,7 +821,7 @@ class CircuitIR(AbstractBaseIR):
 
     def __init__(self, label: str = "circuit", nodes: Dict[str, NodeIR] = None, edges: list = None,
                  template: str = None, step_size_adaptation: bool = False, step_size: float = None,
-                 verbose: bool = True, float_precision: str = 'float64', backend: str = None,
+                 verbose: bool = True, float_precision: str = 'float32', backend: str = None,
                  scalar_shape: tuple = None, **kwargs):
         """
         Parameters:
@@ -1278,7 +1278,7 @@ class CircuitIR(AbstractBaseIR):
             try:
                 in_var = var.name
             except AttributeError:
-                in_var = var['symbol'].name
+                in_var = key.split('/')[-1]
             inp = get_unique_label(in_var, inputs_unique)
 
             # store input-related information

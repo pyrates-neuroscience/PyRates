@@ -31,7 +31,8 @@
 
 # pyrates internal imports
 from .base_funcs import *
-from .base_backend import BaseBackend, BaseVar, CodeGen, sort_equations
+from .base_backend import BaseBackend
+from .computegraph import ComputeVar
 
 # external imports
 from typing import Optional, Dict, Callable, List, Any, Union
@@ -40,49 +41,6 @@ import tensorflow as tf
 # meta infos
 __author__ = "Richard Gast"
 __status__ = "development"
-
-
-# Helper Functions
-##################
-
-#################################
-# classes for backend variables #
-#################################
-
-
-class TensorflowVar(BaseVar, tf.Variable):
-    """Class for creating variables via a tensorflow-based PyRates backend.
-    """
-
-    @staticmethod
-    def _get_value(value, dtype, shape):
-        if value is None:
-            return tf.zeros(shape=shape, dtype=dtype)
-        elif not hasattr(value, 'shape'):
-            if type(value) is list:
-                return tf.zeros(shape=shape, dtype=dtype) + tf.reshape(tf.constant(value, dtype=dtype), shape=shape)
-            else:
-                return tf.zeros(shape=shape, dtype=dtype) + value
-        elif shape:
-            return tf.cast(tf.reshape(value, shape=shape), dtype)
-        else:
-            value = tf.constant(value, dtype=tf.float32)
-            return tf.cast(tf.zeros(shape=value.shape, dtype=value.dtype) + value, dtype=dtype)
-
-    @classmethod
-    def _get_var(cls, value, name, dtype):
-        return tf.Variable(value, name=name, dtype=dtype)
-
-    @staticmethod
-    def squeeze(var, **kwargs):
-        return tf.squeeze(var, **kwargs)
-
-    @staticmethod
-    def __subclasscheck__(subclass):
-        if tf.Variable.__subclasscheck__(subclass):
-            return True
-        else:
-            return BaseVar.__subclasscheck__(subclass)
 
 
 #######################################
@@ -115,295 +73,124 @@ class TensorflowBackend(BaseBackend):
 
     """
 
-    create_backend_var = TensorflowVar
-
     def __init__(self,
-                 ops: Optional[Dict[str, Callable]] = None,
+                 ops: Optional[Dict[str, str]] = None,
                  dtypes: Optional[Dict[str, object]] = None,
-                 name: str = 'net_0',
-                 float_default_type: str = 'float32',
                  imports: Optional[List[str]] = None,
+                 **kwargs
                  ) -> None:
         """Instantiates tensorflow backend, i.e. a tensorflow graph.
         """
 
-        if not imports:
-            imports = ["import tensorflow as tf"]
-
-        super().__init__(ops, dtypes, name, float_default_type, imports)
-
-        # define operations and datatypes of the backend
-        ################################################
-
         # base math operations
-        self.ops.update({
-                    "max": {'func': tf.reduce_max, 'str': "tf.reduce_max"},
-                    "min": {'func': tf.reduce_min, 'str': "tf.reduce_min"},
-                    "argmax": {'func': tf.argmax, 'str': "tf.argmax"},
-                    "argmin": {'func': tf.argmin, 'str': "tf.argmin"},
-                    "round": {'func': tf.round, 'str': "tf.round"},
-                    "sum": {'func': tf.reduce_sum, 'str': "tf.reduce_sum"},
-                    "mean": {'func': tf.reduce_mean, 'str': "tf.reduce_mean"},
-                    "matmul": {'func': tf.matmul, 'str': "tf.matmul"},
-                    "concat": {'func': tf.concat, 'str': "tf.concat"},
-                    "reshape": {'func': tf.reshape, 'str': "tf.reshape"},
-                    "shape": {'func': tf.shape, 'str': "tf.shape"},
-                    'squeeze': {'func': tf.squeeze, 'str': "np.squeeze"},
-                    'expand': {'func': tf.expand_dims, 'str': "tf.expand_dims"},
-                    "roll": {'func': tf.roll, 'str': "tf.roll"},
-                    "cast": {'func': tf.Variable, 'str': "tf.Variable"},
-                    "ones": {'func': tf.ones, 'str': "tf.ones"},
-                    "zeros": {'func': tf.zeros, 'str': "tf.zeros"},
-                    "range": {'func': tf.range, 'str': "tf.range"},
-                    "softmax": {'func': tf.math.softmax, 'str': "tf.math.softmax"},
-                    "sigmoid": {'func': tf.math.sigmoid, 'str': "tf.math.sigmoid"},
-                    "tanh": {'func': tf.tanh, 'str': "tf.tanh"},
-                    "exp": {'func': tf.exp, 'str': "tf.exp"},
-                    })
+        ops_tf = {
+            "max": {'func': tf.reduce_max, 'str': "reduce_max"},
+            "min": {'func': tf.reduce_min, 'str': "reduce_min"},
+            "argmax": {'func': tf.argmax, 'str': "argmax"},
+            "argmin": {'func': tf.argmin, 'str': "argmin"},
+            "round": {'func': tf.round, 'str': "round"},
+            "sum": {'func': tf.reduce_sum, 'str': "reduce_sum"},
+            "mean": {'func': tf.reduce_mean, 'str': "reduce_mean"},
+            "matmul": {'func': tf.matmul, 'str': "matmul"},
+            "matvec": {'func': tf.linalg.matvec, 'str': "linalg.matvec"},
+            'expand': {'func': tf.expand_dims, 'str': "expand_dims"},
+            "roll": {'func': tf.roll, 'str': "roll"},
+            "softmax": {'func': tf.math.softmax, 'str': "math.softmax"},
+            "sigmoid": {'func': tf.math.sigmoid, 'str': "math.sigmoid"},
+            "tanh": {'func': tf.tanh, 'str': "tanh"},
+            "exp": {'func': tf.exp, 'str': "exp"},
+        }
+        if ops:
+            ops_tf.update(ops)
 
         # base data types
-        self.dtypes = {"float16": tf.float16,
-                       "float32": tf.float32,
-                       "float64": tf.float64,
-                       "int16": tf.int16,
-                       "int32": tf.int32,
-                       "int64": tf.int64,
-                       "uint16": tf.uint16,
-                       "uint32": tf.uint32,
-                       "uint64": tf.uint64,
-                       "complex64": tf.complex64,
-                       "complex128": tf.complex128,
-                       "bool": tf.bool
-                       }
+        dtypes_tf = {
+            "float16": tf.float16,
+            "float32": tf.float32,
+            "float64": tf.float64,
+            "int16": tf.int16,
+            "int32": tf.int32,
+            "int64": tf.int64,
+            "uint16": tf.uint16,
+            "uint32": tf.uint32,
+            "uint64": tf.uint64,
+            "complex64": tf.complex64,
+            "complex128": tf.complex128,
+            "bool": tf.bool
+        }
+        if dtypes:
+            dtypes_tf.update(dtypes)
 
-        self.type = 'tensorflow'
+        # base imports
+        imports_tf = ["from tensorflow import *"]
+        for op in ops_tf.values():
+            *op_import, op_key = op['str'].split('.')
+            if op_import:
+                imports_tf.append(f"from tensorflow.{'.'.join(op_import)} import {op_key}")
+                op['str'] = op_key
 
-    def run(self, T: float, dt: float, dts: float = None, outputs: dict = None, solver: str = None,
-            in_place: bool = True, func_name: str = None, file_name: str = None, compile_kwargs: dict = None, **kwargs
-            ) -> dict:
-        if not compile_kwargs:
-            compile_kwargs = dict()
-        # TODO: enable usage of tf.function decorator
-        # TODO: make sure that naming schemes are not messed up by tensorflow
-        #compile_kwargs['decorator'] = tf.function
-        return super().run(T, dt, dts, outputs, solver, in_place, func_name, file_name, compile_kwargs, **kwargs)
+        if imports:
+            for imp in imports:
+                if imp not in imports_tf:
+                    imports_tf.append(imp)
 
-    def _integrate(self, rhs_func, func_args, T, dt, dts, t, output_indices):
+        super().__init__(ops_tf, dtypes_tf, imports_tf, **kwargs)
 
-        sampling_steps = int(np.round(T / dts, decimals=0))
+    def add_var_update(self, lhs: str, rhs: str, lhs_idx: Optional[str] = None, rhs_shape: Optional[tuple] = ()):
 
-        # initialize results storage vectors
-        results = []
-        for idx in output_indices:
-            var_dim = idx[1] - idx[0] if type(idx) is tuple else 1
-            results.append(tf.Variable(np.zeros((sampling_steps, var_dim), dtype=self._float_def)))
+        if lhs_idx:
+            lhs_idx = self._flatten_idx(lhs_idx, rhs_shape)
+            idx = self.create_index_str(lhs_idx, separator=':', scatter=True)
+            if not rhs_shape:
+                rhs = f"[{rhs}]"
+            else:
+                try:
+                    rhs = f"[{float(rhs)}]"
+                except ValueError:
+                    pass
+            self.add_code_line(f"{lhs}.scatter_nd_update([{idx}], {rhs})")
+        else:
+            self.add_code_line(f"{lhs} = {rhs}")
 
-        # solve via pyrates internal explicit euler algorithm
-        sampling_idx = tf.Variable(0, dtype='int32')
-        sampling_steps = tf.constant(int(np.round(dts / dt, decimals=0)))
-        dt = tf.constant(dt)
-        steps = tf.constant(int(np.round(T / dt, decimals=0)))
-        results = self._run(rhs_func=rhs_func, func_args=func_args, t=t, dt=dt, steps=steps,
-                            sampling_steps=sampling_steps, results=results, sampling_idx=sampling_idx,
-                            output_indices=output_indices)
+    def create_index_str(self, idx: Union[str, int, tuple], separator: str = ',', scatter: bool = False) -> str:
+        if scatter and separator in idx:
+            idx_start, idx_stop = idx.split(separator)
+            return ",".join([f"[{i}]" for i in range(int(idx_start), int(idx_stop))])
+        return super().create_index_str(idx=idx, separator=separator)
 
-        results = np.asarray([r.numpy() for r in results])
-        times = np.arange(0, T, dts)
+    def _solve_euler(self, func: Callable, args: tuple, T: float, dt: float, dts: float, y: tf.Variable):
 
-        return times, results
-
-    @tf.function
-    def _run(self, rhs_func, func_args, t, dt, steps, sampling_steps, results, sampling_idx,
-             output_indices):
-
+        # preparations for fixed step-size integration
         zero = tf.constant(0, dtype=tf.int32)
-        state_vars = self.vars['y']
+        idx = tf.Variable(0, dtype=tf.int32)
+        steps = tf.constant(int(np.round(T / dt)))
+        store_steps = int(np.round(T / dts))
+        store_step = tf.constant(int(np.round(dts / dt)))
+        state_rec = tf.Variable(np.zeros((store_steps, y.shape[0])))
+
+        # perform fixed step-size integration
+        self._euler_integrate(func, args, steps, store_step, zero, state_rec, idx, y, dt)
+        return state_rec.numpy()
+
+    @staticmethod
+    @tf.function
+    def _euler_integrate(func, args, steps, store_step, zero, state_rec, idx, y, dt):
 
         for step in tf.range(steps):
 
-            deltas = rhs_func(t, state_vars, func_args)
-            t.assign_add(dt)
-            state_vars.assign_add(dt*deltas)
+            if tf.equal(tf.math.floormod(step, store_step), zero):
+                state_rec.scatter_nd_update([[idx]], [y])
+                idx.assign_add(1)
 
-            if tf.equal(tf.math.floormod(step, sampling_steps), zero):
-
-                for r, idx in zip(results, output_indices):
-                    r.scatter_nd_update([[sampling_idx, 0]], [state_vars[idx]])
-
-                sampling_idx.assign_add(1)
-
-        return results
-
-    def _match_dtypes(self, op1: Any, op2: Any) -> tuple:
-        """Match data types of two operators/variables.
-        """
-
-        if issubclass(type(op1), tf.Variable):
-
-            if issubclass(type(op2), tf.Variable):
-
-                # cast both variables to lowest precision
-                for acc in ["16", "32", "64", "128"]:
-                    if acc in op1.dtype.name:
-                        return op1, self.add_op('cast', op2, op1.dtype.name)
-                    elif acc in op2.dtype.name:
-                        return self.add_op('cast', op1, op2.dtype.name), op2
-
-            if type(op2) is int or type(op2) is float:
-
-                # transform op2 into constant tensor with dtype of op1
-                return op1, self.add_op('cast', tf.constant(op2), op1.dtype.name)
-
-            return op1, self.add_op('cast', op2, op1.dtype.name)
-
-        elif issubclass(type(op2), tf.Variable):
-
-            # transform op1 into constant tensor with dtype of op2
-            if type(op1) is int or type(op2) is float:
-                return self.add_op('cast', tf.constant(op1), op2.dtype.name), op2
-
-            return self.add_op('cast', op1, op2.dtype.name), op2
-
-        elif hasattr(op1, 'numpy') or type(op1) is np.ndarray:
-
-            # cast op2 to numpy dtype of op1
-            return op1, self.add_op('cast', op2, op1.dtype)
-
-        elif hasattr(op2, 'numpy') or type(op2) is np.ndarray:
-
-            # cast op1 to numpy dtype of op2
-            return self.add_op('cast', op1, op2.dtype), op2
-
-        else:
-
-            # cast op2 to dtype of op1 referred from its type string
-            return super()._match_dtypes(op1, op2)
+            rhs = func(step, y, *args)
+            y.assign_add(dt*rhs)
 
     @staticmethod
-    def _compare_shapes(op1: Any, op2: Any) -> bool:
-
-        if hasattr(op1, 'shape') and hasattr(op2, 'shape'):
-            if tuple(op1.shape) == tuple(op2.shape):
-                return True
-            elif len(op1.shape) > 1 and len(op2.shape) > 1 and tuple(op1.shape)[1] == tuple(op2.shape)[0]:
-                return True
-            elif len(op1.shape) == 0 and len(op2.shape) == 0:
-                return True
-            else:
-                return False
-        if hasattr(op1, 'shape'):
-            return len(tuple(op1.shape)) == 0
-        if hasattr(op2, 'shape'):
-            return len(tuple(op2.shape)) == 0
+    def get_var(v: ComputeVar):
+        if v.vtype == 'constant':
+            return tf.constant(name=v.name, value=v.value)
         else:
-            try:
-                return len(op1) == len(op2)
-            except TypeError:
-                return True
-
-    @staticmethod
-    def _compare_dtypes(op1: Any, op2: Any) -> bool:
-        """Checks whether the data types of op1 and op2 are compatible with each other.
-
-        Parameters
-        ----------
-        op1
-            First operator.
-        op2
-            Second operator.
-
-        Returns
-        -------
-        bool
-            If true, the data types of op1 and op2 are compatible.
-
-        """
-
-        try:
-            x = op1 + op2
-            return True
-        except (TypeError, ValueError, Exception):
-            if hasattr(op1, 'dtype') and hasattr(op2, 'dtype'):
-                dtype1 = op1.dtype.as_numpy_dtype if hasattr(op1.dtype, 'as_numpy_dtype') else op1.dtype
-                dtype2 = op2.dtype.as_numpy_dtype if hasattr(op2.dtype, 'as_numpy_dtype') else op2.dtype
-                return dtype1 == dtype2
-            else:
-                return False
-
-    @staticmethod
-    def get_var_shape(v: BaseVar):
-        if not v.shape or not tuple(v.shape):
-            v = np.reshape(v, (1,))
-        return v.shape[0]
-
-    def _generate_update_equations(self, code_gen: CodeGen, nodes: dict, rhs_var: str = None, indices: list = None,
-                                   funcs: dict = None):
-
-        # collect right-hand side expression and all input variables to these expressions
-        func_args, expressions, var_names, defined_vars = [], [], [], []
-        for node, update in nodes.items():
-
-            # collect expression and variables of right-hand side of equation
-            expr_args, expr = self.graph.node_to_expr(update, **funcs)
-            func_args.extend(expr_args)
-            expressions.append(self._expr_to_str(expr))
-
-            # process left-hand side of equation
-            var = self.get_var(node)
-            if 'expr' in var:
-                # process indexing of left-hand side variable
-                idx_args, lhs = self.graph.node_to_expr(node, **funcs)
-                func_args.extend(idx_args)
-                lhs_var = self._expr_to_str(lhs)
-            else:
-                # process normal update of left-hand side variable
-                lhs_var = var['symbol'].name
-            var_names.append(lhs_var)
-
-        # add the left-hand side assignments of the collected right-hand side expressions to the code generator
-        if rhs_var:
-
-            # differential equation (DE) update
-            if indices:
-
-                # DE updates stored in a state-vector
-                for idx, expr in zip(indices, expressions):
-                    code_gen.add_code_line(f"{rhs_var}.scatter_nd_update([{idx}], [{expr}])")
-
-            else:
-
-                if len(nodes) > 1:
-                    raise ValueError('Received a request to update a variable via multiple right-hand side expressions.'
-                                     )
-
-                # DE update stored in a single variable
-                code_gen.add_code_line(f"{rhs_var} = {expressions[0]}")
-
-            # add rhs var to function arguments
-            func_args = [rhs_var] + func_args
-
-        else:
-
-            # non-differential equation update
-
-            var_names, expressions, undefined_vars, defined_vars = sort_equations(var_names, expressions)
-            func_args.extend(undefined_vars)
-
-            if indices:
-
-                # non-DE update stored in a variable slice
-                for idx, expr, target_var in zip(indices, expressions, var_names):
-                    code_gen.add_code_line(f"{target_var}.scatter_nd_update([{idx}], [{expr}])")
-
-            else:
-
-                # non-DE update stored in a single variable
-                for target_var, expr in zip(var_names, expressions):
-                    code_gen.add_code_line(f"{target_var} = {expr}")
-
-        code_gen.add_linebreak()
-
-        return func_args, defined_vars, code_gen
+            return tf.Variable(name=v.name, initial_value=v.value)
 
     @staticmethod
     def _euler_integration(steps, store_step, state_vec, state_rec, dt, rhs_func, rhs, *args):
@@ -414,3 +201,8 @@ class TensorflowBackend(BaseBackend):
                 idx += 1
             state_vec.assign_add(dt * rhs_func(step, state_vec, rhs, *args))
         return state_rec
+
+    @staticmethod
+    def process_idx(v: ComputeVar, idx: Union[str, ComputeVar]):
+        if idx == ':':
+            idx = f'0:{rhs_shape[0] if rhs_shape else 1}'

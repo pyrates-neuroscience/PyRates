@@ -44,11 +44,11 @@ Currently supported backends:
 
 # pyrates internal imports
 from .base_funcs import *
+from .computegraph import ComputeVar
 
 # external imports
 from typing import Optional, Dict, List, Union, Any, Callable
 import numpy as np
-from numba import njit
 
 
 # Helper Functions and Classes
@@ -134,38 +134,39 @@ class BaseBackend(CodeGen):
 
         # base math operations
         self.ops = {
-                    "max": {'func': np.maximum, 'str': "np.maximum"},
-                    "min": {'func': np.minimum, 'str': "np.minimum"},
-                    "argmax": {'func': np.argmax, 'str': "np.argmax"},
-                    "argmin": {'func': np.argmin, 'str': "np.argmin"},
-                    "round": {'func': np.round, 'str': "np.round"},
-                    "sum": {'func': np.sum, 'str': "np.sum"},
-                    "mean": {'func': np.mean, 'str': "np.mean"},
-                    "matmul": {'func': np.dot, 'str': "np.dot"},
-                    "concat": {'func': np.concatenate, 'str': "np.concatenate"},
-                    "reshape": {'func': np.reshape, 'str': "np.reshape"},
-                    "append": {'func': np.append, 'str': "np.append"},
-                    "shape": {'func': np.shape, 'str': "np.shape"},
-                    "dtype": {'func': np.dtype, 'str': "np.dtype"},
-                    'squeeze': {'func': np.squeeze, 'str': "np.squeeze"},
-                    'expand': {'func': np.expand_dims, 'str': "np.expand_dims"},
-                    "roll": {'func': np.roll, 'str': "np.roll"},
-                    "cast": {'func': np.asarray, 'str': "np.asarray"},
-                    "randn": {'func': np.random.randn, 'str': "np.randn"},
-                    "ones": {'func': np.ones, 'str': "np.ones"},
-                    "zeros": {'func': np.zeros, 'str': "np.zeros"},
-                    "range": {'func': np.arange, 'str': "np.arange"},
+                    "max": {'func': np.maximum, 'str': "maximum"},
+                    "min": {'func': np.minimum, 'str': "minimum"},
+                    "argmax": {'func': np.argmax, 'str': "argmax"},
+                    "argmin": {'func': np.argmin, 'str': "argmin"},
+                    "round": {'func': np.round, 'str': "round"},
+                    "sum": {'func': np.sum, 'str': "sum"},
+                    "mean": {'func': np.mean, 'str': "mean"},
+                    "matmul": {'func': np.dot, 'str': "dot"},
+                    "matvec": {'func': np.dot, 'str': "dot"},
+                    "concat": {'func': np.concatenate, 'str': "concatenate"},
+                    "reshape": {'func': np.reshape, 'str': "reshape"},
+                    "append": {'func': np.append, 'str': "append"},
+                    "shape": {'func': np.shape, 'str': "shape"},
+                    "dtype": {'func': np.dtype, 'str': "dtype"},
+                    'squeeze': {'func': np.squeeze, 'str': "squeeze"},
+                    'expand': {'func': np.expand_dims, 'str': "expand_dims"},
+                    "roll": {'func': np.roll, 'str': "roll"},
+                    "cast": {'func': np.asarray, 'str': "asarray"},
+                    "randn": {'func': np.random.randn, 'str': "randn"},
+                    "ones": {'func': np.ones, 'str': "ones"},
+                    "zeros": {'func': np.zeros, 'str': "zeros"},
+                    "range": {'func': np.arange, 'str': "arange"},
                     "softmax": {'func': pr_softmax, 'str': "pr_softmax"},
                     "sigmoid": {'func': pr_sigmoid, 'str': "pr_sigmoid"},
-                    "tanh": {'func': np.tanh, 'str': "np.tanh"},
-                    "sinh": {'func': np.sinh, 'str': "np.sinh"},
-                    "cosh": {'func': np.cosh, 'str': "np.cosh"},
-                    "arctan": {'func': np.arctan, 'str': "np.arctan"},
-                    "arcsin": {'func': np.arcsin, 'str': "np.arcsin"},
-                    "arccos": {'func': np.arccos, 'str': "np.arccos"},
-                    "sin": {'func': np.sin, 'str': "np.sin"},
-                    "cos": {'func': np.cos, 'str': "np.cos"},
-                    "tan": {'func': np.tan, 'str': "np.tan"},
+                    "tanh": {'func': np.tanh, 'str': "tanh"},
+                    "sinh": {'func': np.sinh, 'str': "sinh"},
+                    "cosh": {'func': np.cosh, 'str': "cosh"},
+                    "arctan": {'func': np.arctan, 'str': "arctan"},
+                    "arcsin": {'func': np.arcsin, 'str': "arcsin"},
+                    "arccos": {'func': np.arccos, 'str': "arccos"},
+                    "sin": {'func': np.sin, 'str': "sin"},
+                    "cos": {'func': np.cos, 'str': "cos"},
+                    "tan": {'func': np.tan, 'str': "tan"},
                     "exp": {'func': np.exp, 'str': "exp"},
                     "no_op": {'func': pr_identity, 'str': "pr_identity"},
                     "interp": {'func': pr_interp, 'str': "pr_interp"},
@@ -207,59 +208,16 @@ class BaseBackend(CodeGen):
         self._idx_right = "]"
         self._start_idx = 0
 
-    def expr_to_str(self, expr: Any, expr_str: str = None) -> str:
+    def add_var_update(self, lhs: str, rhs: str, lhs_idx: Optional[str] = None, rhs_shape: Optional[tuple] = ()):
 
-        if not expr_str:
-            expr_str = str(expr)
-            for arg in expr.args:
-                expr_str = expr_str.replace(str(arg), self.expr_to_str(arg))
-
-        while 'pr_base_index(' in expr_str:
-
-            # replace `index` calls with brackets-based indexing
-            start = expr_str.find('pr_base_index(')
-            end = expr_str[start:].find(')') + 1
-            idx = expr.args[1]
-            expr_str = expr_str.replace(expr_str[start:start+end], f"{expr.args[0]}{self.create_index_str(idx)}")
-
-        while 'pr_2d_index(' in expr_str:
-
-            # replace `index` calls with brackets-based indexing
-            start = expr_str.find('pr_2d_index(')
-            end = expr_str[start:].find(')') + 1
-            idx = (expr.args[1], expr.args[2])
-            expr_str = expr_str.replace(expr_str[start:start + end], f"{expr.args[0]}{self.create_index_str(idx)}")
-
-        while 'pr_range_index(' in expr_str:
-
-            # replace `index` calls with brackets-based indexing
-            start = expr_str.find('pr_range_index(')
-            end = expr_str[start:].find(')') + 1
-            idx = (expr.args[1], f"{expr.args[2]}")
-            expr_str = expr_str.replace(expr_str[start:start + end],
-                                        f"{expr.args[0]}{self.create_index_str(idx, separator=':')}")
-
-        while 'pr_axis_index(' in expr_str:
-
-            # replace `index` calls with brackets-based indexing
-            start = expr_str.find('pr_axis_index(')
-            end = expr_str[start:].find(')') + 1
-            if len(expr.args) < 2:
-                expr_str = expr_str.replace(expr_str[start:start + end], f"{expr.args[0]}{self.create_index_str(':')}")
-            else:
-                idx = ','.join([':' for _ in range(expr.args[2])] + [f"{expr.args[1]}"])
-                expr_str = expr_str.replace(expr_str[start:start + end], f"{expr.args[0]}{self.create_index_str(idx)}")
-
-        while 'pr_identity(' in expr_str:
-
-            # replace `no_op` calls with first argument to the function call
-            start = expr_str.find('pr_identity(')
-            end = expr_str[start:].find(')') + 1
-            expr_str = expr_str.replace(expr_str[start:start+end], f"{expr.args[0]}")
-
-        return expr_str
+        if lhs_idx:
+            idx = self.create_index_str(lhs_idx)
+            lhs = f"{lhs}{idx}"
+        self.add_code_line(f"{lhs} = {rhs}")
 
     def create_index_str(self, idx: Union[str, int, tuple], separator: str = ',') -> str:
+
+        # TODO: finalize indexing operations
 
         # case: multiple indices
         if type(idx) is tuple:
@@ -358,6 +316,14 @@ class BaseBackend(CodeGen):
         return outputs
 
     @staticmethod
+    def get_var(v: ComputeVar):
+        return v.value
+
+    @staticmethod
+    def process_idx(v: ComputeVar, idx: Union[str, ComputeVar]):
+        return idx
+
+    @staticmethod
     def _solve_euler(func: Callable, args: tuple, T: float, dt: float, dts: float, y: np.ndarray):
 
         # preparations for fixed step-size integration
@@ -365,7 +331,7 @@ class BaseBackend(CodeGen):
         steps = int(np.round(T / dt))
         store_steps = int(np.round(T / dts))
         store_step = int(np.round(dts / dt))
-        state_rec = np.zeros((store_steps, y.shape[0]))
+        state_rec = np.zeros((store_steps, y.shape[0]) if y.shape else (store_steps, 1))
 
         # solve ivp for forward Euler method
         for step in range(steps):

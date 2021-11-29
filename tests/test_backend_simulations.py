@@ -14,7 +14,7 @@ __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
 
 # set backends to run the tests for
-backends = ['default']
+backends = ['default', 'tensorflow']
 
 # set accuracy for all tests
 accuracy = 1e-4
@@ -385,9 +385,9 @@ def test_2_5_inputs_outputs():
         #############################################################
 
         # perform simulation
-        r2 = simulate("model_templates.test_resources.test_backend.net13", simulation_time=sim_time, outputs=['all/op9/a'],
-                      inputs={'all/op9/I_ext': inp}, vectorization=True, step_size=dt, backend=b, solver='scipy',
-                      clear=True, method='RK45', atol=1e-7, rtol=1e-6, file_name='inout_2')
+        r2 = simulate("model_templates.test_resources.test_backend.net13", simulation_time=sim_time,
+                      outputs=['all/op9/a'], inputs={'all/op9/I_ext': inp}, vectorization=True, step_size=dt, backend=b,
+                      solver='scipy', clear=True, method='RK45', atol=1e-7, rtol=1e-6, file_name='inout_2')
 
         assert np.mean(r1.values.flatten() - r2.values.flatten()) == pytest.approx(0., rel=accuracy, abs=accuracy)
 
@@ -422,13 +422,10 @@ def test_2_6_vectorization():
     :method:`CircuitTemplate.run` for a documentation of the keyword argument `vectorize`.
     """
 
-    backends = ['default']
-
     dt = 1e-4
     dts = 1e-2
     T = 1.0
     inp = np.zeros((int(np.round(T/dt)),)) + 220.0
-    from numba import njit
 
     for i, b in enumerate(backends):
 
@@ -465,8 +462,10 @@ def test_2_7_backends():
 
     for i, b in enumerate(backends):
 
-        r = simulate("model_templates.montbrio.simple_montbrio.QIF_sfa",
-                     inputs=None, outputs={"r": "p/Op_sfa/r"}, backend=b, solver='euler', step_size=dt, clear=True,
-                     simulation_time=T, sampling_step_size=dts, file_name=f'm{i+1}')
+        if b != 'default':
 
-        assert np.mean(r0.values - r.values) == pytest.approx(0.0, rel=accuracy, abs=accuracy)
+            r = simulate("model_templates.montbrio.simple_montbrio.QIF_sfa",
+                         inputs=None, outputs={"r": "p/Op_sfa/r"}, backend=b, solver='euler', step_size=dt, clear=True,
+                         simulation_time=T, sampling_step_size=dts, file_name=f'm{i+1}')
+
+            assert np.mean(r0.values - r.values) == pytest.approx(0.0, rel=accuracy, abs=accuracy)
