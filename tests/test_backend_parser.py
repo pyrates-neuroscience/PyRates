@@ -201,20 +201,24 @@ def test_1_5_expression_parser_indexing():
     ##################################################
 
     A = np.array(np.random.randn(10, 10), dtype=np.float32)
-    B = np.eye(10, dtype=np.float32) == 1
+    B = np.asarray([0, 2, 4], dtype=np.int32)
+    C = np.asarray([1, 3, 5], dtype=np.int32)
     arg_dict = {'A': {'vtype': 'constant', 'value': A, 'shape': A.shape, 'dtype': A.dtype},
                 'B': {'vtype': 'constant', 'value': B, 'shape': B.shape, 'dtype': B.dtype},
+                'C': {'vtype': 'constant', 'value': C, 'shape': C.shape, 'dtype': C.dtype},
                 'd': {'vtype': 'constant', 'value': 4, 'shape': (), 'dtype': 'int32'}}
 
     # define valid test cases
     indexed_expressions = [("index_axis(A)", A[:]),                  # single-dim indexing I
                            ("index(A, 0)", A[0]),                    # single-dim indexing II
                            ("index(A, 9)", A[9]),                    # single-dim indexing III
+                           ("index(A, B)", A[B]),                    # single-dim indexing IV
                            ("index_range(A, 0, 5)", A[0:5]),         # single-dim slicing I
+                           ("index_range(A, d, 8-1)", A[4:8 - 1]),   # single-dim slicing II
                            ("index_2d(A, 4, 5)", A[4, 5]),           # two-dim indexing I
-                           ("index(A, A > 0.)", A[A > 0.]),          # boolean indexing
-                           ("index(A, B)", A[B]),                    # indexing with other array
-                           ("index_range(A, d, 8-1)",  A[4:8 - 1]),  # using variables as indices
+                           ("index_2d(A, B, 1)", A[B, 1]),           # two-dim indexing II
+                           ("index_2d(A, B, C)", A[B, C]),           # two-dim indexing III
+                           ("index_axis(A, B, 1)", A[:, B]),         # two-dim indexing IV
                            ]
 
     # define invalid test cases

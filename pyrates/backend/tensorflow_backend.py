@@ -35,7 +35,7 @@ from .base_backend import BaseBackend
 from .computegraph import ComputeVar
 
 # external imports
-from typing import Optional, Dict, Callable, List, Any, Union
+from typing import Optional, Dict, Callable, List, Tuple, Union
 import tensorflow as tf
 
 # meta infos
@@ -139,8 +139,7 @@ class TensorflowBackend(BaseBackend):
     def add_var_update(self, lhs: str, rhs: str, lhs_idx: Optional[str] = None, rhs_shape: Optional[tuple] = ()):
 
         if lhs_idx:
-            lhs_idx = self._flatten_idx(lhs_idx, rhs_shape)
-            idx = self.create_index_str(lhs_idx, separator=':', scatter=True)
+            idx, _ = self.create_index_str(lhs_idx, scatter=True, size=rhs_shape[0] if rhs_shape else 1, apply=True)
             if not rhs_shape:
                 rhs = f"[{rhs}]"
             else:
@@ -148,15 +147,38 @@ class TensorflowBackend(BaseBackend):
                     rhs = f"[{float(rhs)}]"
                 except ValueError:
                     pass
-            self.add_code_line(f"{lhs}.scatter_nd_update([{idx}], {rhs})")
+            self.add_code_line(f"{lhs}.scatter_nd_update({idx}, {rhs})")
         else:
             self.add_code_line(f"{lhs} = {rhs}")
 
-    def create_index_str(self, idx: Union[str, int, tuple], separator: str = ',', scatter: bool = False) -> str:
-        if scatter and separator in idx:
-            idx_start, idx_stop = idx.split(separator)
-            return ",".join([f"[{i}]" for i in range(int(idx_start), int(idx_stop))])
-        return super().create_index_str(idx=idx, separator=separator)
+    def create_index_str(self, idx: Union[str, int, tuple], separator: str = ',', apply: bool = True,
+                         scatter: bool = False, size: Optional[int] = 1, max_length: int = 2) -> Tuple[str, dict]:
+
+        # case I: multiple indices
+        if scatter:
+
+            # create tensorflow-specific index
+            if type(idx) is not tuple:
+                idx = tuple(idx.split(separator)) if separator in idx else tuple(idx)
+            new_idx, return_dict = self._get_tf_idx(idx, size=size, max_length=max_length)
+            return f"{new_idx}" if apply else new_idx, return_dict
+
+        # case II: indexing via tf.gather_nd
+        if type(idx) is tuple and any([type(i) is ComputeVar and i.is_constant for i in idx]):
+
+            # create tensorflow-specific index
+            new_idx, return_dict = self._get_tf_idx(idx, size=size, max_length=max_length)
+            return f".gather_nd({new_idx})" if apply else new_idx, return_dict
+
+        # case III: default indexing
+        return super().create_index_str(idx=idx, separator=separator, apply=apply, scatter=False)
+
+    @staticmethod
+    def get_var(v: ComputeVar):
+        if v.vtype == 'constant':
+            return tf.constant(name=v.name, value=v.value)
+        else:
+            return tf.Variable(name=v.name, initial_value=v.value)
 
     def _solve_euler(self, func: Callable, args: tuple, T: float, dt: float, dts: float, y: tf.Variable):
 
@@ -172,6 +194,63 @@ class TensorflowBackend(BaseBackend):
         self._euler_integrate(func, args, steps, store_step, zero, state_rec, idx, y, dt)
         return state_rec.numpy()
 
+    def _process_idx(self, idx: Union[Tuple[int, int], int, str, ComputeVar], size: int = 1, scatter: bool = False
+                     ) -> Union[str, list]:
+
+        # case I: tensorflow-specific mode where lists of indexing integers are collected for each variable axis
+        if scatter:
+            if type(idx) is ComputeVar:
+                return (idx.value + self._start_idx).tolist()
+            if type(idx) is tuple:
+                idx_range = np.arange(idx[0] + self._start_idx, idx[1]).tolist()
+                return idx_range
+            if type(idx) is int:
+                return [idx + self._start_idx]
+            if idx == ':':
+                return self._process_idx((self._start_idx, size), scatter=scatter)
+            try:
+                return self._process_idx(int(idx), scatter=scatter)
+            except (ValueError, TypeError):
+                return idx
+
+        # case II: multiple indices into a single dimension
+        if type(idx) is ComputeVar and idx.is_constant:
+            return (idx.value + self._start_idx).tolist()
+
+        # case III: default mode
+        return super()._process_idx(idx)
+
+    def _get_tf_idx(self, idx: tuple, size: int, max_length) -> Tuple[list, dict]:
+
+        # collect axis indices
+        idx = list(idx)
+        for i in range(len(idx)):
+            idx[i] = self._process_idx(idx[i], size=size, scatter=True)
+
+        # bring indices into form required for `tf.Variable.scatter_nd_update`
+        length = max([len(i) for i in idx])
+        new_idx = []
+        for i in range(length):
+            idx_tmp = []
+            for j in range(len(idx)):
+                try:
+                    idx_tmp.append(idx[j][i])
+                except IndexError:
+                    idx_tmp.append(idx[j][0])
+            new_idx.append(idx_tmp)
+
+        if len(new_idx) > max_length:
+
+            # for many indices, create new indexing constant
+            idx = "temporary_pyrates_var_index"
+            return_dict = {idx: new_idx}
+
+        else:
+
+            return_dict = dict()
+
+        return new_idx, return_dict
+
     @staticmethod
     @tf.function
     def _euler_integrate(func, args, steps, store_step, zero, state_rec, idx, y, dt):
@@ -186,13 +265,6 @@ class TensorflowBackend(BaseBackend):
             y.assign_add(dt*rhs)
 
     @staticmethod
-    def get_var(v: ComputeVar):
-        if v.vtype == 'constant':
-            return tf.constant(name=v.name, value=v.value)
-        else:
-            return tf.Variable(name=v.name, initial_value=v.value)
-
-    @staticmethod
     def _euler_integration(steps, store_step, state_vec, state_rec, dt, rhs_func, rhs, *args):
         idx = 0
         for step in range(steps):
@@ -201,8 +273,3 @@ class TensorflowBackend(BaseBackend):
                 idx += 1
             state_vec.assign_add(dt * rhs_func(step, state_vec, rhs, *args))
         return state_rec
-
-    @staticmethod
-    def process_idx(v: ComputeVar, idx: Union[str, ComputeVar]):
-        if idx == ':':
-            idx = f'0:{rhs_shape[0] if rhs_shape else 1}'

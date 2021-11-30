@@ -235,6 +235,18 @@ class ComputeGraph(MultiDiGraph):
         self._fname = fname
         self._fend = fend
 
+    @property
+    def ops(self):
+        return self.backend.ops
+
+    @property
+    def dtypes(self):
+        return self.backend.dtypes
+
+    @property
+    def state_vars(self):
+        return list(self.var_updates['DEs'].keys())
+
     def add_var(self, label: str, value: Any, vtype: str, **kwargs):
 
         unique_label = self._generate_unique_label(label)
@@ -265,6 +277,9 @@ class ComputeGraph(MultiDiGraph):
 
         # remember var and update node to ensure that they are not pruned during compilation
         self._eq_nodes.extend([var, update])
+
+    def get_var(self, var: str):
+        return self.nodes[var]['node']
 
     def eval_graph(self):
 
@@ -472,14 +487,12 @@ class ComputeGraph(MultiDiGraph):
         for var in self.state_vars:
 
             # extract index of variable in state vector
-            idx = self._state_var_indices[var]
-
-            # turn index to string
-            idx_str = f'{idx}' if type(idx) is int else f'{idx[0]}:{idx[1]}'
+            idx = (self._state_var_indices[var],)
 
             # extract state variable from state vector
-            code_gen.add_code_line(f"{var} = y{code_gen.create_index_str(idx_str)}")
-            rhs_indices_str.append(idx_str)
+            rhs_idx, _ = code_gen.create_index_str(idx)
+            code_gen.add_code_line(f"{var} = y{rhs_idx}")
+            rhs_indices_str.append(idx)
 
         code_gen.add_linebreak()
 
@@ -515,7 +528,9 @@ class ComputeGraph(MultiDiGraph):
             # collect expression and variables of right-hand side of equation
             expr_args, expr = self._node_to_expr(update, **funcs)
             func_args.extend(expr_args)
-            expressions.append(self._expr_to_str(expr))
+            expr_str, expr_args, _, _ = self._expr_to_str(expr, apply=True)
+            func_args.extend(expr_args)
+            expressions.append(expr_str)
 
             # collect shape of the right-hand side variable
             v = self.get_var(update)
@@ -535,8 +550,8 @@ class ComputeGraph(MultiDiGraph):
                 if lhs.args[0].name not in defined_vars:
                     idx_args.append(lhs.args[0].name)
                 func_args.extend(idx_args)
-                lhs_var_indexed = self._expr_to_str(lhs)
-                lhs_var, idx = lhs_var_indexed[:-1].split("[")
+                _, idx_args, lhs_var, idx = self._expr_to_str(lhs, apply=False)
+                func_args.extend(idx_args)
 
             else:
 
@@ -611,66 +626,74 @@ class ComputeGraph(MultiDiGraph):
 
         return expr_args, expr
 
-    def _expr_to_str(self, expr: Any, expr_str: str = None) -> str:
+    def _expr_to_str(self, expr: Any, expr_str: str = None, apply: bool = True) -> tuple:
 
-        create_index_str = self.backend.create_index_str
+        # preparations
+        ###############
 
+        # initializations
+        index_args = []
+        func = ""
+        var = ""
+        idx = ""
+
+        # ensure expression string exists
         if not expr_str:
             expr_str = str(expr)
+
+            # transform expression arguments into strings
             for arg in expr.args:
-                expr_str = expr_str.replace(str(arg), self._expr_to_str(arg))
+                expr_part, args, _, _ = self._expr_to_str(arg)
+                expr_str = expr_str.replace(str(arg), expr_part)
+                index_args.extend(args)
 
-        while 'pr_base_index(' in expr_str:
+        # process indexing operations
+        #############################
 
-            # replace `index` calls with brackets-based indexing
-            start = expr_str.find('pr_base_index(')
-            end = expr_str[start:].find(')') + 1
-            v = expr.args[0]
-            idx = self._process_idx(var=v.name, idx=expr.args[1])
-            expr_str = expr_str.replace(expr_str[start:start+end], f"{v}{create_index_str(idx)}")
-
-        while 'pr_2d_index(' in expr_str:
+        if 'pr_base_index(' in expr_str:
 
             # replace `index` calls with brackets-based indexing
-            start = expr_str.find('pr_2d_index(')
-            end = expr_str[start:].find(')') + 1
-            v = expr.args[0]
-            idx = (self._process_idx(var=v.name, idx=expr.args[1]),
-                   self._process_idx(var=v.name, idx=expr.args[2]))
-            expr_str = expr_str.replace(expr_str[start:start + end], f"{v}{create_index_str(idx)}")
+            var, idx = self._get_var_idx(var=expr.args[0], idx=(expr.args[1],), args=index_args, apply=apply)
+            func = 'pr_base_index'
 
-        while 'pr_range_index(' in expr_str:
+        elif 'pr_2d_index(' in expr_str:
 
-            # replace `index` calls with brackets-based indexing
-            start = expr_str.find('pr_range_index(')
-            end = expr_str[start:].find(')') + 1
-            v = expr.args[0]
-            idx = (self._process_idx(var=v.name, idx=expr.args[1]),
-                   self._process_idx(var=v.name, idx=expr.args[2]))
-            expr_str = expr_str.replace(expr_str[start:start + end], f"{v}{create_index_str(idx, separator=':')}")
+            # replace `2d_index` calls with brackets-based indexing
+            var, idx = self._get_var_idx(var=expr.args[0], idx=(expr.args[1], expr.args[2]), args=index_args,
+                                         apply=apply)
+            func = 'pr_2d_index'
 
-        while 'pr_axis_index(' in expr_str:
+        elif 'pr_range_index(' in expr_str:
 
-            # replace `index` calls with brackets-based indexing
-            start = expr_str.find('pr_axis_index(')
-            end = expr_str[start:].find(')') + 1
-            v = expr.args[0]
+            # replace `range_index` calls with brackets-based indexing
+            var, idx = self._get_var_idx(var=expr.args[0], idx=((expr.args[1], expr.args[2]),), args=index_args,
+                                         apply=apply)
+            func = 'pr_range_index'
+
+        elif 'pr_axis_index(' in expr_str:
+
+            # replace `axis_index` calls with brackets-based indexing
             if len(expr.args) < 2:
-                idx = self._process_idx(var=v.name, idx=':')
-                expr_str = expr_str.replace(expr_str[start:start + end], f"{v}{create_index_str(idx)}")
+                var, idx = self._get_var_idx(var=expr.args[0], idx=(':',), args=index_args, apply=apply)
             else:
-                idx = self._process_idx(var=v.name,
-                                        idx=','.join([':' for _ in range(expr.args[2])] + [f"{expr.args[1]}"]))
-                expr_str = expr_str.replace(expr_str[start:start + end], f"{v}{create_index_str(idx)}")
+                var, idx = self._get_var_idx(var=expr.args[0], args=index_args, apply=apply,
+                                             idx=tuple([':' for _ in range(expr.args[2])] + [f"{expr.args[1]}"]))
+            func = "pr_axis_index"
 
-        while 'pr_identity(' in expr_str:
+        # either apply the above indexing calls or return them
+        if func and apply:
+            expr_str = self._process_func_call(expr=expr_str, func=func, replacement=f"{var}{idx}")
+
+        # handle dummy function calls
+        #############################
+
+        if 'pr_identity(' in expr_str:
 
             # replace `no_op` calls with first argument to the function call
-            start = expr_str.find('pr_identity(')
-            end = expr_str[start:].find(')') + 1
-            expr_str = expr_str.replace(expr_str[start:start+end], f"{expr.args[0]}")
+            var = str(expr.args[0])
+            expr_str = self._process_func_call(expr=expr_str, func='pr_identity', replacement=var)
 
-        return expr_str
+        return expr_str, index_args, var, idx
 
     def _process_var_update(self, var: str, update: str) -> tuple:
 
@@ -727,14 +750,27 @@ class ComputeGraph(MultiDiGraph):
             inputs.extend([inp] if isinstance(self.get_var(inp), ComputeVar) else self._get_inputs(inp))
         return inputs
 
-    def _process_idx(self, var: str, idx: str):
-        v = self.get_var(var)
-        try:
-            idx = self.get_var(idx)
-        except KeyError:
-            pass
-        idx = self.backend.process_idx(v=v, idx=idx)
-        return idx
+    def _get_var_idx(self, var: Symbol, idx: tuple, args: list, apply: bool = True):
+
+        # collect indexing variables where necessary
+        new_idx = []
+        for idx_tmp in idx:
+            try:
+                v = self.get_var(idx_tmp.name if type(idx_tmp) is Symbol else idx_tmp)
+                new_idx.append(v)
+            except KeyError:
+                new_idx.append(idx_tmp)
+
+        # turn index into a backend-specific string
+        idx_str, new_vars = self.backend.create_index_str(tuple(new_idx), apply=apply)
+
+        # add new variables to graph and index arguments
+        for key, v in new_vars.items():
+            vlabel, _ = self.add_var(label='index', value=v, vtype='constant')
+            idx_str = idx_str.replace(key, vlabel)
+            args.append(vlabel)
+
+        return var.name, idx_str
 
     def _prune(self):
 
@@ -760,17 +796,12 @@ class ComputeGraph(MultiDiGraph):
         else:
             return label
 
-    def get_var(self, var: str):
-        return self.nodes[var]['node']
+    @staticmethod
+    def _process_func_call(expr: str, func: str, replacement: str):
 
-    @property
-    def ops(self):
-        return self.backend.ops
+        # identify start and end of the function call
+        start = expr.find(f"{func}(")
+        end = expr[start:].find(')') + 1
 
-    @property
-    def dtypes(self):
-        return self.backend.dtypes
-
-    @property
-    def state_vars(self):
-        return list(self.var_updates['DEs'].keys())
+        # replace part in expression string
+        return expr.replace(expr[start:start + end], replacement)

@@ -47,7 +47,7 @@ from .base_funcs import *
 from .computegraph import ComputeVar
 
 # external imports
-from typing import Optional, Dict, List, Union, Any, Callable
+from typing import Optional, Dict, List, Union, Tuple, Callable
 import numpy as np
 
 
@@ -211,30 +211,29 @@ class BaseBackend(CodeGen):
     def add_var_update(self, lhs: str, rhs: str, lhs_idx: Optional[str] = None, rhs_shape: Optional[tuple] = ()):
 
         if lhs_idx:
-            idx = self.create_index_str(lhs_idx)
+            idx, _ = self.create_index_str(lhs_idx, apply=True)
             lhs = f"{lhs}{idx}"
         self.add_code_line(f"{lhs} = {rhs}")
 
-    def create_index_str(self, idx: Union[str, int, tuple], separator: str = ',') -> str:
+    def create_index_str(self, idx: Union[str, int, tuple], separator: str = ',', apply: bool = True,
+                         **kwargs) -> Tuple[str, dict]:
 
-        # TODO: finalize indexing operations
+        # preprocess idx
+        if separator in idx:
+            idx = tuple(idx.split(separator))
 
         # case: multiple indices
         if type(idx) is tuple:
+            idx = list(idx)
             for i in range(len(idx)):
-                try:
-                    idx[i] += self._start_idx
-                except TypeError:
-                    pass
+                idx[i] = self._process_idx(idx[i], **kwargs)
             idx = tuple([f"{i}" for i in idx])
-            return f"{self._idx_left}{separator.join(idx)}{self._idx_right}"
+            idx_str = f"{self._idx_left}{separator.join(idx)}{self._idx_right}" if apply else separator.join(idx)
+            return idx_str, dict()
 
         # case: single index
-        try:
-            idx += self._start_idx
-        except TypeError:
-            pass
-        return f"{self._idx_left}{idx}{self._idx_right}"
+        idx = self._process_idx(idx, **kwargs)
+        return f"{self._idx_left}{idx}{self._idx_right}" if apply else idx, dict()
 
     def get_fname(self, f: str) -> tuple:
 
@@ -319,8 +318,13 @@ class BaseBackend(CodeGen):
     def get_var(v: ComputeVar):
         return v.value
 
-    @staticmethod
-    def process_idx(v: ComputeVar, idx: Union[str, ComputeVar]):
+    def _process_idx(self, idx: Union[Tuple[int, int], int, str, ComputeVar], **kwargs) -> str:
+        if type(idx) is ComputeVar:
+            return idx.name
+        if type(idx) is tuple:
+            return f"{idx[0] + self._start_idx}:{idx[1]}"
+        if type(idx) is int:
+            return f"{idx + self._start_idx}"
         return idx
 
     @staticmethod
