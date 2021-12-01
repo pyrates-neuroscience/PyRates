@@ -14,7 +14,7 @@ __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
 
 # set backends to run the tests for
-backends = ['default', 'tensorflow']
+backends = ['default']
 
 # set accuracy for all tests
 accuracy = 1e-4

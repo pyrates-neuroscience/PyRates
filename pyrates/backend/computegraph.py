@@ -90,7 +90,7 @@ class ComputeNode:
 
     def set_value(self, v: Union[float, np.ndarray]):
         self._value = v
-        self.shape = self.value.shape
+        self.shape = self.value.shape if hasattr(v, 'shape') else ()
 
     @property
     def value(self):
@@ -236,14 +236,6 @@ class ComputeGraph(MultiDiGraph):
         self._fend = fend
 
     @property
-    def ops(self):
-        return self.backend.ops
-
-    @property
-    def dtypes(self):
-        return self.backend.dtypes
-
-    @property
     def state_vars(self):
         return list(self.var_updates['DEs'].keys())
 
@@ -278,8 +270,14 @@ class ComputeGraph(MultiDiGraph):
         # remember var and update node to ensure that they are not pruned during compilation
         self._eq_nodes.extend([var, update])
 
-    def get_var(self, var: str):
-        return self.nodes[var]['node']
+    def get_var(self, var: str, from_backend: bool = False):
+        v = self.nodes[var]['node']
+        if from_backend:
+            return self.backend.get_var(v)
+        return v
+
+    def get_op(self, op: str) -> dict:
+        return self.backend.get_op(op)
 
     def eval_graph(self):
 
@@ -366,9 +364,9 @@ class ComputeGraph(MultiDiGraph):
 
         # add vectorized state variables and updates to the backend
         try:
-            state_vec = self.ops['concat']['func'](variables, axis=0)
+            state_vec = np.concatenate(variables, axis=0)
         except ValueError:
-            state_vec = self.ops['cast']['func'](variables)
+            state_vec = np.asarray(variables)
         state_var_key, y = self.add_var(label='y', vtype='state_var', value=state_vec)
         rhs_var_key, dy = self.add_var(label='dy', vtype='state_var', value=np.zeros_like(state_vec))
 
@@ -411,11 +409,11 @@ class ComputeGraph(MultiDiGraph):
             dts = dt
         solver = kwargs.pop('solver', 'euler')
 
-        # extract state vector
-        y = self.backend.get_var(self.get_var('y'))
+        # extract backend-specific state vector
+        y = self.get_var('y', from_backend=True)
 
-        # extract required function arguments from graph
-        args = tuple(self.backend.get_var(self.get_var(v)) for v in func_args[2:])
+        # extract backend-specific function arguments
+        args = tuple(self.get_var(v, from_backend=True) for v in func_args[2:])
 
         # call backend method
         return self.backend.run(func=func, func_args=args, T=T, dt=dt, dts=dts, y0=y, outputs=outputs, solver=solver,
@@ -480,7 +478,6 @@ class ComputeGraph(MultiDiGraph):
 
         # preparations
         code_gen = self.backend
-        backend_funcs = {key: val['str'] for key, val in self.ops.items()}
 
         # extract state variable from state vector
         rhs_indices_str = []
@@ -497,12 +494,11 @@ class ComputeGraph(MultiDiGraph):
         code_gen.add_linebreak()
 
         # get equation string and argument list for each non-DE node at the end of the compute graph hierarchy
-        func_args2, delete_args1 = self._generate_update_equations(differential_equations=False, funcs=backend_funcs)
+        func_args2, delete_args1 = self._generate_update_equations(differential_equations=False)
         code_gen.add_linebreak()
 
         # get equation string and argument list for each DE node at the end of the compute graph hierarchy
-        func_args1, delete_args2 = self._generate_update_equations(differential_equations=True, funcs=backend_funcs,
-                                                                   indices=rhs_indices_str)
+        func_args1, delete_args2 = self._generate_update_equations(differential_equations=True, indices=rhs_indices_str)
 
         # remove unnecessary function arguments
         func_args = func_args1 + func_args2
@@ -512,8 +508,7 @@ class ComputeGraph(MultiDiGraph):
 
         return func_args, code_gen
 
-    def _generate_update_equations(self, differential_equations: bool, funcs: dict = None, indices: list = None
-                                   ) -> tuple:
+    def _generate_update_equations(self, differential_equations: bool, indices: list = None) -> tuple:
 
         code_gen = self.backend
 
@@ -526,7 +521,7 @@ class ComputeGraph(MultiDiGraph):
         for node, update in zip(nodes, updates):
 
             # collect expression and variables of right-hand side of equation
-            expr_args, expr = self._node_to_expr(update, **funcs)
+            expr_args, expr = self._node_to_expr(update)
             func_args.extend(expr_args)
             expr_str, expr_args, _, _ = self._expr_to_str(expr, apply=True)
             func_args.extend(expr_args)
@@ -546,7 +541,7 @@ class ComputeGraph(MultiDiGraph):
             if isinstance(var, ComputeOp):
 
                 # process indexing of left-hand side variable
-                idx_args, lhs = self._node_to_expr(node, **funcs)
+                idx_args, lhs = self._node_to_expr(node)
                 if lhs.args[0].name not in defined_vars:
                     idx_args.append(lhs.args[0].name)
                 func_args.extend(idx_args)
@@ -605,12 +600,17 @@ class ComputeGraph(MultiDiGraph):
             # replace old inputs with its processed versions
             expr = node.expr
             for expr_old, (args, expr_new) in expr_info.items():
-                expr = expr.replace(expr_old, expr_new)
+                if expr_old != expr_new:
+                    expr = expr.replace(expr_old, expr_new)
                 expr_args.extend(args)
 
             # replace generic function calls with the backend-specific function calls
-            for expr_old, expr_new in kwargs.items():
-                expr = expr.replace(Function(expr_old), Function(expr_new))
+            try:
+                expr_old = expr.func.__name__
+                func_info = self.get_op(expr_old)
+                expr = expr.replace(Function(expr_old), Function(func_info['call']))
+            except (AttributeError, KeyError):
+                pass
 
         # case II: node is a simple variable or constant
         except AttributeError:
@@ -650,27 +650,27 @@ class ComputeGraph(MultiDiGraph):
         # process indexing operations
         #############################
 
-        if 'pr_base_index(' in expr_str:
+        if 'index_1d(' in expr_str:
 
             # replace `index` calls with brackets-based indexing
             var, idx = self._get_var_idx(var=expr.args[0], idx=(expr.args[1],), args=index_args, apply=apply)
-            func = 'pr_base_index'
+            func = 'index_1d'
 
-        elif 'pr_2d_index(' in expr_str:
+        elif 'index_2d(' in expr_str:
 
             # replace `2d_index` calls with brackets-based indexing
             var, idx = self._get_var_idx(var=expr.args[0], idx=(expr.args[1], expr.args[2]), args=index_args,
                                          apply=apply)
-            func = 'pr_2d_index'
+            func = 'index_2d'
 
-        elif 'pr_range_index(' in expr_str:
+        elif 'index_range(' in expr_str:
 
             # replace `range_index` calls with brackets-based indexing
             var, idx = self._get_var_idx(var=expr.args[0], idx=((expr.args[1], expr.args[2]),), args=index_args,
                                          apply=apply)
-            func = 'pr_range_index'
+            func = 'index_range'
 
-        elif 'pr_axis_index(' in expr_str:
+        elif 'index_axis(' in expr_str:
 
             # replace `axis_index` calls with brackets-based indexing
             if len(expr.args) < 2:
@@ -678,7 +678,7 @@ class ComputeGraph(MultiDiGraph):
             else:
                 var, idx = self._get_var_idx(var=expr.args[0], args=index_args, apply=apply,
                                              idx=tuple([':' for _ in range(expr.args[2])] + [f"{expr.args[1]}"]))
-            func = "pr_axis_index"
+            func = "index_axis"
 
         # either apply the above indexing calls or return them
         if func and apply:
@@ -687,11 +687,11 @@ class ComputeGraph(MultiDiGraph):
         # handle dummy function calls
         #############################
 
-        if 'pr_identity(' in expr_str:
+        if 'identity(' in expr_str:
 
             # replace `no_op` calls with first argument to the function call
             var = str(expr.args[0])
-            expr_str = self._process_func_call(expr=expr_str, func='pr_identity', replacement=var)
+            expr_str = self._process_func_call(expr=expr_str, func='identity', replacement=var)
 
         return expr_str, index_args, var, idx
 

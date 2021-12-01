@@ -43,11 +43,11 @@ Currently supported backends:
 """
 
 # pyrates internal imports
-from .base_funcs import *
 from .computegraph import ComputeVar
+from .base_funcs import base_funcs
 
 # external imports
-from typing import Optional, Dict, List, Union, Tuple, Callable
+from typing import Optional, Dict, List, Union, Tuple, Callable, Iterable
 import numpy as np
 
 
@@ -111,7 +111,6 @@ class BaseBackend(CodeGen):
 
     def __init__(self,
                  ops: Optional[Dict[str, str]] = None,
-                 dtypes: Optional[Dict[str, object]] = None,
                  imports: Optional[List[str]] = None,
                  **kwargs
                  ) -> None:
@@ -129,84 +128,62 @@ class BaseBackend(CodeGen):
         # call to super method (initializes code generator)
         super().__init__()
 
-        # define operations and datatypes of the backend
-        ################################################
-
-        # base math operations
-        self.ops = {
-                    "max": {'func': np.maximum, 'str': "maximum"},
-                    "min": {'func': np.minimum, 'str': "minimum"},
-                    "argmax": {'func': np.argmax, 'str': "argmax"},
-                    "argmin": {'func': np.argmin, 'str': "argmin"},
-                    "round": {'func': np.round, 'str': "round"},
-                    "sum": {'func': np.sum, 'str': "sum"},
-                    "mean": {'func': np.mean, 'str': "mean"},
-                    "matmul": {'func': np.dot, 'str': "dot"},
-                    "matvec": {'func': np.dot, 'str': "dot"},
-                    "concat": {'func': np.concatenate, 'str': "concatenate"},
-                    "reshape": {'func': np.reshape, 'str': "reshape"},
-                    "append": {'func': np.append, 'str': "append"},
-                    "shape": {'func': np.shape, 'str': "shape"},
-                    "dtype": {'func': np.dtype, 'str': "dtype"},
-                    'squeeze': {'func': np.squeeze, 'str': "squeeze"},
-                    'expand': {'func': np.expand_dims, 'str': "expand_dims"},
-                    "roll": {'func': np.roll, 'str': "roll"},
-                    "cast": {'func': np.asarray, 'str': "asarray"},
-                    "randn": {'func': np.random.randn, 'str': "randn"},
-                    "ones": {'func': np.ones, 'str': "ones"},
-                    "zeros": {'func': np.zeros, 'str': "zeros"},
-                    "range": {'func': np.arange, 'str': "arange"},
-                    "softmax": {'func': pr_softmax, 'str': "pr_softmax"},
-                    "sigmoid": {'func': pr_sigmoid, 'str': "pr_sigmoid"},
-                    "tanh": {'func': np.tanh, 'str': "tanh"},
-                    "sinh": {'func': np.sinh, 'str': "sinh"},
-                    "cosh": {'func': np.cosh, 'str': "cosh"},
-                    "arctan": {'func': np.arctan, 'str': "arctan"},
-                    "arcsin": {'func': np.arcsin, 'str': "arcsin"},
-                    "arccos": {'func': np.arccos, 'str': "arccos"},
-                    "sin": {'func': np.sin, 'str': "sin"},
-                    "cos": {'func': np.cos, 'str': "cos"},
-                    "tan": {'func': np.tan, 'str': "tan"},
-                    "exp": {'func': np.exp, 'str': "exp"},
-                    "no_op": {'func': pr_identity, 'str': "pr_identity"},
-                    "interp": {'func': pr_interp, 'str': "pr_interp"},
-                    "interpolate_1d": {'func': pr_interp_1d, 'str': "pr_interp_1d"},
-                    "interpolate_nd": {'func': pr_interp_nd, 'str': "pr_interp_nd"},
-                    "index": {'func': pr_base_index, 'str': "pr_base_index"},
-                    "index_axis": {'func': pr_axis_index, 'str': "pr_axis_index"},
-                    "index_2d": {'func': pr_2d_index, 'str': "pr_2d_index"},
-                    "index_range": {'func': pr_range_index, 'str': "pr_range_index"},
-                    }
+        # definition of usable math operations
         if ops:
-            self.ops.update(ops)
+            base_funcs.update(ops)
+        self.helper_funcs = []
 
-        # base data-types
-        self.dtypes = {"float16": np.float16,
-                       "float32": np.float32,
-                       "float64": np.float64,
-                       "int16": np.int16,
-                       "int32": np.int32,
-                       "int64": np.int64,
-                       "uint16": np.uint16,
-                       "uint32": np.uint32,
-                       "uint64": np.uint64,
-                       "complex64": np.complex64,
-                       "complex128": np.complex128,
-                       "bool": np.bool
-                       }
-        if dtypes:
-            self.dtypes.update(dtypes)
-
-        # further attributes
-        self._file_ending = ".py"
-        self.imports = ["from numpy import *", "from pyrates.backend.base_funcs import *"]
+        # definition of extrinsic function imports
+        self.imports = ["from numpy import pi, exp"]
         if imports:
             for imp in imports:
                 if imp not in self.imports:
                     self.imports.append(imp)
+
+        # private attributes
+        self._file_ending = ".py"
         self._idx_left = "["
         self._idx_right = "]"
         self._start_idx = 0
+        self._no_funcs = ["identity", "index_1d", "index_2d", "index_range", "index_axis"]
+
+    def get_op(self, name: str) -> dict:
+
+        # retrieve function information from backend definitions
+        func_info = base_funcs[name]
+        func_name = func_info['call']
+
+        # add extrinsic function imports if necessary
+        if 'imports' in func_info:
+            for imp in func_info['imports']:
+                *in_path, in_func = imp.split('.')
+                import_line = f"from {'.'.join(in_path)} import {in_func}"
+                if import_line not in self.imports:
+                    self.imports.append(import_line)
+
+        if 'func' in func_info:
+
+            # extract the provided callable
+            func = func_info['func']
+
+        else:
+
+            # extract the provided function definition
+            func_str = func_info['def']
+
+            # make imports available to function
+            for imp in self.imports:
+                exec(imp, globals())
+
+            # evaluate the function string to receive a callable
+            exec(func_str, globals())
+            func = globals().pop(func_name)
+
+            # remember the function definition string for file creation
+            if func_str not in self.helper_funcs and func_name not in self._no_funcs:
+                self.helper_funcs.append(func_str)
+
+        return {'func': func, 'call': func_name}
 
     def add_var_update(self, lhs: str, rhs: str, lhs_idx: Optional[str] = None, rhs_shape: Optional[tuple] = ()):
 
@@ -251,6 +228,7 @@ class BaseBackend(CodeGen):
     def generate_func_head(self, func_name: str, state_var: str = None, func_args: list = None):
 
         imports = self.imports
+        helper_funcs = self.helper_funcs
 
         if not func_args:
             func_args = []
@@ -265,9 +243,16 @@ class BaseBackend(CodeGen):
                 self.add_code_line(imp)
             self.add_linebreak()
 
+        if helper_funcs:
+
+            # add definitions of helper functions after the imports
+            for func in helper_funcs:
+                self.add_code_line(func)
+            self.add_linebreak()
+
         # add function header
         self.add_linebreak()
-        self.add_code_line(f"def {func_name}({','.join(func_args)}):")
+        self.add_code_line(self._generate_func_call(name=func_name, args=func_args))
         self.add_indent()
 
         return func_args
@@ -326,6 +311,10 @@ class BaseBackend(CodeGen):
         if type(idx) is int:
             return f"{idx + self._start_idx}"
         return idx
+
+    @staticmethod
+    def _generate_func_call(name: str, args: Iterable):
+        return f"def {name}({','.join(args)}):"
 
     @staticmethod
     def _solve_euler(func: Callable, args: tuple, T: float, dt: float, dts: float, y: np.ndarray):

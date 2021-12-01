@@ -27,6 +27,7 @@ def setup_module():
     print("| Test Suite : Parser Module |")
     print("==============================")
 
+
 # list parsers to be tested and their backends
 backends = ['default']
 parsers = [ExpressionParser]
@@ -37,6 +38,7 @@ accuracy = 1e-4
 #########
 # Tests #
 #########
+
 
 def test_1_1_expression_parser_init():
     """Testing initializations of different expression parsers:
@@ -209,17 +211,18 @@ def test_1_5_expression_parser_indexing():
                 'd': {'vtype': 'constant', 'value': 4, 'shape': (), 'dtype': 'int32'}}
 
     # define valid test cases
-    indexed_expressions = [("index_axis(A)", A[:]),                  # single-dim indexing I
-                           ("index(A, 0)", A[0]),                    # single-dim indexing II
-                           ("index(A, 9)", A[9]),                    # single-dim indexing III
-                           ("index(A, B)", A[B]),                    # single-dim indexing IV
-                           ("index_range(A, 0, 5)", A[0:5]),         # single-dim slicing I
-                           ("index_range(A, d, 8-1)", A[4:8 - 1]),   # single-dim slicing II
-                           ("index_2d(A, 4, 5)", A[4, 5]),           # two-dim indexing I
-                           ("index_2d(A, B, 1)", A[B, 1]),           # two-dim indexing II
-                           ("index_2d(A, B, C)", A[B, C]),           # two-dim indexing III
-                           ("index_axis(A, B, 1)", A[:, B]),         # two-dim indexing IV
-                           ]
+    indexed_expressions = [
+        ("index(A, 0)", A[0]),                    # single-dim indexing I
+        ("index(A, 9)", A[9]),                    # single-dim indexing II
+        ("index(A, B)", A[B]),                    # single-dim indexing III
+        ("index_range(A, 0, 5)", A[0:5]),         # slicing I
+        ("index_range(A, d, 8-1)", A[4:8 - 1]),   # slicing II
+        ("index_axis(A)", A[:]),                  # slicing III
+        ("index_2d(A, 4, 5)", A[4, 5]),           # two-dim indexing I
+        ("index_2d(A, B, 1)", A[B, 1]),           # two-dim indexing II
+        ("index_2d(A, B, C)", A[B, C]),           # two-dim indexing III
+        ("index_axis(A, B, 1)", A[:, B]),         # two-dim indexing IV
+    ]
 
     # define invalid test cases
     indexed_expressions_wrong = ["index(A, 1.2)",           # wrong data type of index

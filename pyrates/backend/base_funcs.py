@@ -26,14 +26,11 @@
 #
 # Richard Gast and Daniel Rose et. al. in preparation
 
-"""Contains functions that may be used as backend operations
-
+"""Contains string-based function definitions that may be used as backend operations
 """
 
 # external imports
 import numpy as np
-from scipy.interpolate import interp1d
-from numba import njit
 
 # meta infos
 __author__ = "Richard Gast"
@@ -43,55 +40,76 @@ __status__ = "development"
 # function definitions
 ######################
 
+neg_one = """
 def neg_one(x):
     return -1*x
+"""
 
-@njit
-def pr_sigmoid(x):
-    return 1./(1. + np.exp(-x))
+sigmoid = """
+def sigmoid(x):
+    return 1./(1. + exp(-x))
+"""
 
-@njit
-def pr_softmax(x, axis=0):
-    x_exp = np.exp(x)
-    return x_exp/np.sum(x_exp, axis=axis)
-
-def pr_identity(x):
+identity = """
+def identity(x):
     return x
+"""
 
-def pr_interp_nd_linear(x, y, x_new, y_idx, t):
-    return np.asarray([np.interp(t - x_new_tmp, x, y[i, :]) for i, x_new_tmp in zip(y_idx, x_new)])
-
-@njit
-def pr_interp_1d(x, y, x_new):
-    return interp1d(x, y, kind=3, axis=-1)(x_new)
-
-
-def pr_interp_nd(x, y, x_new, y_idx, t):
-    try:
-        f = interp1d(x, y, kind=3, axis=-1, fill_value='extrapolate', copy=False)
-    except ValueError:
-        try:
-            x, idx = np.unique(x, return_index=True)
-            f = interp1d(x, y[:, idx], kind=3, axis=-1, copy=False, fill_value='extrapolate')
-        except ValueError:
-            f = interp1d(x, y[:, idx], kind='linear', axis=-1, copy=False, fill_value='extrapolate')
-    return np.asarray([f(x_new_tmp)[i] for i, x_new_tmp in zip(y_idx, t-x_new)])
-
-@njit
-def pr_interp(x, y, x_new):
-    return np.interp(x_new, x, y)
-
-def pr_base_index(x, idx):
+index_1d = """
+def index_1d(x, idx):
     return x[idx]
+"""
 
-def pr_2d_index(x, idx1, idx2):
+index_2d = """
+def index_2d(x, idx1, idx2):
     return x[idx1, idx2]
+"""
 
-def pr_range_index(x, idx1, idx2):
+index_range = """
+def index_range(x, idx1, idx2):
     return x[idx1:idx2]
+"""
 
-def pr_axis_index(x, idx=None, axis=0):
-    if idx:
+index_axis = """
+def index_axis(x, idx=None, axis=0):
+    if idx is not None:
         return x[idx] if axis == 0 else x[:, idx]
     else:
         return x[:]
+"""
+
+# dictionary for backend import
+###############################
+
+base_funcs = {
+    'max': {'call': 'maximum', 'func': np.maximum, 'imports': ['numpy.maximum']},
+    'min': {'call': 'minimum', 'func': np.minimum, 'imports': ['numpy.minimum']},
+    'argmax': {'call': 'argmax', 'func': np.argmax, 'imports': ['numpy.argmax']},
+    'argmin': {'call': 'argmin','func': np.argmin, 'imports': ['numpy.argmin']},
+    'round': {'call': 'round', 'func': np.round, 'imports': ['numpy.round']},
+    'sum': {'call': 'sum', 'func': np.sum, 'imports': ['numpy.sum']},
+    'mean': {'call': 'mean', 'func': np.mean, 'imports': ['numpy.mean']},
+    'matmul': {'call': 'dot', 'func': np.dot, 'imports': ['numpy.dot']},
+    'matvec': {'call': 'dot', 'func': np.dot, 'imports': ['numpy.dot']},
+    'roll': {'call': 'roll', 'func': np.roll, 'imports': ['numpy.roll']},
+    'cast': {'call': 'asarray', 'func': np.asarray, 'imports': ['numpy.asarray']},
+    'randn': {'call': 'randn', 'func': np.random.randn, 'imports': ['numpy.random.randn']},
+    'tanh': {'call': 'tanh', 'func': np.tanh, 'imports': ['numpy.tanh']},
+    'sinh': {'call': 'sinh', 'func': np.sinh, 'imports': ['numpy.sinh']},
+    'cosh': {'call': 'cosh', 'func': np.cosh, 'imports': ['numpy.cosh']},
+    'arctan': {'call': 'arctan', 'func': np.arctan, 'imports': ['numpy.arctan']},
+    'arcsin': {'call': 'arcsin', 'func': np.arcsin, 'imports': ['numpy.arcsin']},
+    'arccos': {'call': 'arccos', 'func': np.arccos, 'imports': ['numpy.arccos']},
+    'sin': {'call': 'sin', 'func': np.sin, 'imports': ['numpy.sin']},
+    'cos': {'call': 'cos', 'func': np.cos, 'imports': ['numpy.cos']},
+    'tan': {'call': 'tan', 'func': np.tan, 'imports': ['numpy.tan']},
+    'exp': {'call': 'exp', 'func': np.exp, 'imports': ['numpy.exp']},
+    'interp': {'call': 'interp', 'func': np.interp, 'imports': ['numpy.interp']},
+    'neg_one': {'call': 'neg_one', 'def': neg_one},
+    'sigmoid': {'call': 'sigmoid', 'def': sigmoid},
+    'no_op': {'call': 'identity', 'def': identity},
+    'index': {'call': 'index_1d', 'def': index_1d},
+    'index_range': {'call': 'index_range', 'def': index_range},
+    'index_2d': {'call': 'index_2d', 'def': index_2d},
+    'index_axis': {'call': 'index_axis', 'def': index_axis}
+}

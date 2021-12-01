@@ -997,7 +997,7 @@ def create_input_node(var: str, inp: np.ndarray, continuous: bool, T: float) -> 
         inp = inp.squeeze()
         time = np.linspace(0, T, inp.shape[0])
         y_new = np.interp(0.0, time, inp)
-        eqs = [f"{var_name} = interp(time, {var}_input, t)"]
+        eqs = [f"{var_name} = interp(t, time, {var}_input)"]
         var_dict = {
             var_name: {'default': 'output', 'value': y_new},
             f"{var}_input": {'default': 'constant', 'value': inp, 'shape': inp.shape},

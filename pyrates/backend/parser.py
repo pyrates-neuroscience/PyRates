@@ -305,14 +305,12 @@ class ExpressionParser:
                     inputs.append(label)
                     func_args.append(var.symbol)
 
-            # retrieve name of the mathematical operation
+            # create callable function of the operation
+            label = expr.func.__name__
             try:
-                label = str(expr.func).split('\'')[1].split('.')[-1]
-            except IndexError:
-                label = str(expr.func)
-
-            # define function calls that can be used for the operation
-            backend_funcs = {label: self.cg.ops[label]['func']} if label in self.cg.ops else {}
+                backend_funcs = {label: self.cg.get_op(label)['func']}
+            except KeyError:
+                backend_funcs = dict()
             func = lambdify(func_args, expr=expr, modules=[backend_funcs, "numpy"])
 
             # parse mathematical operation into compute graph
