@@ -29,13 +29,13 @@
 """Functions for performing parameter grid simulations with pyrates model_templates.
 """
 
-# external imports
+# external _imports
 import pandas as pd
 import numpy as np
 from typing import Optional, Union, Tuple
 from copy import deepcopy
 
-# system imports
+# system _imports
 import os
 import sys
 import time as t
@@ -47,7 +47,7 @@ from datetime import datetime
 from threading import Thread, currentThread, RLock
 import socket
 
-# pyrates internal imports
+# pyrates internal _imports
 from pyrates.frontend import CircuitTemplate
 from pyrates.ir.circuit import CircuitIR
 
@@ -1368,7 +1368,7 @@ class ClusterWorkerTemplate(object):
 
         """
         import warnings
-        # external imports
+        # external _imports
         from numba import config
         import yaml
 

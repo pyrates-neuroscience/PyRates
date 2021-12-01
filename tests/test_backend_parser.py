@@ -1,12 +1,12 @@
 """Test suite for basic parser module functionality.
 """
 
-# external imports
+# external _imports
 import numpy as np
 from copy import deepcopy
 import pytest
 
-# pyrates internal imports
+# pyrates internal _imports
 from pyrates.backend.parser import parse_equations
 from pyrates.backend.parser import ExpressionParser
 from pyrates.backend.computegraph import ComputeGraph
@@ -29,7 +29,7 @@ def setup_module():
 
 
 # list parsers to be tested and their backends
-backends = ['default']
+backends = ['torch']
 parsers = [ExpressionParser]
 
 # test accuracy

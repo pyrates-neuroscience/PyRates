@@ -1,8 +1,8 @@
-# pyrates imports
+# pyrates _imports
 from pyrates.ir.circuit import CircuitIR
 from pyrates.frontend import CircuitTemplate
 
-# additional imports
+# additional _imports
 import numpy as np
 from pandas import DataFrame
 from copy import deepcopy

@@ -29,7 +29,7 @@
 """This module provides the backend class that should be used to set up any backend in pyrates.
 """
 
-# external imports
+# external _imports
 import os
 import sys
 from shutil import rmtree
@@ -66,7 +66,7 @@ class ComputeNode:
     __slots__ = ["name", "symbol", "dtype", "shape", "_value"]
 
     def __init__(self, name: str, symbol: Union[Symbol, Expr, Function], dtype: Optional[str] = None,
-                 shape: Optional[str] = None, def_shape: Optional[tuple] = None):
+                 shape: Optional[tuple] = None, def_shape: Optional[tuple] = None):
         """Instantiates a basic node of a ComputeGraph instance.
         """
 
@@ -90,7 +90,7 @@ class ComputeNode:
 
     def set_value(self, v: Union[float, np.ndarray]):
         self._value = v
-        self.shape = self.value.shape if hasattr(v, 'shape') else ()
+        self.shape = tuple(v.shape)
 
     @property
     def value(self):
@@ -101,6 +101,10 @@ class ComputeNode:
     @property
     def is_constant(self):
         raise NotImplementedError("This method has to be defined by each child class.")
+
+    @property
+    def is_float(self):
+        return "float" in self.dtype
 
     def _is_equal_to(self, v):
         for attr in self.__slots__:
@@ -137,7 +141,7 @@ class ComputeNode:
         return np.asarray(value, dtype=dtype)
 
     @staticmethod
-    def _get_shape(s: Union[tuple, None], s_def: Union[tuple, None]):
+    def _get_shape(s: Union[tuple, None], s_def: tuple):
         if s is None or sum(s) < 2:
             return s_def
         return s
@@ -170,10 +174,15 @@ class ComputeVar(ComputeNode):
 
         # adjust variable value
         self.set_value(self._get_value(value=value, shape=self.shape, dtype=self.dtype))
+        self._set_dtype()
 
     @property
     def is_constant(self):
         return self.vtype == 'constant'
+
+    def _set_dtype(self):
+        if not self.dtype:
+            self.dtype = 'float' if 'float' in str(self.value.dtype) else 'int'
 
 
 class ComputeOp(ComputeNode):
@@ -194,6 +203,10 @@ class ComputeOp(ComputeNode):
     def is_constant(self):
         return False
 
+    @property
+    def is_float(self):
+        return True
+
 
 # networkx-based graph class
 class ComputeGraph(MultiDiGraph):
@@ -207,16 +220,19 @@ class ComputeGraph(MultiDiGraph):
 
         # choose a backend
         if backend == 'tensorflow':
-            from pyrates.backend.tensorflow_backend import TensorflowBackend
+            from pyrates.backend.tensorflow import TensorflowBackend
             backend = TensorflowBackend
+        elif backend == 'torch':
+            from pyrates.backend.torch import TorchBackend
+            backend = TorchBackend
         elif backend == 'fortran':
-            from pyrates.backend.fortran_backend import FortranBackend
+            from pyrates.backend.fortran import FortranBackend
             backend = FortranBackend
         elif backend == 'PyAuto' or backend == 'pyauto':
-            from pyrates.backend.fortran_backend import PyAutoBackend
+            from pyrates.backend.fortran import PyAutoBackend
             backend = PyAutoBackend
         else:
-            from pyrates.backend.base_backend import BaseBackend
+            from pyrates.backend.base import BaseBackend
             backend = BaseBackend
 
         # backend-related attributes
@@ -367,8 +383,8 @@ class ComputeGraph(MultiDiGraph):
             state_vec = np.concatenate(variables, axis=0)
         except ValueError:
             state_vec = np.asarray(variables)
-        state_var_key, y = self.add_var(label='y', vtype='state_var', value=state_vec)
-        rhs_var_key, dy = self.add_var(label='dy', vtype='state_var', value=np.zeros_like(state_vec))
+        state_var_key, y = self.add_var(label='y', vtype='state_var', value=state_vec, dtype='float')
+        rhs_var_key, dy = self.add_var(label='dy', vtype='state_var', value=np.zeros_like(state_vec), dtype='float')
 
         # create a string containing all computations and variable updates represented by the compute graph
         func_args, code_gen = self._to_str()

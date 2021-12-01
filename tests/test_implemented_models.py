@@ -1,11 +1,11 @@
 """Test suite for accurate behavior of models provided under pyrates.model_templates"""
 
-# external imports
+# external _imports
 from typing import Union
 import numpy as np
 import pytest
 
-# pyrates internal imports
+# pyrates internal _imports
 from pyrates import simulate
 
 # meta infos

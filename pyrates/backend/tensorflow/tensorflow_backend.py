@@ -29,14 +29,15 @@
 """Wraps tensorflow such that it's low-level functions can be used by PyRates to create and simulate a compute graph.
 """
 
-# pyrates internal imports
-from .base_funcs import *
-from .base_backend import BaseBackend
-from .computegraph import ComputeVar
+# pyrates internal _imports
+from ..base import BaseBackend
+from ..computegraph import ComputeVar
+from .tensorflow_funcs import tf_funcs
 
-# external imports
+# external _imports
 from typing import Optional, Dict, Callable, List, Tuple, Union
 import tensorflow as tf
+import numpy as np
 
 # meta infos
 __author__ = "Richard Gast"
@@ -75,66 +76,30 @@ class TensorflowBackend(BaseBackend):
 
     def __init__(self,
                  ops: Optional[Dict[str, str]] = None,
-                 dtypes: Optional[Dict[str, object]] = None,
                  imports: Optional[List[str]] = None,
                  **kwargs
                  ) -> None:
         """Instantiates tensorflow backend, i.e. a tensorflow graph.
         """
 
-        # base math operations
-        ops_tf = {
-            "max": {'func': tf.reduce_max, 'str': "reduce_max"},
-            "min": {'func': tf.reduce_min, 'str': "reduce_min"},
-            "argmax": {'func': tf.argmax, 'str': "argmax"},
-            "argmin": {'func': tf.argmin, 'str': "argmin"},
-            "round": {'func': tf.round, 'str': "round"},
-            "sum": {'func': tf.reduce_sum, 'str': "reduce_sum"},
-            "mean": {'func': tf.reduce_mean, 'str': "reduce_mean"},
-            "matmul": {'func': tf.matmul, 'str': "matmul"},
-            "matvec": {'func': tf.linalg.matvec, 'str': "linalg.matvec"},
-            'expand': {'func': tf.expand_dims, 'str': "expand_dims"},
-            "roll": {'func': tf.roll, 'str': "roll"},
-            "softmax": {'func': tf.math.softmax, 'str': "math.softmax"},
-            "sigmoid": {'func': tf.math.sigmoid, 'str': "math.sigmoid"},
-            "tanh": {'func': tf.tanh, 'str': "tanh"},
-            "exp": {'func': tf.exp, 'str': "exp"},
-        }
+        # add user-provided operations to function dict
+        tf_ops = tf_funcs.copy()
         if ops:
-            ops_tf.update(ops)
+            tf_ops.update(ops)
 
-        # base data types
-        dtypes_tf = {
-            "float16": tf.float16,
-            "float32": tf.float32,
-            "float64": tf.float64,
-            "int16": tf.int16,
-            "int32": tf.int32,
-            "int64": tf.int64,
-            "uint16": tf.uint16,
-            "uint32": tf.uint32,
-            "uint64": tf.uint64,
-            "complex64": tf.complex64,
-            "complex128": tf.complex128,
-            "bool": tf.bool
-        }
-        if dtypes:
-            dtypes_tf.update(dtypes)
+        # call parent method
+        super().__init__(ops=tf_ops, imports=imports, **kwargs)
 
-        # base imports
-        imports_tf = ["from tensorflow import *"]
-        for op in ops_tf.values():
-            *op_import, op_key = op['str'].split('.')
-            if op_import:
-                imports_tf.append(f"from tensorflow.{'.'.join(op_import)} import {op_key}")
-                op['str'] = op_key
+        # define tensorflow-specific _imports
+        self._imports.pop(0)
+        self._imports.append("from tensorflow import sqrt")
 
-        if imports:
-            for imp in imports:
-                if imp not in imports_tf:
-                    imports_tf.append(imp)
-
-        super().__init__(ops_tf, dtypes_tf, imports_tf, **kwargs)
+    def get_var(self, v: ComputeVar):
+        dtype = self._float_precision if v.is_float else self._int_precision
+        if v.vtype == 'constant':
+            return tf.constant(name=v.name, value=v.value, dtype=dtype)
+        else:
+            return tf.Variable(name=v.name, initial_value=v.value, dtype=dtype)
 
     def add_var_update(self, lhs: str, rhs: str, lhs_idx: Optional[str] = None, rhs_shape: Optional[tuple] = ()):
 
@@ -159,7 +124,12 @@ class TensorflowBackend(BaseBackend):
 
             # create tensorflow-specific index
             if type(idx) is not tuple:
-                idx = tuple(idx.split(separator)) if separator in idx else tuple(idx)
+                if separator in idx:
+                    idx = tuple(idx.split(separator))
+                elif type(idx) is str:
+                    idx = (idx,)
+                else:
+                    idx = tuple(idx)
             new_idx, return_dict = self._get_tf_idx(idx, size=size, max_length=max_length)
             return f"{new_idx}" if apply else new_idx, return_dict
 
@@ -173,26 +143,41 @@ class TensorflowBackend(BaseBackend):
         # case III: default indexing
         return super().create_index_str(idx=idx, separator=separator, apply=apply, scatter=False)
 
-    @staticmethod
-    def get_var(v: ComputeVar):
-        if v.vtype == 'constant':
-            return tf.constant(name=v.name, value=v.value)
+    def _solve(self, solver: str, func: Callable, args: tuple, T: float, dt: float, dts: float, y0: tf.Variable,
+               times: np.ndarray, **kwargs) -> np.ndarray:
+
+        # perform integration via scipy solver (mostly Runge-Kutta methods)
+        if solver == 'euler':
+
+            # preparations for fixed step-size integration
+            zero = tf.constant(0, dtype=tf.int32)
+            idx = tf.Variable(0, dtype=tf.int32)
+            steps = tf.constant(int(np.round(T / dt)))
+            store_steps = int(np.round(T / dts))
+            store_step = tf.constant(int(np.round(dts / dt)))
+            state_rec = tf.Variable(np.zeros((store_steps, y0.shape[0])))
+            dt = tf.constant(dt)
+
+            # solve ivp via forward euler method (fixed integration step-size)
+            self._solve_euler(func, args, steps, store_step, zero, state_rec, idx, y0, dt)
+            results = state_rec.numpy()
+
         else:
-            return tf.Variable(name=v.name, initial_value=v.value)
 
-    def _solve_euler(self, func: Callable, args: tuple, T: float, dt: float, dts: float, y: tf.Variable):
+            # solve ivp via scipy methods (solvers of various orders with adaptive step-size)
+            from scipy.integrate import solve_ivp
+            t = 0.0
+            kwargs['t_eval'] = times
 
-        # preparations for fixed step-size integration
-        zero = tf.constant(0, dtype=tf.int32)
-        idx = tf.Variable(0, dtype=tf.int32)
-        steps = tf.constant(int(np.round(T / dt)))
-        store_steps = int(np.round(T / dts))
-        store_step = tf.constant(int(np.round(dts / dt)))
-        state_rec = tf.Variable(np.zeros((store_steps, y.shape[0])))
+            def f(t: float, y: np.ndarray):
+                rhs = func(t, tf.constant(y, dtype=y0.dtype), *args)
+                return rhs.numpy()
 
-        # perform fixed step-size integration
-        self._euler_integrate(func, args, steps, store_step, zero, state_rec, idx, y, dt)
-        return state_rec.numpy()
+            # call scipy solver
+            results = solve_ivp(fun=f, t_span=(t, T), y0=y0.numpy(), first_step=dt, **kwargs)
+            results = results['y'].T
+
+        return results
 
     def _process_idx(self, idx: Union[Tuple[int, int], int, str, ComputeVar], size: int = 1, scatter: bool = False
                      ) -> Union[str, list]:
@@ -208,6 +193,11 @@ class TensorflowBackend(BaseBackend):
                 return [idx + self._start_idx]
             if idx == ':':
                 return self._process_idx((self._start_idx, size), scatter=scatter)
+            if ':' in idx:
+                idx0, idx1 = idx.split(':')
+                idx0 = self._process_idx(idx0, scatter=scatter)[0]
+                idx1 = self._process_idx(idx1, scatter=scatter)[0]
+                return self._process_idx((idx0, idx1), scatter=scatter)
             try:
                 return self._process_idx(int(idx), scatter=scatter)
             except (ValueError, TypeError):
@@ -253,7 +243,8 @@ class TensorflowBackend(BaseBackend):
 
     @staticmethod
     @tf.function
-    def _euler_integrate(func, args, steps, store_step, zero, state_rec, idx, y, dt):
+    def _solve_euler(func: Callable, args: tuple, steps: tf.constant, store_step: int, zero: tf.constant,
+                     state_rec: tf.Variable, idx: tf.Variable, y: tf.Variable, dt: tf.constant):
 
         for step in tf.range(steps):
 
@@ -263,13 +254,3 @@ class TensorflowBackend(BaseBackend):
 
             rhs = func(step, y, *args)
             y.assign_add(dt*rhs)
-
-    @staticmethod
-    def _euler_integration(steps, store_step, state_vec, state_rec, dt, rhs_func, rhs, *args):
-        idx = 0
-        for step in range(steps):
-            if step % store_step == 0:
-                state_rec[idx, :] = state_vec.numpy()
-                idx += 1
-            state_vec.assign_add(dt * rhs_func(step, state_vec, rhs, *args))
-        return state_rec

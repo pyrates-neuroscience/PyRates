@@ -26,7 +26,7 @@
 #
 # Richard Gast and Daniel Rose et. al. in preparation
 
-# system imports
+# system _imports
 import os
 import sys
 import json
@@ -34,7 +34,7 @@ import time
 import argparse
 import warnings
 
-# external imports
+# external _imports
 from numba import njit, config
 import numpy as np
 import pandas as pd

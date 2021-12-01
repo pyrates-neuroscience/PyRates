@@ -26,10 +26,10 @@
 #
 # Richard Gast and Daniel Rose et. al. in preparation
 
-"""Contains string-based function definitions that may be used as backend operations
+"""Contains function definitions that may be used for PyRates model equations.
 """
 
-# external imports
+# external _imports
 import numpy as np
 
 # meta infos
@@ -85,14 +85,13 @@ base_funcs = {
     'max': {'call': 'maximum', 'func': np.maximum, 'imports': ['numpy.maximum']},
     'min': {'call': 'minimum', 'func': np.minimum, 'imports': ['numpy.minimum']},
     'argmax': {'call': 'argmax', 'func': np.argmax, 'imports': ['numpy.argmax']},
-    'argmin': {'call': 'argmin','func': np.argmin, 'imports': ['numpy.argmin']},
+    'argmin': {'call': 'argmin', 'func': np.argmin, 'imports': ['numpy.argmin']},
     'round': {'call': 'round', 'func': np.round, 'imports': ['numpy.round']},
     'sum': {'call': 'sum', 'func': np.sum, 'imports': ['numpy.sum']},
     'mean': {'call': 'mean', 'func': np.mean, 'imports': ['numpy.mean']},
     'matmul': {'call': 'dot', 'func': np.dot, 'imports': ['numpy.dot']},
     'matvec': {'call': 'dot', 'func': np.dot, 'imports': ['numpy.dot']},
     'roll': {'call': 'roll', 'func': np.roll, 'imports': ['numpy.roll']},
-    'cast': {'call': 'asarray', 'func': np.asarray, 'imports': ['numpy.asarray']},
     'randn': {'call': 'randn', 'func': np.random.randn, 'imports': ['numpy.random.randn']},
     'tanh': {'call': 'tanh', 'func': np.tanh, 'imports': ['numpy.tanh']},
     'sinh': {'call': 'sinh', 'func': np.sinh, 'imports': ['numpy.sinh']},
@@ -106,7 +105,7 @@ base_funcs = {
     'exp': {'call': 'exp', 'func': np.exp, 'imports': ['numpy.exp']},
     'interp': {'call': 'interp', 'func': np.interp, 'imports': ['numpy.interp']},
     'neg_one': {'call': 'neg_one', 'def': neg_one},
-    'sigmoid': {'call': 'sigmoid', 'def': sigmoid},
+    'sigmoid': {'call': 'sigmoid', 'def': sigmoid, 'imports': ['numpy.exp']},
     'no_op': {'call': 'identity', 'def': identity},
     'index': {'call': 'index_1d', 'def': index_1d},
     'index_range': {'call': 'index_range', 'def': index_range},

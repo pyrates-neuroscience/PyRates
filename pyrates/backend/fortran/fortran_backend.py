@@ -29,14 +29,14 @@
 """Wraps tensorflow such that it's low-level functions can be used by PyRates to create and simulate a compute graph.
 """
 
-# pyrates internal imports
+# pyrates internal _imports
 import gc
 
 from .base_backend import BaseBackend, CodeGen
 from .fortran_funcs import get_fortran_func, fortran_identifiers
 from .base_funcs import *
 
-# external imports
+# external _imports
 from typing import Optional, Dict, Union, List, Any, Callable
 import os
 from numpy import f2py
@@ -178,7 +178,7 @@ class FortranBackend(BaseBackend):
 
         # TODO: in pyauto compatibility mode, the run function has to be defined differently. Most importantly,
         #  all function parameters except the continuation parameter have to enter the function via a single list.
-        #  This works only for scalar parameters. Thus, other parameters should be saved to the file and loaded instead of imports
+        #  This works only for scalar parameters. Thus, other parameters should be saved to the file and loaded instead of _imports
         #  above the function definition.
         super().__init__(ops=ops, dtypes=dtypes, name=name, float_default_type=float_default_type,
                          imports=imports, build_dir=build_dir, code_gen=FortranGen(), **kwargs)

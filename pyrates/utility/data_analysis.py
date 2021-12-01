@@ -27,7 +27,7 @@
 # 
 # Richard Gast and Daniel Rose et. al. in preparation
 
-# external imports
+# external _imports
 import pandas as pd
 import numpy as np
 from typing import List

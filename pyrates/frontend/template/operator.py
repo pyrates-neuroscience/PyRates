@@ -25,13 +25,13 @@
 # CITATION:
 # 
 # Richard Gast and Daniel Rose et. al. in preparation
-# external imports
+# external _imports
 import re
 from copy import deepcopy
 from sys import intern
 from typing import Union
 
-# pyrates internal imports
+# pyrates internal _imports
 from pyrates.ir.circuit import PyRatesException
 from pyrates.frontend.template.abc import AbstractBaseTemplate
 

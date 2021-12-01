@@ -42,11 +42,11 @@ Currently supported backends:
 
 """
 
-# pyrates internal imports
-from .computegraph import ComputeVar
+# pyrates internal _imports
+from ..computegraph import ComputeVar
 from .base_funcs import base_funcs
 
-# external imports
+# external _imports
 from typing import Optional, Dict, List, Union, Tuple, Callable, Iterable
 import numpy as np
 
@@ -119,8 +119,6 @@ class BaseBackend(CodeGen):
         Parameters
         ----------
         ops
-        dtypes
-        float_default_type
         imports
         kwargs
         """
@@ -129,37 +127,44 @@ class BaseBackend(CodeGen):
         super().__init__()
 
         # definition of usable math operations
+        self._funcs = base_funcs.copy()
         if ops:
-            base_funcs.update(ops)
-        self.helper_funcs = []
+            self._funcs.update(ops)
+        self._helper_funcs = []
 
-        # definition of extrinsic function imports
-        self.imports = ["from numpy import pi, exp"]
+        # definition of extrinsic function _imports
+        self._imports = ["from numpy import sqrt", "from math import pi"]
         if imports:
             for imp in imports:
-                if imp not in self.imports:
-                    self.imports.append(imp)
+                if imp not in self._imports:
+                    self._imports.append(imp)
 
         # private attributes
+        self._float_precision = kwargs.pop('float_precision', 'float32')
+        self._int_precision = kwargs.pop('int_precision', 'int16')
         self._file_ending = ".py"
         self._idx_left = "["
         self._idx_right = "]"
         self._start_idx = 0
         self._no_funcs = ["identity", "index_1d", "index_2d", "index_range", "index_axis"]
 
+    def get_var(self, v: ComputeVar):
+        dtype = self._float_precision if v.is_float else self._int_precision
+        return np.asarray(v.value, dtype=dtype)
+
     def get_op(self, name: str) -> dict:
 
         # retrieve function information from backend definitions
-        func_info = base_funcs[name]
+        func_info = self._funcs[name]
         func_name = func_info['call']
 
-        # add extrinsic function imports if necessary
+        # add extrinsic function _imports if necessary
         if 'imports' in func_info:
             for imp in func_info['imports']:
                 *in_path, in_func = imp.split('.')
                 import_line = f"from {'.'.join(in_path)} import {in_func}"
-                if import_line not in self.imports:
-                    self.imports.append(import_line)
+                if import_line not in self._imports:
+                    self._imports.append(import_line)
 
         if 'func' in func_info:
 
@@ -171,8 +176,8 @@ class BaseBackend(CodeGen):
             # extract the provided function definition
             func_str = func_info['def']
 
-            # make imports available to function
-            for imp in self.imports:
+            # make _imports available to function
+            for imp in self._imports:
                 exec(imp, globals())
 
             # evaluate the function string to receive a callable
@@ -180,8 +185,8 @@ class BaseBackend(CodeGen):
             func = globals().pop(func_name)
 
             # remember the function definition string for file creation
-            if func_str not in self.helper_funcs and func_name not in self._no_funcs:
-                self.helper_funcs.append(func_str)
+            if func_str not in self._helper_funcs and func_name not in self._no_funcs:
+                self._helper_funcs.append(func_str)
 
         return {'func': func, 'call': func_name}
 
@@ -227,8 +232,8 @@ class BaseBackend(CodeGen):
 
     def generate_func_head(self, func_name: str, state_var: str = None, func_args: list = None):
 
-        imports = self.imports
-        helper_funcs = self.helper_funcs
+        imports = self._imports
+        helper_funcs = self._helper_funcs
 
         if not func_args:
             func_args = []
@@ -238,14 +243,14 @@ class BaseBackend(CodeGen):
 
         if imports:
 
-            # add imports at beginning of file
+            # add _imports at beginning of file
             for imp in imports:
                 self.add_code_line(imp)
             self.add_linebreak()
 
         if helper_funcs:
 
-            # add definitions of helper functions after the imports
+            # add definitions of helper functions after the _imports
             for func in helper_funcs:
                 self.add_code_line(func)
             self.add_linebreak()
@@ -269,24 +274,8 @@ class BaseBackend(CodeGen):
         times = np.arange(0, T, dts) if dts else np.arange(0, T, dt)
 
         # perform simulation
-        ####################
-
-        # perform integration via scipy solver (mostly Runge-Kutta methods)
-        if solver == 'euler':
-
-            # solve ivp via forward euler method (fixed integration step-size)
-            results = self._solve_euler(func, func_args, T, dt, dts, y0)
-
-        else:
-
-            # solve ivp via scipy methods (solvers of various orders with adaptive step-size)
-            from scipy.integrate import solve_ivp
-            t = 0.0
-            kwargs['t_eval'] = times
-
-            # call scipy solver
-            results = solve_ivp(fun=func, t_span=(t, T), y0=y0, first_step=dt, args=func_args, **kwargs)
-            results = results['y'].T
+        results = self._solve(solver=solver, func=func, args=func_args, T=T, dt=dt, dts=dts, y0=y0, times=times,
+                              **kwargs)
 
         # reduce state recordings to requested state variables
         for key, idx in outputs.items():
@@ -299,10 +288,6 @@ class BaseBackend(CodeGen):
 
         return outputs
 
-    @staticmethod
-    def get_var(v: ComputeVar):
-        return v.value
-
     def _process_idx(self, idx: Union[Tuple[int, int], int, str, ComputeVar], **kwargs) -> str:
         if type(idx) is ComputeVar:
             return idx.name
@@ -311,6 +296,28 @@ class BaseBackend(CodeGen):
         if type(idx) is int:
             return f"{idx + self._start_idx}"
         return idx
+
+    def _solve(self, solver: str, func: Callable, args: tuple, T: float, dt: float, dts: float, y0: np.ndarray,
+               times: np.ndarray, **kwargs) -> np.ndarray:
+
+        # perform integration via scipy solver (mostly Runge-Kutta methods)
+        if solver == 'euler':
+
+            # solve ivp via forward euler method (fixed integration step-size)
+            results = self._solve_euler(func, args, T, dt, dts, y0)
+
+        else:
+
+            # solve ivp via scipy methods (solvers of various orders with adaptive step-size)
+            from scipy.integrate import solve_ivp
+            t = 0.0
+            kwargs['t_eval'] = times
+
+            # call scipy solver
+            results = solve_ivp(fun=func, t_span=(t, T), y0=y0, first_step=dt, args=args, **kwargs)
+            results = results['y'].T
+
+        return results
 
     @staticmethod
     def _generate_func_call(name: str, args: Iterable):

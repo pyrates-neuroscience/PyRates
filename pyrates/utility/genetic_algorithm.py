@@ -26,13 +26,13 @@
 #
 # Richard Gast and Daniel Rose et. al. in preparation
 
-# external imports
+# external _imports
 import numpy as np
 import pandas as pd
 from typing import Optional, Union
 from scipy.optimize import differential_evolution
 
-# system imports
+# system _imports
 import os
 import sys
 import glob
@@ -40,7 +40,7 @@ import time as t
 from itertools import cycle
 from copy import deepcopy
 
-# pyrates imports
+# pyrates _imports
 from pyrates.utility.grid_search import grid_search, ClusterGridSearch, linearize_grid, adapt_circuit, ClusterCompute, \
     StreamTee
 from pyrates.frontend import CircuitTemplate

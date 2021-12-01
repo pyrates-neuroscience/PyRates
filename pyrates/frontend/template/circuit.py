@@ -42,7 +42,7 @@ import pandas as pd
 from pandas import DataFrame, MultiIndex
 import numpy as np
 
-# pyrates internal imports
+# pyrates internal _imports
 from pyrates.frontend.template._io import _complete_template_path
 from pyrates.frontend.template.abc import AbstractBaseTemplate
 from pyrates.frontend.template.edge import EdgeTemplate
@@ -594,7 +594,7 @@ class CircuitTemplate(AbstractBaseTemplate):
 
     def clear(self):
         """Removes all temporary files and directories that may have been created during simulations of that circuit.
-        Also deletes operator template caches, imports and path variables from working memory."""
+        Also deletes operator template caches, _imports and path variables from working memory."""
         self._ir.clear()
         self._ir = None
         clear_ir_caches()

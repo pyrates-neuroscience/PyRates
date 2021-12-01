@@ -1,12 +1,12 @@
 """Test suite for basic backend simulation functionalities.
 """
 
-# external imports
+# external _imports
 from typing import Union
 import numpy as np
 import pytest
 
-# pyrates internal imports
+# pyrates internal _imports
 from pyrates import simulate
 
 # meta infos
@@ -14,7 +14,7 @@ __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
 
 # set backends to run the tests for
-backends = ['default']
+backends = ['torch']
 
 # set accuracy for all tests
 accuracy = 1e-4
@@ -338,6 +338,7 @@ def test_2_4_solver():
 
     # define input
     dt = 1e-3
+    dts = 1e-1
     sim_time = 100.
     sim_steps = int(np.round(sim_time / dt, decimals=0))
     inp = np.zeros((sim_steps, 1)) + 0.5
@@ -347,12 +348,14 @@ def test_2_4_solver():
         # standard euler solver (trusted)
         r = simulate("model_templates.test_resources.test_backend.net13", simulation_time=sim_time,
                      outputs={'a1': 'p1/op9/a', 'a2': 'p2/op10/a'}, inputs={'p1/op9/I_ext': inp},
-                     vectorization=True, step_size=dt, backend=b, solver='euler', clear=True, file_name='euler_solver')
+                     vectorization=True, step_size=dt, backend=b, solver='euler', clear=True, file_name='euler_solver',
+                     sampling_step_size=dts, int_precision='long')
 
         # scipy solver (tested)
         r2 = simulate("model_templates.test_resources.test_backend.net13", simulation_time=sim_time,
                       outputs={'a1': 'p1/op9/a', 'a2': 'p2/op10/a'}, inputs={'p1/op9/I_ext': inp}, method='RK23',
-                      vectorization=True, step_size=dt, backend=b, solver='scipy', clear=True, file_name='scipy_solver')
+                      vectorization=True, step_size=dt, backend=b, solver='scipy', clear=True, file_name='scipy_solver',
+                      sampling_step_size=dts, int_precision='long')
 
         assert np.mean(r.loc[:, 'a2'].values - r2.loc[:, 'a2'].values) == pytest.approx(0., rel=accuracy, abs=accuracy)
 
@@ -367,7 +370,8 @@ def test_2_5_inputs_outputs():
     """
 
     dt = 1e-3
-    sim_time = 100.
+    dts = 1e-1
+    sim_time = 10.
     sim_steps = int(np.round(sim_time / dt, decimals=0))
     inp = np.zeros((sim_steps, 1)) + 0.5
 
@@ -379,7 +383,8 @@ def test_2_5_inputs_outputs():
         # perform simulation
         r1 = simulate("model_templates.test_resources.test_backend.net13", simulation_time=sim_time,
                       outputs={'a1': 'p1/op9/a'}, inputs={'p1/op9/I_ext': inp}, vectorization=True, step_size=dt,
-                      backend=b, solver='scipy', clear=True, method='RK45', atol=1e-7, rtol=1e-6, file_name='inout_1')
+                      backend=b, solver='euler', clear=True, file_name='inout_1', sampling_step_size=dts,
+                      int_precision='long')
 
         # define input and output for both populations simultaneously
         #############################################################
@@ -387,7 +392,7 @@ def test_2_5_inputs_outputs():
         # perform simulation
         r2 = simulate("model_templates.test_resources.test_backend.net13", simulation_time=sim_time,
                       outputs=['all/op9/a'], inputs={'all/op9/I_ext': inp}, vectorization=True, step_size=dt, backend=b,
-                      solver='scipy', clear=True, method='RK45', atol=1e-7, rtol=1e-6, file_name='inout_2')
+                      solver='euler', clear=True, file_name='inout_2', sampling_step_size=dts, int_precision='long')
 
         assert np.mean(r1.values.flatten() - r2.values.flatten()) == pytest.approx(0., rel=accuracy, abs=accuracy)
 
@@ -399,16 +404,17 @@ def test_2_5_inputs_outputs():
 
         # perform simulation
         r1 = simulate("model_templates.test_resources.test_backend.net14", simulation_time=sim_time, vectorization=True,
-                      step_size=dt, backend=b, solver='scipy', clear=True, method='RK45', atol=1e-7, rtol=1e-6,
+                      step_size=dt, backend=b, solver='euler', clear=True, sampling_step_size=dts,
                       outputs={'a1': 'c1/p1/op9/a', 'a2': 'c1/p2/op10/a', 'a3': 'c2/p1/op9/a', 'a4': 'c2/p2/op10/a'},
                       inputs={'c1/p1/op9/I_ext': inp, 'c1/p2/op10/I_ext': inp2, 'c2/p1/op9/I_ext': inp,
-                              'c2/p2/op10/I_ext': inp2}, file_name='inout_3')
+                              'c2/p2/op10/I_ext': inp2}, file_name='inout_3', int_precision='long')
 
         # perform simulation
         r2 = simulate("model_templates.test_resources.test_backend.net14", simulation_time=sim_time,
-                      outputs={'a1': 'all/all/op9/a', 'a2': 'all/all/op10/a'}, method='RK45', atol=1e-7, rtol=1e-6,
+                      outputs={'a1': 'all/all/op9/a', 'a2': 'all/all/op10/a'},
                       inputs={'all/all/op9/I_ext': inp, 'all/all/op10/I_ext': inp2},
-                      vectorization=True, step_size=dt, backend=b, solver='scipy', clear=True, file_name='inout_4')
+                      vectorization=True, step_size=dt, backend=b, solver='euler', clear=True, file_name='inout_4',
+                      sampling_step_size=dts, int_precision='long')
 
         assert np.mean(r1.values.flatten() - r2.values.flatten()) == pytest.approx(0., rel=accuracy, abs=accuracy)
 
@@ -439,7 +445,7 @@ def test_2_6_vectorization():
         r2 = simulate("model_templates.jansen_rit.simple_jansenrit.JRC_delaycoupled", vectorize=True,
                       inputs={"JRC2/JRC_op/u": inp}, outputs={"r": "JRC1/JRC_op/PSP_ein"}, backend=b,
                       solver='euler', step_size=dt, clear=True, simulation_time=T, sampling_step_size=dts,
-                      file_name=f'novec{i + 1}')
+                      file_name=f'novec{i + 1}', int_precision='long')
 
         assert np.mean(r1.values - r2.values) == pytest.approx(0.0, rel=accuracy, abs=accuracy)
 

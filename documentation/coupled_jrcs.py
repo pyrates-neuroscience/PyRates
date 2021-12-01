@@ -1,7 +1,7 @@
-# pyrates imports
+# pyrates _imports
 from pyrates.utility.grid_search import grid_search
 
-# additional imports
+# additional _imports
 import numpy as np
 from numba import njit, config
 import tensorflow as tf

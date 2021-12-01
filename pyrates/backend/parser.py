@@ -30,7 +30,7 @@
 operations.
 """
 
-# external imports
+# external _imports
 import math
 import typing as tp
 from numbers import Number
@@ -38,7 +38,7 @@ from pyparsing import Literal, CaselessLiteral, Word, Combine, Optional, \
     ZeroOrMore, Forward, nums, alphas, ParserElement
 from sympy import Expr, Symbol, lambdify, sympify
 
-# pyrates internal imports
+# pyrates internal _imports
 from pyrates.backend.computegraph import ComputeGraph, ComputeNode
 
 # meta infos

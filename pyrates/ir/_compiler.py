@@ -29,7 +29,7 @@
 """This module provides the backend class that should be used to set up any backend in pyrates.
 """
 
-# external imports
+# external _imports
 from typing import Optional, Tuple, List, Union, Any
 from pandas import DataFrame, MultiIndex
 import numpy as np
@@ -37,7 +37,7 @@ from networkx import find_cycle, NetworkXNoCycle, DiGraph
 from copy import deepcopy
 from warnings import filterwarnings
 
-# pyrates imports
+# pyrates _imports
 from pyrates.backend.base_backend import NumpyBackend as _NumpyBackend
 from pyrates.backend.parser import parse_equation_system, parse_dict
 from pyrates.ir.circuit import CircuitIR

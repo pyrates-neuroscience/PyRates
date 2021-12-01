@@ -35,7 +35,7 @@ import numpy as np
 from typing import Union, Optional, List
 from pandas import DataFrame, MultiIndex
 
-# pyrates internal imports
+# pyrates internal _imports
 
 # meta infos
 __author__ = 'Richard Gast'

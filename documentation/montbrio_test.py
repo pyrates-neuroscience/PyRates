@@ -1,8 +1,8 @@
-# pyrates imports
+# pyrates _imports
 from pyrates.frontend import CircuitTemplate
 from pyrates.utility.visualization import plot_timeseries, create_cmap
 
-# additional imports
+# additional _imports
 import numpy as np
 import matplotlib.pyplot as plt
 

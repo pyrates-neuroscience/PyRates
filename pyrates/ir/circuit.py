@@ -28,7 +28,7 @@
 """
 """
 
-# external imports
+# external _imports
 import time
 from typing import Union, Dict, Iterator, Optional, List, Tuple
 from warnings import filterwarnings
@@ -36,7 +36,7 @@ from networkx import MultiDiGraph, DiGraph
 import numpy as np
 from copy import deepcopy
 
-# pyrates-internal imports
+# pyrates-internal _imports
 from pyrates.backend import PyRatesException
 from pyrates.ir.node import NodeIR
 from pyrates.ir.edge import EdgeIR
@@ -63,7 +63,7 @@ class NetworkGraph(AbstractBaseIR):
 
     def __init__(self, label: str = "circuit", nodes: Dict[str, NodeIR] = None, edges: list = None,
                  template: str = None, step_size: float = 1e-3, step_size_adaptation: bool = True, verbose: bool = True,
-                 float_precision: str = "float32", **kwargs):
+                 **kwargs):
 
         # TODO: differentiate between vectorized and non-vectorized NetworkGraph
 
@@ -93,7 +93,7 @@ class NetworkGraph(AbstractBaseIR):
             print("\t(2) Preprocessing edge transmission operations...")
 
         # translate edge operations and attributes into graph operators
-        self._preprocess_edge_operations(float_precision=float_precision, dde_approx=kwargs.pop('dde_approx', 0),
+        self._preprocess_edge_operations(dde_approx=kwargs.pop('dde_approx', 0),
                                          matrix_sparseness=kwargs.pop('matrix_sparseness', 0.05))
 
         if verbose:
@@ -169,7 +169,7 @@ class NetworkGraph(AbstractBaseIR):
     def getitem_from_iterator(self, key: str, key_iter: Iterator[str]):
         return self.graph.nodes[key]["node"]
 
-    def _preprocess_edge_operations(self, float_precision: str = "float32", dde_approx: int = 0, **kwargs):
+    def _preprocess_edge_operations(self, dde_approx: int = 0, **kwargs):
         """Restructures network graph to collapse nodes and edges that share the same operator graphs. Variable values
         get an additional vector dimension. References to the respective index is saved in the internal `label_map`."""
 
@@ -191,15 +191,13 @@ class NetworkGraph(AbstractBaseIR):
                 # add synaptic buffer to output variables with delay
                 if add_delay:
                     self._add_edge_buffer(node_name, op_name, var_name, edges=edges, delays=delays,
-                                          nodes=nodes, spreads=spreads, dde_approx=dde_approx,
-                                          float_precision=float_precision)
+                                          nodes=nodes, spreads=spreads, dde_approx=dde_approx)
 
         # create the final equations and variables for each edge
         for source, targets in self.graph.adjacency():
             for target, edges in targets.items():
                 for idx, data in edges.items():
-                    self._generate_edge_equation(source_node=source, target_node=target, data=data,
-                                                 float_precision=float_precision, **kwargs)
+                    self._generate_edge_equation(source_node=source, target_node=target, data=data, **kwargs)
 
     def _sort_edges(self, edges: List[tuple], attr: str, data_included: bool = False) -> dict:
         """Sorts edges according to the given edge attribute.
@@ -282,8 +280,7 @@ class NetworkGraph(AbstractBaseIR):
         return means, stds, nodes, add_delay
 
     def _add_edge_buffer(self, node: str, op: str, var: str, edges: list, delays: list, nodes: list,
-                         spreads: Optional[list] = None, dde_approx: int = 0, float_precision: str = "float32"
-                         ) -> None:
+                         spreads: Optional[list] = None, dde_approx: int = 0) -> None:
         """Adds a buffer variable to an edge.
 
         Parameters
@@ -306,7 +303,6 @@ class NetworkGraph(AbstractBaseIR):
             Only relevant for delayed systems. If larger than zero, all discrete delays in the system will be
             automatically approximated by a system of (n+1) coupled ODEs that represent a convolution with a
             gamma distribution centered around the original delay (n is the approximation order).
-        float_precision
 
         Returns
         -------
@@ -323,7 +319,7 @@ class NetworkGraph(AbstractBaseIR):
         nodes_tmp = []
         for n in nodes:
             nodes_tmp += n
-        source_idx = np.asarray(nodes_tmp, dtype=np.int32).flatten()
+        source_idx = np.asarray(nodes_tmp, dtype='int').flatten()
 
         # ODE approximation to DDE
         ##########################
@@ -345,8 +341,8 @@ class NetworkGraph(AbstractBaseIR):
 
             # sort all edge information in ascending ODE order
             order_idx = np.argsort(orders, kind='stable')
-            orders_sorted = np.asarray(orders, dtype=np.int32)[order_idx]
-            orders_tmp = np.asarray(orders, dtype=np.int32)[order_idx]
+            orders_sorted = np.asarray(orders, dtype='int')[order_idx]
+            orders_tmp = np.asarray(orders, dtype='int')[order_idx]
             rates_tmp = np.asarray(rates)[order_idx]
             source_idx_tmp = source_idx[order_idx]
 
@@ -373,7 +369,7 @@ class NetworkGraph(AbstractBaseIR):
                 if i == 0 and idx != [0] and (sum(target_shape) != len(idx) or any(np.diff(order_idx) != 1)):
                     var_prev_idx = f"index({var_prev}, source_idx)"
                     var_dict["source_idx"] = {'vtype': 'constant',
-                                              'dtype': 'int32',
+                                              'dtype': 'int',
                                               'shape': (len(source_idx_tmp[idx]),),
                                               'value': source_idx_tmp[idx]}
                 elif i != 0 and idx_apply:
@@ -384,11 +380,11 @@ class NetworkGraph(AbstractBaseIR):
                 # create new ODE string and corresponding variable definitions
                 buffer_eqs.append(f"d/dt * {var_next} = {rate} * ({var_prev_idx} - {var_next})")
                 var_dict[var_next] = {'vtype': 'state_var',
-                                      'dtype': float_precision,
+                                      'dtype': 'float',
                                       'shape': var_shape,
                                       'value': 0.}
                 var_dict[rate] = {'vtype': 'constant',
-                                  'dtype': float_precision,
+                                  'dtype': 'float',
                                   'value': val}
 
                 # store indices that are required to fill the edge buffer variable
@@ -412,7 +408,7 @@ class NetworkGraph(AbstractBaseIR):
                     orders_tmp = orders_tmp[idx]
                     rates_tmp = rates_tmp[idx]
                 if not orders_tmp.shape:
-                    orders_tmp = np.asarray([orders_tmp], dtype=np.int32)
+                    orders_tmp = np.asarray([orders_tmp], dtype='int')
                     rates_tmp = np.asarray([rates_tmp])
 
             # remove unnecessary ODEs
@@ -429,7 +425,7 @@ class NetworkGraph(AbstractBaseIR):
                 rhs = get_indexed_var_str(f"{var}_d{i}" if i != 0 else var, idx_r, var_length=buffer_length)
                 buffer_eqs.append(f"{lhs} = {rhs}")
             var_dict[f"{var}_buffered"] = {'vtype': 'state_var',
-                                           'dtype': float_precision,
+                                           'dtype': 'float',
                                            'shape': (buffer_length,),
                                            'value': 0.0}
 
@@ -437,7 +433,7 @@ class NetworkGraph(AbstractBaseIR):
             if any(np.diff(order_idx) != 1):
                 buffer_eqs.append(f"{var}_buffered = index({var}_buffered, {var}_buffered_idx)")
                 var_dict[f"{var}_buffered_idx"] = {'vtype': 'constant',
-                                                   'dtype': 'int32',
+                                                   'dtype': 'int',
                                                    'shape': (len(order_idx),),
                                                    'value': np.argsort(order_idx, kind='stable')}
 
@@ -454,18 +450,18 @@ class NetworkGraph(AbstractBaseIR):
 
             # create buffer variable definitions
             var_dict = {f'{var}_buffer': {'vtype': 'variable',
-                                          'dtype': float_precision,
+                                          'dtype': 'float',
                                           'shape': buffer_shape,
                                           'value': 0.},
                         f'{var}_buffered': {'vtype': 'variable',
-                                            'dtype': float_precision,
+                                            'dtype': 'float',
                                             'shape': (len(delays),),
                                             'value': 0.},
                         f'{var}_delays': {'vtype': 'constant',
-                                          'dtype': 'int32',
+                                          'dtype': 'int',
                                           'value': delays},
                         f'source_idx': {'vtype': 'constant',
-                                        'dtype': 'int32',
+                                        'dtype': 'int',
                                         'value': source_idx}}
 
             # create buffer equations
@@ -483,6 +479,8 @@ class NetworkGraph(AbstractBaseIR):
 
         else:
 
+            # TODO: rework continuous edge buffers
+
             # create buffer variables
             max_delay_int = int(np.round(max_delay / self.step_size, decimals=0)) + 2
             times = [0. - i * self.step_size for i in range(max_delay_int)]
@@ -493,32 +491,32 @@ class NetworkGraph(AbstractBaseIR):
 
             # create buffer variable definitions
             var_dict = {f'{var}_buffer': {'vtype': 'variable',
-                                          'dtype': float_precision,
+                                          'dtype': 'float',
                                           'shape': buffer_shape,
                                           'value': 0.
                                           },
                         'times': {'vtype': 'variable',
-                                  'dtype': float_precision,
+                                  'dtype': 'float',
                                   'shape': (len(times),),
                                   'value': np.asarray(times)
                                   },
                         't': {'vtype': 'state_var',
-                              'dtype': float_precision,
+                              'dtype': 'float',
                               'shape': (),
                               'value': 0.0
                               },
                         f'{var}_buffered': {'vtype': 'variable',
-                                            'dtype': float_precision,
+                                            'dtype': 'float',
                                             'shape': (len(delays),),
                                             'value': 0.},
                         f'{var}_delays': {'vtype': 'constant',
-                                          'dtype': float_precision,
+                                          'dtype': 'float',
                                           'value': delays},
                         f'source_idx': {'vtype': 'constant',
-                                        'dtype': 'int32',
+                                        'dtype': 'int',
                                         'value': source_idx},
                         f'{var}_maxdelay': {'vtype': 'constant',
-                                            'dtype': float_precision,
+                                            'dtype': 'float',
                                             'value': (max_delay_int + 1) * self.step_size},
                         f'{var}_idx': {'vtype': 'variable',
                                        'dtype': 'bool',
@@ -564,8 +562,7 @@ class NetworkGraph(AbstractBaseIR):
                 self.edges[s, t, e]['source_idx'] = list(range(idx_l, idx_h))
                 idx_l = idx_h
 
-    def _generate_edge_equation(self, source_node: str, target_node: str, data: dict,
-                                matrix_sparseness: float = 0.1, float_precision: str = "float32"):
+    def _generate_edge_equation(self, source_node: str, target_node: str, data: dict, matrix_sparseness: float = 0.1):
 
         # extract edge information
         weight = data['weight']
@@ -621,17 +618,14 @@ class NetworkGraph(AbstractBaseIR):
                 eq = f"{tvar} = {svar_final} * weight"
 
         # add edge variables to dict
-        dtype = sval["dtype"]
-        args['weight'] = {'vtype': 'constant', 'dtype': dtype, 'value': weight}
+        args['weight'] = {'vtype': 'constant', 'dtype': 'float', 'value': weight}
         args[tvar] = deepcopy(tval)
         args[tvar]['vtype'] = 'variable'
         if len(d):
-            args['target_idx'] = {'vtype': 'constant',
-                                  'value': np.array(d, dtype=float_precision if len(
-                                      d) > 1 else np.int32)}
+            args['target_idx'] = {'vtype': 'constant', 'value': np.asarray(d),
+                                  'dtype': 'float' if len(d) > 1 else 'int'}
         if index_svar:
-            args['source_idx'] = {'vtype': 'constant', 'dtype': 'int32',
-                                  'value': np.array(sidx, dtype=np.int32)}
+            args['source_idx'] = {'vtype': 'constant', 'dtype': 'int', 'value': np.asarray(sidx)}
 
         # add edge operator to target node
         if target_node not in in_edge_indices:
@@ -821,8 +815,7 @@ class CircuitIR(AbstractBaseIR):
 
     def __init__(self, label: str = "circuit", nodes: Dict[str, NodeIR] = None, edges: list = None,
                  template: str = None, step_size_adaptation: bool = False, step_size: float = None,
-                 verbose: bool = True, float_precision: str = 'float32', backend: str = None,
-                 scalar_shape: tuple = None, **kwargs):
+                 verbose: bool = True, backend: str = None, scalar_shape: tuple = None, **kwargs):
         """
         Parameters:
         -----------
@@ -852,8 +845,7 @@ class CircuitIR(AbstractBaseIR):
 
         # translate the network into a networkx graph
         net = NetworkGraph(nodes=nodes, edges=edges, label=label, step_size=step_size,
-                           step_size_adaptation=step_size_adaptation, verbose=verbose, float_precision=float_precision,
-                           **kwargs)
+                           step_size_adaptation=step_size_adaptation, verbose=verbose, **kwargs)
 
         # parse network equations into a compute graph
         if verbose:

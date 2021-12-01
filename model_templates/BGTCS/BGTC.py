@@ -1,10 +1,10 @@
-# pyrates imports
+# pyrates _imports
 from pyrates.ir.circuit import CircuitIR
 from pyrates.backend import ComputeGraph
 from pyrates.utility.visualization import plot_connectivity
 from pyrates.frontend import CircuitTemplate
 
-# additional imports
+# additional _imports
 import numpy as np
 from scipy.spatial.distance import cdist
 from scipy.stats.distributions import norm

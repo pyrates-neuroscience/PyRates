@@ -29,14 +29,14 @@
 """Visualization functionality for pyrates networks and backend simulations.
 """
 
-# external imports
+# external _imports
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
 from typing import Union, Optional
 
-# pyrates internal imports
+# pyrates internal _imports
 
 # meta infos
 __author__ = "Richard Gast, Daniel Rose"
