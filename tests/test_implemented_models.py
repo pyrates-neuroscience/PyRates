@@ -48,7 +48,7 @@ def nmrse(x: np.ndarray,
 
 
 # define backends for which to run the tests
-backends = ['default']
+backends = ['torch']
 
 # define test accuracy
 accuracy = 1e-4

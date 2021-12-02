@@ -278,7 +278,7 @@ class ExpressionParser:
 
                 if isinstance(arg, Symbol):
 
-                    # case: variables/constants
+                    # case I: variables/constants
                     var = self.vars[arg.name]
                     if isinstance(var, ComputeNode):
 
@@ -293,7 +293,7 @@ class ExpressionParser:
 
                 else:
 
-                    # case: mathematical expressions
+                    # case II: mathematical expressions
                     label, var = self._parse_stack(arg)
 
                 if isinstance(var, ComputeNode):

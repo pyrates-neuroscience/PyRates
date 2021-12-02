@@ -32,11 +32,12 @@
 # pyrates internal _imports
 from ..base import BaseBackend
 from ..computegraph import ComputeVar
+from .torch_funcs import torch_funcs
 
 # external _imports
 import torch
 import numpy as np
-from typing import Callable
+from typing import Callable, Optional, Dict, List
 
 # meta infos
 __author__ = "Richard Gast"
@@ -49,6 +50,32 @@ __status__ = "development"
 
 
 class TorchBackend(BaseBackend):
+
+    def __init__(self,
+                 ops: Optional[Dict[str, str]] = None,
+                 imports: Optional[List[str]] = None,
+                 **kwargs
+                 ) -> None:
+        """Instantiates tensorflow backend, i.e. a tensorflow graph.
+        """
+
+        # add user-provided operations to function dict
+        torch_ops = torch_funcs.copy()
+        if ops:
+            torch_ops.update(ops)
+
+        # ensure that long is the standard integer type
+        if 'int_precision' in kwargs:
+            print(f"Warning: User-provided integer precision `{kwargs.pop('int_precision')}` will be ignored, since the"
+                  f"torch backend requires integer precision `long` for some indexing operations.")
+        kwargs['int_precision'] = 'long'
+
+        # call parent method
+        super().__init__(ops=torch_ops, imports=imports, **kwargs)
+
+        # define tensorflow-specific _imports
+        self._imports.pop(0)
+        self._imports.append("from torch import sqrt")
 
     def get_var(self, v: ComputeVar):
         return torch.from_numpy(super().get_var(v))
@@ -69,17 +96,18 @@ class TorchBackend(BaseBackend):
             from scipy.integrate import solve_ivp
             t = 0.0
             kwargs['t_eval'] = times
+            try:
+                dtype = getattr(torch, self._float_precision)
+            except AttributeError:
+                dtype = torch.get_default_dtype()
 
             # wrapper to rhs function
-            y_tmp = y0.numpy()
-            y = torch.from_numpy(y_tmp)
-            def f(t, y_new):
-                y_tmp[:] = y_new
-                rhs = func(t, y, *args)
+            def f(t, y):
+                rhs = func(torch.tensor(t, dtype=dtype), torch.tensor(y, dtype=dtype), *args)
                 return rhs.numpy()
 
             # call scipy solver
-            results = solve_ivp(fun=f, t_span=(t, T), y0=y_tmp, first_step=dt, **kwargs)
+            results = solve_ivp(fun=f, t_span=(t, T), y0=y0, first_step=dt, **kwargs)
             results = results['y'].T
 
         return results
@@ -95,7 +123,7 @@ class TorchBackend(BaseBackend):
         state_rec = torch.zeros((store_steps, y.shape[0]) if y.shape else (store_steps, 1))
 
         # solve ivp for forward Euler method
-        for step in range(steps):
+        for step in torch.arange(steps):
             if step % store_step == 0:
                 state_rec[idx, :] = y
                 idx += 1

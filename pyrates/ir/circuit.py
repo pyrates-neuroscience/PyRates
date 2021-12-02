@@ -65,8 +65,6 @@ class NetworkGraph(AbstractBaseIR):
                  template: str = None, step_size: float = 1e-3, step_size_adaptation: bool = True, verbose: bool = True,
                  **kwargs):
 
-        # TODO: differentiate between vectorized and non-vectorized NetworkGraph
-
         super().__init__(label=label, template=template)
         self._edge_idx_counter = 0
         self.step_size = step_size
@@ -94,7 +92,7 @@ class NetworkGraph(AbstractBaseIR):
 
         # translate edge operations and attributes into graph operators
         self._preprocess_edge_operations(dde_approx=kwargs.pop('dde_approx', 0),
-                                         matrix_sparseness=kwargs.pop('matrix_sparseness', 0.05))
+                                         matrix_sparseness=kwargs.pop('matrix_sparseness', 0.1))
 
         if verbose:
             print("\t\t...finished.")
@@ -193,11 +191,30 @@ class NetworkGraph(AbstractBaseIR):
                     self._add_edge_buffer(node_name, op_name, var_name, edges=edges, delays=delays,
                                           nodes=nodes, spreads=spreads, dde_approx=dde_approx)
 
+        # go through nodes again, and collect and process all inputs to each node variable
+        ##################################################################################
+
+        for node_name in self.nodes:
+
+            node_inputs = self.graph.in_edges(node_name, keys=True)
+            node_inputs = self._sort_edges(node_inputs, 'target_var', data_included=False)
+
+            # loop over inputs to node variable
+            for i, (in_var, edges) in enumerate(node_inputs.items()):
+
+                # extract info from projections to input variable
+                op_name, var_name = in_var.split('/')
+                data = self._collect_from_edges(edges,
+                                                keys=['source_var', 'weight', 'delay', 'source_idx', 'target_idx'])
+
+                # create the final equations for all edges that target the input variable
+                self._generate_edge_equation(tnode=node_name, top=op_name, tvar=var_name, inputs=data, **kwargs)
+
         # create the final equations and variables for each edge
-        for source, targets in self.graph.adjacency():
-            for target, edges in targets.items():
-                for idx, data in edges.items():
-                    self._generate_edge_equation(source_node=source, target_node=target, data=data, **kwargs)
+        # for source, targets in self.graph.adjacency():
+        #     for target, edges in targets.items():
+        #         for idx, data in edges.items():
+        #             self._generate_edge_equation(source_node=source, target_node=target, data=data, **kwargs)
 
     def _sort_edges(self, edges: List[tuple], attr: str, data_included: bool = False) -> dict:
         """Sorts edges according to the given edge attribute.
@@ -278,6 +295,15 @@ class NetworkGraph(AbstractBaseIR):
             self.edges[s, t, e]['delay'] = None
 
         return means, stds, nodes, add_delay
+
+    def _collect_from_edges(self, edges: list, keys: list):
+        data = {}
+        for source, target, idx in edges:
+            edge = self.edges[(source, target, idx)]
+            data[source] = {}
+            for key in keys:
+                data[source][key] = edge[key]
+        return data
 
     def _add_edge_buffer(self, node: str, op: str, var: str, edges: list, delays: list, nodes: list,
                          spreads: Optional[list] = None, dde_approx: int = 0) -> None:
@@ -562,89 +588,128 @@ class NetworkGraph(AbstractBaseIR):
                 self.edges[s, t, e]['source_idx'] = list(range(idx_l, idx_h))
                 idx_l = idx_h
 
-    def _generate_edge_equation(self, source_node: str, target_node: str, data: dict, matrix_sparseness: float = 0.1):
+    def _generate_edge_equation(self, tnode: str, top: str, tvar: str, inputs: dict, matrix_sparseness: float = 0.1,
+                                weight_minimum: float = 1e-8):
 
-        # extract edge information
-        weight = data['weight']
-        sidx = data['source_idx']
-        tidx = data['target_idx']
-        svar = data['source_var']
-        sop, svar = svar.split("/")
-        sval = self[f"{source_node}/{sop}/{svar}"]
-        tvar = data['target_var']
-        top, tvar = tvar.split("/")
-        tval = self[f"{target_node}/{top}/{tvar}"]
-        target_node_ir = self[target_node]
+        # step 0: check properties of the target variable and its inputs
+        multiple_inputs = len(inputs) > 1
+        tval = self[f"{tnode}/{top}/{tvar}"]
+        if tval['shape']:
+            tsize = sum(tval['shape'])
+        elif type(tval['value']) is list:
+            tsize = len(tval['value'])
+        else:
+            tsize = 0
 
-        # check whether edge projection can be solved by a simple inner product between a weight matrix and the
-        # source variables
-        dot_edge = False
-        if len(tval['shape']) < 2 and len(sval['shape']) < 2 and len(sidx) > 1:
+        # step 1: collect all inputs
+        weights, source_indices, target_indices, sources = [], [], [], []
+        for snode, sinfo in inputs.items():
+            weights.append(sinfo['weight'])
+            source_indices.append(sinfo['source_idx'])
+            target_indices.append(sinfo['target_idx'])
+            sources.append((snode,) + tuple(sinfo['source_var'].split('/')))
 
-            n, m = tval['shape'][0], sval['shape'][0]
+        # step 2: process incoming edges
+        source_vars, args = {}, {}
+        eqs, in_vars = [], []
+        for i, (weight, sidx, tidx, (snode, sop, svar)) in \
+                enumerate(zip(weights, source_indices, target_indices, sources)):
 
-            # check whether the weight matrix is dense enough for this edge realization to be efficient
-            if 1 - len(weight) / (n * m) < matrix_sparseness and n > 1 and m > 1:
+            # get source variable size
+            sval = self[f"{snode}/{sop}/{svar}"]
+            if sval['shape']:
+                ssize = sum(sval['shape'])
+            elif type(sval['value']) is list:
+                ssize = len(sval['value'])
+            else:
+                ssize = 1
 
-                weight_mat = np.zeros((n, m))
-                if not tidx:
-                    tidx = [0 for _ in range(len(sidx))]
+            # define new input variable if necessary
+            if multiple_inputs:
+                in_shape = (tsize,)
+                in_var = f'{tvar}_input_col_{i}' if len(inputs) > 1 else tvar
+                args[in_var] = {'value': np.zeros(in_shape), 'dtype': 'float', 'vtype': 'variable', 'shape': in_shape}
+            else:
+                in_var = tvar
+
+            # check whether the edge can be realized via a matrix productr
+            if not tidx:
+                tidx = [0 for _ in range(len(sidx))]
+            n, m = len(tidx), len(sidx)
+            if n*m > 1 and tsize*ssize > 1:
+                dot_edge = len(weight) / (n * m) > matrix_sparseness
+            else:
+                dot_edge = False
+
+            # case I: realize edge projection via a matrix product
+            if dot_edge:
+
+                # create weight matrix
+                weight_mat = np.zeros((tsize, ssize))
                 for row, col, w in zip(tidx, sidx, weight):
                     weight_mat[row, col] = w
 
-                # set up weights and edge projection equation
-                eq = f"{tvar} = matvec(weight,{svar})"
-                weight = weight_mat
-                dot_edge = True
+                # define edge projection equation
+                eq = f"{in_var} = matvec(weight_{i},{svar})"
+                args[f'weight_{i}'] = {'vtype': 'constant', 'value': weight_mat, 'dtype': 'float',
+                                       'shape': weight_mat.shape}
 
-        # set up edge projection equation and edge indices for edges that cannot be realized via a matrix product
-        args = {}
-        if len(tidx) > 1 and sum(tval['shape']) > 1:
-            d = np.zeros((tval['shape'][0], len(tidx)))
-            for i, t in enumerate(tidx):
-                d[t, i] = 1
-        elif len(tidx) and sum(tval['shape']) > 1:
-            d = tidx
-        else:
-            d = []
-        index_svar = sidx and sum(sval['shape']) > 1
-        svar_final = f"index({svar},source_idx)" if index_svar else svar
-        if not dot_edge:
-            if len(d) > 1:
-                eq = f"{tvar} = matvec(target_idx, {svar_final}*weight)"
-            elif len(d):
-                eq = f"index({tvar},target_idx) = {svar_final} * weight"
+            # case II: realize edge projection via source and target indexing
             else:
-                eq = f"{tvar} = {svar_final} * weight"
 
-        # add edge variables to dict
-        args['weight'] = {'vtype': 'constant', 'dtype': 'float', 'value': weight}
+                # check whether source variable requires indexing
+                if m > 1:
+                    ssize = len(sidx) if sum(sidx) > 0 else 0
+                    svar_final = f"index({svar},source_idx_{i})"
+                    args[f'source_idx_{i}'] = {'vtype': 'constant', 'value': sidx, 'dtype': 'int', 'shape': (ssize,)}
+                else:
+                    svar_final = svar
+                    ssize = len(weight)
+
+                # check wether weighting of source variables is required
+                if all([abs(abs(w) - 1) < weight_minimum for w in weight]):
+                    weighting = ""
+                else:
+                    weighting = f" * weight_{i}"
+                    args[f'weight_{i}'] = {'vtype': 'constant', 'dtype': 'float', 'value': weight}
+
+                # define edge equation
+                if len(tidx) > 1:
+                    eq = f"index({in_var}, target_idx_{i}) = {svar_final}{weighting}"
+                    args[f'target_idx_{i}'] = {'vtype': 'constant', 'dtype': 'int', 'value': tidx,
+                                               'shape': (len(tidx),)}
+                elif tsize > 1 or ssize > tsize:
+                    eq = f"index({in_var}, {tidx[0]}) = {svar_final}{weighting}"
+                else:
+                    eq = f"{in_var} = {svar_final}{weighting}"
+
+            # add equation and source information
+            eqs.append(eq)
+            source_vars[svar] = {'sources': [sop], 'node': snode, 'var': svar}
+            in_vars.append(in_var)
+
+        # step 3: process multiple inputs to same variable
+        if multiple_inputs:
+
+            # finalize edge equations
+            eq = f"{tvar} = {'+'.join(in_vars)}"
+            eqs.append(eq)
+
+        # step 4: define target variable as operator output
         args[tvar] = deepcopy(tval)
         args[tvar]['vtype'] = 'variable'
-        if len(d):
-            args['target_idx'] = {'vtype': 'constant', 'value': np.asarray(d),
-                                  'dtype': 'float' if len(d) > 1 else 'int'}
-        if index_svar:
-            args['source_idx'] = {'vtype': 'constant', 'dtype': 'int', 'value': np.asarray(sidx)}
 
-        # add edge operator to target node
-        if target_node not in in_edge_indices:
-            in_edge_indices[target_node] = 0
-        op_name = f'incoming_edge_{in_edge_indices[target_node]}'
-        in_edge_indices[target_node] += 1
-        target_node_ir.add_op(op_name,
-                              inputs={svar: {'sources': [sop],
-                                             'node': source_node,
-                                             'var': svar}},
-                              output=tvar,
-                              equations=[eq],
-                              variables=args)
+        # step 5: add edge operator to target node
+        if tnode not in in_edge_indices:
+            in_edge_indices[tnode] = 0
+        op_name = f'in_edge_{in_edge_indices[tnode]}'
+        in_edge_indices[tnode] += 1
+        tnode_ir = self[tnode]
+        tnode_ir.add_op(op_name, inputs=source_vars, output=tvar, equations=eqs, variables=args)
+        tnode_ir.add_op_edge(op_name, top)
 
-        # connect edge operator to target operator
-        target_node_ir.add_op_edge(op_name, top)
-
-        # add input information to target operator
-        inputs = self[target_node][top]['inputs']
+        # step 6: add input information to target operator
+        inputs = self[tnode][top]['inputs']
         if tvar in inputs.keys():
             inputs[tvar]['sources'].add(op_name)
         else:
@@ -1195,18 +1260,19 @@ class CircuitIR(AbstractBaseIR):
                             in_val = graph[in_key]
                         in_ops_col[in_key] = in_val
 
+                    # if multiple inputs to variable, sum them up
                     if len(in_ops_col) > 1:
-                        in_ops[var_name] = self._map_multiple_inputs(in_ops_col, scope=scope)
+                        in_ops[var_name] = self._map_multiple_inputs(in_ops_col, scope=scope, tvar=var_name)
                     else:
                         key, _ = in_ops_col.popitem()
                         *in_node, in_op, in_var = key.split("/")
-                        in_ops[var_name] = (in_var, {in_var: key})
+                        in_ops[var_name] = (None, {in_var: key})
 
             # replace input variables with input in operator equations
-            for var, inp in in_ops.items():
-                for i, eq in enumerate(op_info['equations']):
-                    op_info['equations'][i] = replace(eq, var, inp[0], rhs_only=True)
-                op_args['inputs'].update(inp[1])
+            for var, (eq, inp) in in_ops.items():
+                if eq:
+                    op_info['equations'] = [eq] + op_info['equations']
+                op_args['inputs'].update(inp)
 
             # collect operator variables and equations
             variables[f"{scope}/inputs"] = {}
@@ -1239,7 +1305,7 @@ class CircuitIR(AbstractBaseIR):
         return equations, variables
 
     @staticmethod
-    def _map_multiple_inputs(inputs: dict, scope: str) -> tuple:
+    def _map_multiple_inputs(inputs: dict, scope: str, tvar: str) -> tuple:
         """Creates mapping between multiple input variables and a single output variable.
 
         Parameters
@@ -1248,18 +1314,20 @@ class CircuitIR(AbstractBaseIR):
             Input variables.
         scope
             Scope of the input variables
+        tvar
+            Name of the input-receiving variable
 
         Returns
         -------
         tuple
-            Summed up or concatenated input variables and the mapping to the respective input variables
-
+            Equation that sums up all input variables and the mapping to the respective input variables
         """
 
         # preparations
         if scope not in in_edge_vars:
             in_edge_vars[scope] = []
         inputs_unique = in_edge_vars[scope]
+        inputs_unique.append(tvar)
         input_mapping = {}
         new_input_vars = []
 
@@ -1278,10 +1346,10 @@ class CircuitIR(AbstractBaseIR):
             inputs_unique.append(inp)
             input_mapping[inp] = key
 
-        # sum up all inputs
-        input_expr = f"sum(({','.join(new_input_vars)}), 0)"
+        # collect input into single variable
+        input_eq = f"{tvar} = {'+'.join(new_input_vars)}"
 
-        return input_expr, input_mapping
+        return input_eq, input_mapping
 
     @property
     def nodes(self):

@@ -193,7 +193,7 @@ class CircuitTemplate(AbstractBaseTemplate):
         net = self
         if inputs:
             for target, in_array in inputs.items():
-                net = net._add_input(target, in_array, adaptive_steps, simulation_time)
+                net = net._add_input(target, in_array, adaptive_steps, simulation_time, vectorize)
 
         # apply template (translate into compute graph, optional vectorization process)
         net.apply(adaptive_steps=adaptive_steps, vectorize=vectorize, verbose=verbose, backend=backend,
@@ -678,14 +678,14 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         return edges_with_templates
 
-    def _add_input(self, target: str, inp: np.ndarray, adaptive: bool, sim_time: float):
+    def _add_input(self, target: str, inp: np.ndarray, adaptive: bool, sim_time: float, vectorized_net: bool):
 
         # extract target nodes from network
         *node_id, op, var = target.split('/')
         target_nodes = self.get_nodes(node_id, var_identifier=(op, var))
 
         # create input node
-        node_key, op_key, var_key, in_node = create_input_node(var, inp, adaptive, sim_time)
+        node_key, op_key, var_key, in_node = create_input_node(var, inp, adaptive, sim_time, vectorized_net)
 
         # ensure that inputs match the CircuitTemplate hierarchy
         node_key, net = self._add_input_node(node_key, in_node, self._depth)
@@ -984,34 +984,39 @@ def is_integration_adaptive(solver: str, **solver_kwargs):
 input_labels = []  # cache for input nodes
 
 
-def create_input_node(var: str, inp: np.ndarray, continuous: bool, T: float) -> tuple:
+def create_input_node(var: str, inp: np.ndarray, continuous: bool, T: float, vectorized_net: bool) -> tuple:
 
-    # create input equationd and variables
-    ######################################
+    # create input equation and variables
+    #####################################
 
+    # create left-hand side of input assignment
     var_name = get_unique_label(f"{var}_timed_input", input_labels)
+    lhs = f"index({var_name}, 0)" if vectorized_net else var_name
+    lhs_shape = (1,) if vectorized_net else ()
     input_labels.append(var_name)
+
     if continuous:
 
-        # interpolate input variable if time steps can be variable
+        # case I: interpolate input variable if time steps can vary
         inp = inp.squeeze()
         time = np.linspace(0, T, inp.shape[0])
         y_new = np.interp(0.0, time, inp)
-        eqs = [f"{var_name} = interp(t, time, {var}_input)"]
+        eqs = [f"{lhs} = interp(t, time, {var}_input)"]
         var_dict = {
-            var_name: {'default': 'output', 'value': y_new},
-            f"{var}_input": {'default': 'constant', 'value': inp, 'shape': inp.shape},
-            't': {'default': 'variable', 'value': 0.0},
-            'time': {'default': 'input_variable', 'value': time, 'shape': time.shape}
+            var_name: {'default': 'output', 'value': float(y_new), 'shape': lhs_shape, 'dtype': 'float'},
+            f"{var}_input": {'default': 'constant', 'value': inp, 'shape': inp.shape, 'dtype': 'float'},
+            't': {'default': 'variable', 'value': 0.0, 'dtype': 'float', 'shape': ()},
+            'time': {'default': 'input_variable', 'value': time, 'shape': time.shape, 'dtype': 'float'}
         }
 
     else:
 
-        eqs = [f"{var_name} = index({var}_input,t)"]
+        # case II: simply index the input variable with fixed time steps
+        eqs = [f"{lhs} = index({var}_input,t)"]
         var_dict = {
-            var_name: {'default': 'output', 'value': inp[0]},
-            f"{var}_input": {'default': 'constant', 'value': inp, 'shape': inp.shape},
-            't': {'default': 'variable', 'value': 0, 'dtype': 'int32'}
+            var_name: {'default': 'output', 'value': 0.0, 'shape': lhs_shape, 'dtype': 'float'},
+            f"{var}_input": {'default': 'constant', 'value': inp, 'shape': inp.shape, 'dtype': 'float'},
+            't': {'default': 'variable', 'value': 0, 'dtype': 'int32', 'shape': ()}
         }
 
     # create input operator

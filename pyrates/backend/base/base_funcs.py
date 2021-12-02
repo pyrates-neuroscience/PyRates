@@ -84,8 +84,6 @@ def index_axis(x, idx=None, axis=0):
 base_funcs = {
     'max': {'call': 'maximum', 'func': np.maximum, 'imports': ['numpy.maximum']},
     'min': {'call': 'minimum', 'func': np.minimum, 'imports': ['numpy.minimum']},
-    'argmax': {'call': 'argmax', 'func': np.argmax, 'imports': ['numpy.argmax']},
-    'argmin': {'call': 'argmin', 'func': np.argmin, 'imports': ['numpy.argmin']},
     'round': {'call': 'round', 'func': np.round, 'imports': ['numpy.round']},
     'sum': {'call': 'sum', 'func': np.sum, 'imports': ['numpy.sum']},
     'mean': {'call': 'mean', 'func': np.mean, 'imports': ['numpy.mean']},

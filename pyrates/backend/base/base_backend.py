@@ -166,6 +166,15 @@ class BaseBackend(CodeGen):
                 if import_line not in self._imports:
                     self._imports.append(import_line)
 
+        if 'def' in func_info:
+
+            # extract the provided function definition
+            func_str = func_info['def']
+
+            # remember the function definition string for file creation
+            if func_str not in self._helper_funcs and func_name not in self._no_funcs:
+                self._helper_funcs.append(func_str)
+
         if 'func' in func_info:
 
             # extract the provided callable
@@ -183,10 +192,6 @@ class BaseBackend(CodeGen):
             # evaluate the function string to receive a callable
             exec(func_str, globals())
             func = globals().pop(func_name)
-
-            # remember the function definition string for file creation
-            if func_str not in self._helper_funcs and func_name not in self._no_funcs:
-                self._helper_funcs.append(func_str)
 
         return {'func': func, 'call': func_name}
 

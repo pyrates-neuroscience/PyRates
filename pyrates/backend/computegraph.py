@@ -730,27 +730,44 @@ class ComputeGraph(MultiDiGraph):
 
     def _sort_var_updates(self, nodes: dict, differential_equations: bool = True) -> tuple:
 
-        # for differential equations, do not perform any sorting
+        # case I: for differential equations, do not perform any sorting
         if differential_equations:
             return list(nodes.keys()), list(nodes.values()), []
 
-        # for non-differential equations, sort them according to their graph connections
+        # case II: for non-differential equations, sort them according to their graph connections
+        #########################################################################################
+
+        # step 1: ensure lhs-indexing operations are considered as well
+        node_names, node_keys = [], []
+        for node in nodes:
+            n = self.get_var(node)
+            if type(n) is ComputeVar:
+                node_names.append(node)
+            else:
+                node_names.append(list(self._get_inputs(node))[0])
+            node_keys.append(node)
+
         keys, values, defined_vars = [], [], []
         while nodes:
 
             for node, update in nodes.copy().items():
 
                 # go through node inputs and check whether other it depends on other equations to be evaluated first
-                dependent = False
+                dependent, inp = False, ""
                 for inp in self._get_inputs(update):
-                    if inp in nodes:
-                        dependent = True
-                        break
+                    if inp in node_names:
+                        idx = node_names.index(inp)
+                        if node_keys[idx] != node:
+                            dependent = True
+                            break
 
-                # decide whether this equation can evaluated now
+                # decide whether this equation can be evaluated now
                 if dependent:
                     continue
                 else:
+                    idx = node_keys.index(node)
+                    node_names.pop(idx)
+                    node_keys.pop(idx)
                     nodes.pop(node)
                     keys.append(node)
                     values.append(update)
