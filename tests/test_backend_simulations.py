@@ -13,15 +13,15 @@ from pyrates import simulate
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
 
-# set backends to run the tests for
-backends = ['tensorflow']
-
-# set accuracy for all tests
-accuracy = 1e-4
-
 ###########
 # Utility #
 ###########
+
+# set backends to run the tests for
+backends = ['tensorflow', 'torch', 'default']
+
+# set accuracy for all tests
+accuracy = 1e-4
 
 
 def setup_module():

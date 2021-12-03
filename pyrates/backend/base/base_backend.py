@@ -293,6 +293,10 @@ class BaseBackend(CodeGen):
 
         return outputs
 
+    @staticmethod
+    def finalize_idx_str(var: ComputeVar, idx: str):
+        return f"{var.name}{idx}"
+
     def _process_idx(self, idx: Union[Tuple[int, int], int, str, ComputeVar], **kwargs) -> str:
         if type(idx) is ComputeVar:
             return idx.name

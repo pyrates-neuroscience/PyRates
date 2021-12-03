@@ -650,7 +650,7 @@ class ComputeGraph(MultiDiGraph):
         # initializations
         index_args = []
         func = ""
-        var = ""
+        var = str(expr.args[0]) if expr.args else ""
         idx = ""
 
         # ensure expression string exists
@@ -669,36 +669,35 @@ class ComputeGraph(MultiDiGraph):
         if 'index_1d(' in expr_str:
 
             # replace `index` calls with brackets-based indexing
-            var, idx = self._get_var_idx(var=expr.args[0], idx=(expr.args[1],), args=index_args, apply=apply)
+            idx = self._get_var_idx(idx=(expr.args[1],), args=index_args, apply=apply)
             func = 'index_1d'
 
         elif 'index_2d(' in expr_str:
 
             # replace `2d_index` calls with brackets-based indexing
-            var, idx = self._get_var_idx(var=expr.args[0], idx=(expr.args[1], expr.args[2]), args=index_args,
-                                         apply=apply)
+            idx = self._get_var_idx(idx=(expr.args[1], expr.args[2]), args=index_args, apply=apply)
             func = 'index_2d'
 
         elif 'index_range(' in expr_str:
 
             # replace `range_index` calls with brackets-based indexing
-            var, idx = self._get_var_idx(var=expr.args[0], idx=((expr.args[1], expr.args[2]),), args=index_args,
-                                         apply=apply)
+            idx = self._get_var_idx(idx=((expr.args[1], expr.args[2]),), args=index_args, apply=apply)
             func = 'index_range'
 
         elif 'index_axis(' in expr_str:
 
             # replace `axis_index` calls with brackets-based indexing
             if len(expr.args) < 2:
-                var, idx = self._get_var_idx(var=expr.args[0], idx=(':',), args=index_args, apply=apply)
+                idx = self._get_var_idx(idx=(':',), args=index_args, apply=apply)
             else:
-                var, idx = self._get_var_idx(var=expr.args[0], args=index_args, apply=apply,
-                                             idx=tuple([':' for _ in range(expr.args[2])] + [f"{expr.args[1]}"]))
+                idx = self._get_var_idx(args=index_args, apply=apply,
+                                        idx=tuple([':' for _ in range(expr.args[2])] + [f"{expr.args[1]}"]))
             func = "index_axis"
 
         # either apply the above indexing calls or return them
         if func and apply:
-            expr_str = self._process_func_call(expr=expr_str, func=func, replacement=f"{var}{idx}")
+            replacement = self.backend.finalize_idx_str(var=self.get_var(var), idx=idx)
+            expr_str = self._process_func_call(expr=expr_str, func=func, replacement=replacement)
 
         # handle dummy function calls
         #############################
@@ -706,7 +705,6 @@ class ComputeGraph(MultiDiGraph):
         if 'identity(' in expr_str:
 
             # replace `no_op` calls with first argument to the function call
-            var = str(expr.args[0])
             expr_str = self._process_func_call(expr=expr_str, func='identity', replacement=var)
 
         return expr_str, index_args, var, idx
@@ -783,7 +781,7 @@ class ComputeGraph(MultiDiGraph):
             inputs.extend([inp] if isinstance(self.get_var(inp), ComputeVar) else self._get_inputs(inp))
         return inputs
 
-    def _get_var_idx(self, var: Symbol, idx: tuple, args: list, apply: bool = True):
+    def _get_var_idx(self, idx: tuple, args: list, apply: bool = True):
 
         # collect indexing variables where necessary
         new_idx = []
@@ -803,7 +801,7 @@ class ComputeGraph(MultiDiGraph):
             idx_str = idx_str.replace(key, vlabel)
             args.append(vlabel)
 
-        return var.name, idx_str
+        return idx_str
 
     def _prune(self):
 

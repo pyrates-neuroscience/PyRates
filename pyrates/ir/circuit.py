@@ -658,8 +658,8 @@ class NetworkGraph(AbstractBaseIR):
             else:
 
                 # check whether source variable requires indexing
-                if m > 1:
-                    ssize = len(sidx) if sum(sidx) > 0 else 0
+                if m > 1 or (ssize > 1 and m):
+                    ssize = len(sidx)
                     svar_final = f"index({svar},source_idx_{i})"
                     args[f'source_idx_{i}'] = {'vtype': 'constant', 'value': sidx, 'dtype': 'int', 'shape': (ssize,)}
                 else:
@@ -678,7 +678,7 @@ class NetworkGraph(AbstractBaseIR):
                     eq = f"index({in_var}, target_idx_{i}) = {svar_final}{weighting}"
                     args[f'target_idx_{i}'] = {'vtype': 'constant', 'dtype': 'int', 'value': tidx,
                                                'shape': (len(tidx),)}
-                elif tsize > 1 or ssize > tsize:
+                elif tsize > 1 or ssize < tsize:
                     eq = f"index({in_var}, {tidx[0]}) = {svar_final}{weighting}"
                 else:
                     eq = f"{in_var} = {svar_final}{weighting}"

@@ -29,7 +29,7 @@ def setup_module():
 
 
 # list parsers to be tested and their backends
-backends = ['torch']
+backends = ['default']
 parsers = [ExpressionParser]
 
 # test accuracy

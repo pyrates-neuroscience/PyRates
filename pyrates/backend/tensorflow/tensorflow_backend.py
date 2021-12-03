@@ -122,14 +122,13 @@ class TensorflowBackend(BaseBackend):
         # case I: multiple indices
         if scatter:
 
+            # recognize indices that already match tensorflow requirements
+            if type(idx) is list:
+                return f"{idx}", dict()
+
             # create tensorflow-specific index
             if type(idx) is not tuple:
-                if separator in idx:
-                    idx = tuple(idx.split(separator))
-                elif type(idx) is str:
-                    idx = (idx,)
-                else:
-                    idx = tuple(idx)
+                idx = tuple(idx.split(separator)) if separator in idx else (idx,)
             new_idx, return_dict = self._get_tf_idx(idx, size=size, max_length=max_length)
             return f"{new_idx}" if apply else new_idx, return_dict
 
@@ -142,6 +141,18 @@ class TensorflowBackend(BaseBackend):
 
         # case III: default indexing
         return super().create_index_str(idx=idx, separator=separator, apply=apply, scatter=False)
+
+    def finalize_idx_str(self, var: ComputeVar, idx: str):
+        gather = ".gather_nd("
+        if gather in idx:
+            start = idx.find(gather) + len(gather)
+            stop = idx.find(")")
+            idx_str = idx[start:stop]
+            import_line = "from tensorflow import gather_nd"
+            if import_line not in self._imports:
+                self._imports.append(import_line)
+            return f"gather_nd({var.name}, {idx_str})"
+        return f"{var.name}{idx}"
 
     def _solve(self, solver: str, func: Callable, args: tuple, T: float, dt: float, dts: float, y0: tf.Variable,
                times: np.ndarray, **kwargs) -> np.ndarray:
@@ -168,9 +179,12 @@ class TensorflowBackend(BaseBackend):
             from scipy.integrate import solve_ivp
             t = 0.0
             kwargs['t_eval'] = times
+            func = tf.function(func)
+            dtype = y0.dtype
 
+            # wrapper function to scipy solver
             def f(t: float, y: np.ndarray):
-                rhs = func(t, tf.constant(y, dtype=y0.dtype), *args)
+                rhs = func(tf.constant(t, dtype=dtype), tf.constant(y, dtype=dtype), *args)
                 return rhs.numpy()
 
             # call scipy solver
