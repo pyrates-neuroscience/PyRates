@@ -49,6 +49,8 @@ from .base_funcs import base_funcs
 # external _imports
 from typing import Optional, Dict, List, Union, Tuple, Callable, Iterable
 import numpy as np
+import os, sys
+from shutil import rmtree
 
 
 # Helper Functions and Classes
@@ -142,20 +144,29 @@ class BaseBackend(CodeGen):
         # private attributes
         self._float_precision = kwargs.pop('float_precision', 'float32')
         self._int_precision = kwargs.pop('int_precision', 'int16')
-        self._file_ending = ".py"
-        self._idx_left = "["
-        self._idx_right = "]"
-        self._start_idx = 0
+        self._idx_left = kwargs.pop('idx_left', '[')
+        self._idx_right = kwargs.pop('idx_right', ']')
+        self._start_idx = kwargs.pop('start_idx', 0)
         self._no_funcs = ["identity", "index_1d", "index_2d", "index_range", "index_axis"]
+
+        # file-creation-related attributes
+        fdir, fname = self.get_fname(kwargs.pop('file_name', 'run'))
+        if fdir:
+            sys.path.append(fdir)
+        else:
+            sys.path.append(os.getcwd())
+        self._fdir = fdir
+        self._fname = fname
+        self._fend = kwargs.pop('file_ending', '.py')
 
     def get_var(self, v: ComputeVar):
         dtype = self._float_precision if v.is_float else self._int_precision
         return np.asarray(v.value, dtype=dtype)
 
-    def get_op(self, name: str) -> dict:
+    def get_op(self, name: str, **kwargs) -> dict:
 
         # retrieve function information from backend definitions
-        func_info = self._funcs[name]
+        func_info = self._get_func_info(name, **kwargs)
         func_name = func_info['call']
 
         # add extrinsic function _imports if necessary
@@ -187,7 +198,10 @@ class BaseBackend(CodeGen):
 
             # make _imports available to function
             for imp in self._imports:
-                exec(imp, globals())
+                try:
+                    exec(imp, globals())
+                except SyntaxError:
+                    pass
 
             # evaluate the function string to receive a callable
             exec(func_str, globals())
@@ -195,8 +209,9 @@ class BaseBackend(CodeGen):
 
         return {'func': func, 'call': func_name}
 
-    def add_var_update(self, lhs: str, rhs: str, lhs_idx: Optional[str] = None, rhs_shape: Optional[tuple] = ()):
+    def add_var_update(self, lhs: ComputeVar, rhs: str, lhs_idx: Optional[str] = None, rhs_shape: Optional[tuple] = ()):
 
+        lhs = lhs.name
         if lhs_idx:
             idx, _ = self.create_index_str(lhs_idx, apply=True)
             lhs = f"{lhs}{idx}"
@@ -233,14 +248,15 @@ class BaseBackend(CodeGen):
             return '/'.join(path), file, f_split[1]
         else:
             *path, file = f.split('/')
-            return '/'.join(path), file, self._file_ending
+            return '/'.join(path), file
 
     def generate_func_head(self, func_name: str, state_var: str = None, func_args: list = None):
 
         imports = self._imports
         helper_funcs = self._helper_funcs
-
-        if not func_args:
+        if func_args:
+            func_args = [arg.name for arg in func_args]
+        else:
             func_args = []
         state_vars = ['t', state_var]
         _, indices = np.unique(func_args, return_index=True)
@@ -262,7 +278,7 @@ class BaseBackend(CodeGen):
 
         # add function header
         self.add_linebreak()
-        self.add_code_line(self._generate_func_call(name=func_name, args=func_args))
+        self._add_func_call(name=func_name, args=func_args)
         self.add_indent()
 
         return func_args
@@ -271,6 +287,37 @@ class BaseBackend(CodeGen):
 
         self.add_code_line(f"return {rhs_var}")
         self.remove_indent()
+
+    def generate_func(self, func_name: str, to_file: bool = True, **kwargs):
+
+        # generate the current function string via the code generator
+        func_str = self.generate()
+
+        if to_file:
+
+            # save rhs function to file
+            file = f'{self._fdir}/{self._fname}' if self._fdir else self._fname
+            with open(f'{file}{self._fend}', 'w') as f:
+                f.writelines(func_str)
+                f.close()
+
+            # import function from file
+            exec(f"from {self._fname} import {func_name}", globals())
+
+        else:
+
+            # just execute the function string, without writing it to file
+            exec(func_str, globals())
+
+        rhs_eval = globals().pop(func_name)
+
+        # apply function decorator
+        decorator = kwargs.pop('decorator', None)
+        if decorator:
+            decorator_kwargs = kwargs.pop('decorator_kwargs', dict())
+            rhs_eval = decorator(rhs_eval, **decorator_kwargs)
+
+        return rhs_eval
 
     def run(self, func: Callable, func_args: tuple, T: float, dt: float, dts: float, y0: np.ndarray, outputs: dict,
             solver: str, **kwargs) -> dict:
@@ -293,9 +340,34 @@ class BaseBackend(CodeGen):
 
         return outputs
 
+    def clear(self):
+
+        # clear code generator
+        super().clear()
+
+        # remove files and directories that have been created during simulation process
+        if self._fdir:
+            rmtree(self._fdir)
+        else:
+            try:
+                os.remove(f"{self._fname}{self._fend}")
+            except FileNotFoundError:
+                pass
+
+        # delete loaded modules from the system
+        if self._fname in sys.modules:
+            del sys.modules[self._fname]
+
+    @staticmethod
+    def register_vars(variables: list):
+        pass
+
     @staticmethod
     def finalize_idx_str(var: ComputeVar, idx: str):
         return f"{var.name}{idx}"
+
+    def _get_func_info(self, name: str, **kwargs):
+        return self._funcs[name]
 
     def _process_idx(self, idx: Union[Tuple[int, int], int, str, ComputeVar], **kwargs) -> str:
         if type(idx) is ComputeVar:
@@ -304,7 +376,10 @@ class BaseBackend(CodeGen):
             return f"{idx[0] + self._start_idx}:{idx[1]}"
         if type(idx) is int:
             return f"{idx + self._start_idx}"
-        return idx
+        try:
+            return self._process_idx(int(idx), **kwargs)
+        except (TypeError, ValueError):
+            return idx
 
     def _solve(self, solver: str, func: Callable, args: tuple, T: float, dt: float, dts: float, y0: np.ndarray,
                times: np.ndarray, **kwargs) -> np.ndarray:
@@ -328,9 +403,8 @@ class BaseBackend(CodeGen):
 
         return results
 
-    @staticmethod
-    def _generate_func_call(name: str, args: Iterable):
-        return f"def {name}({','.join(args)}):"
+    def _add_func_call(self, name: str, args: Iterable):
+        self.add_code_line(f"def {name}({','.join(args)}):")
 
     @staticmethod
     def _solve_euler(func: Callable, args: tuple, T: float, dt: float, dts: float, y: np.ndarray):

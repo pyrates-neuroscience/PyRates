@@ -1,53 +1,47 @@
+# -*- coding: utf-8 -*-
+#
+#
+# PyRates software framework for flexible implementation of neural
+# network model_templates and simulations. See also:
+# https://github.com/pyrates-neuroscience/PyRates
+#
+# Copyright (C) 2017-2018 the original authors (Richard Gast and
+# Daniel Rose), the Max-Planck-Institute for Human Cognitive Brain
+# Sciences ("MPI CBS") and contributors
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>
+#
+# CITATION:
+#
+# Richard Gast and Daniel Rose et. al. in preparation
+
+"""Contains fortran function definitions that may be used for PyRates model equations.
+"""
+
 from typing import Union
+import numpy as np
+
+# function definitions
+######################
 
 
-# function for calculating the mean of an nd-array
-def get_fmean(idx: int, out_shape: Union[tuple, str]) -> str:
-    func = f"""
-function fmean_{idx}(x,dim)
-
-double precision :: fmean_{idx}{out_shape}
-double precision:: x(:)
-integer, optional :: dim
-integer :: d
-
-if (present(dim)) then
-  d = dim
-  fmean_{idx} = sum(x,d) / sum(shape(x))
-else
-  fmean_{idx} = sum(x) / sum(shape(x))
-endif
-
-end function fmean_{idx}
-    """
-    return func
-
-
-# function for calculating the softmax transform of a 1d-array
-def get_fsoftmax(idx: int, out_shape: Union[tuple, str]) -> str:
-    func = f"""
-function fsoftmax_{idx}(x)
-
-double precision :: fsoftmax_{idx}{out_shape}
-double precision :: x(:), xsum
-integer :: d, n, s
-
-s = shape(x)
-do n=1,s
-  fsoftmax_{idx}(n) = exp(x(n))
-end do
-xsum = sum(fsoftmax_{idx})
-do n=1,s
-  fsoftmax_{idx}(n) = fsoftmax_{idx}(n) / xsum
-end do
-
-end function fsoftmax_{idx}
-    """
-    return func
+# sigmoid function
+sigmoid = lambda x: 1./(1. + np.exp(-x))
 
 
 # function for calculating the logistic function of an nd-array
-def get_fsigmoid(idx: int, out_shape: Union[tuple, str]) -> str:
+def get_sigmoid_def(idx: int, out_shape: Union[tuple, str]) -> str:
 
     sigmoid_n = f"s = size(x)\ndo n=1,s\n  fsigmoid_{idx}(n) = 1 / (1 + exp(-x(n)))\nend do"
     sigmoid_0 = f"fsigmoid_{idx} = 1 / (1 + exp(-x))"
@@ -69,7 +63,7 @@ end function fsigmoid_{idx}
 
 
 # wrapper function for interpolating a 1d-array
-def get_finterp(idx: int, out_shape: Union[tuple, str]) -> str:
+def get_interp_def(idx: int, out_shape: Union[tuple, str]) -> str:
     func = f"""
 function finterp_{idx}(x,y,x_new)
 
@@ -105,13 +99,27 @@ end function finterp_{idx}
     return func
 
 
-fortran_identifiers = {
-    'mean': {'str': get_fmean, 'call': 'fmean'},
-    'softmax': {'str': get_fsoftmax, 'call': 'fsoftmax'},
-    'sigmoid': {'str': get_fsigmoid, 'call': 'fsigmoid'},
-    'interp': {'str': get_finterp, 'call': 'finterp'}
+# dictionary for backend import
+###############################
+
+fortran_funcs = {
+    'max': {'call': 'max', 'func': np.maximum},
+    'min': {'call': 'min', 'func': np.minimum},
+    'round': {'call': 'nint', 'func': np.round},
+    'sum': {'call': 'sum', 'func': np.sum},
+    'matmul': {'call': 'matmul', 'func': np.dot},
+    'matvec': {'call': 'matmul', 'func': np.dot},
+    'roll': {'call': 'cshiftl', 'func': np.roll},
+    'tanh': {'call': 'tanh', 'func': np.tanh},
+    'sinh': {'call': 'sinh', 'func': np.sinh},
+    'cosh': {'call': 'cosh', 'func': np.cosh},
+    'arctan': {'call': 'atan', 'func': np.arctan},
+    'arcsin': {'call': 'asin', 'func': np.arcsin},
+    'arccos': {'call': 'acos', 'func': np.arccos},
+    'sin': {'call': 'sin', 'func': np.sin},
+    'cos': {'call': 'cos', 'func': np.cos},
+    'tan': {'call': 'tan', 'func': np.tan},
+    'exp': {'call': 'exp', 'func': np.exp},
+    'sigmoid': {'call': get_sigmoid_def, 'func': sigmoid},
+    'interp': {'call': get_interp_def, 'func': np.interp}
 }
-
-
-def get_fortran_func(fname: str, out_shape: Union[tuple, str], idx: int = 1) -> tuple:
-    return fortran_identifiers[fname]['str'](idx, out_shape), f"{fortran_identifiers[fname]['call']}_{idx}"

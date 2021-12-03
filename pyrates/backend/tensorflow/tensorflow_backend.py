@@ -101,8 +101,9 @@ class TensorflowBackend(BaseBackend):
         else:
             return tf.Variable(name=v.name, initial_value=v.value, dtype=dtype)
 
-    def add_var_update(self, lhs: str, rhs: str, lhs_idx: Optional[str] = None, rhs_shape: Optional[tuple] = ()):
+    def add_var_update(self, lhs: ComputeVar, rhs: str, lhs_idx: Optional[str] = None, rhs_shape: Optional[tuple] = ()):
 
+        lhs = lhs.name
         if lhs_idx:
             idx, _ = self.create_index_str(lhs_idx, scatter=True, size=rhs_shape[0] if rhs_shape else 1, apply=True)
             if not rhs_shape:

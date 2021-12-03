@@ -30,9 +30,6 @@
 """
 
 # external _imports
-import os
-import sys
-from shutil import rmtree
 from typing import Any, Callable, Union, Iterable, Optional
 from networkx import MultiDiGraph
 from sympy import Symbol, Expr, Function
@@ -241,16 +238,6 @@ class ComputeGraph(MultiDiGraph):
         self._eq_nodes = []
         self._state_var_indices = dict()
 
-        # file-creation-related attributes
-        fdir, fname, fend = self.backend.get_fname(kwargs.pop('file_name', 'run'))
-        if fdir:
-            sys.path.append(fdir)
-        else:
-            sys.path.append(os.getcwd())
-        self._fdir = fdir
-        self._fname = fname
-        self._fend = fend
-
     @property
     def state_vars(self):
         return list(self.var_updates['DEs'].keys())
@@ -292,8 +279,8 @@ class ComputeGraph(MultiDiGraph):
             return self.backend.get_var(v)
         return v
 
-    def get_op(self, op: str) -> dict:
-        return self.backend.get_op(op)
+    def get_op(self, op: str, **kwargs) -> dict:
+        return self.backend.get_op(op, **kwargs)
 
     def eval_graph(self):
 
@@ -353,7 +340,7 @@ class ComputeGraph(MultiDiGraph):
 
         return self
 
-    def to_func(self, func_name: str, to_file: bool = True, **kwargs):
+    def to_func(self, func_name: str, to_file: bool = True, dt_adapt: bool = True, **kwargs):
 
         # finalize compute graph
         self.compile()
@@ -378,21 +365,28 @@ class ComputeGraph(MultiDiGraph):
                 self._state_var_indices[var] = idx
                 idx += 1
 
-        # add vectorized state variables and updates to the backend
+        # add collected state variables to the backend
         try:
             state_vec = np.concatenate(variables, axis=0)
         except ValueError:
             state_vec = np.asarray(variables)
         state_var_key, y = self.add_var(label='y', vtype='state_var', value=state_vec, dtype='float')
         rhs_var_key, dy = self.add_var(label='dy', vtype='state_var', value=np.zeros_like(state_vec), dtype='float')
+        try:
+            t = self.get_var('t')
+        except KeyError:
+            _, t = self.add_var(label='t', vtype='state_var', value=0.0 if dt_adapt else 0,
+                                dtype='float' if dt_adapt else 'int', shape=())
+        self.backend.register_vars([t, y])
 
         # create a string containing all computations and variable updates represented by the compute graph
         func_args, code_gen = self._to_str()
         func_body = code_gen.generate()
-        code_gen.clear()
+        code_gen.code.clear()
 
         # generate function head
-        func_args = code_gen.generate_func_head(func_name=func_name, state_var=state_var_key, func_args=func_args)
+        func_args = code_gen.generate_func_head(func_name=func_name, state_var=state_var_key,
+                                                func_args=[self.get_var(arg) for arg in func_args])
 
         # add lines from function body after function head
         code_gen.add_linebreak()
@@ -402,11 +396,8 @@ class ComputeGraph(MultiDiGraph):
         # generate function tail
         code_gen.generate_func_tail(rhs_var=rhs_var_key)
 
-        # finalize function string
-        func_str = code_gen.generate()
-
         # generate the function (and write to file, optionally)
-        func = self._generate_func(func_str, func_name=func_name, to_file=to_file, **kwargs)
+        func = code_gen.generate_func(func_name=func_name, to_file=to_file, **kwargs)
 
         return func, func_args
 
@@ -446,49 +437,8 @@ class ComputeGraph(MultiDiGraph):
         self._state_var_indices.clear()
         self._eq_nodes.clear()
 
-        # remove files and directories that have been created during simulation process
-        if self._fdir:
-            rmtree(self._fdir)
-        else:
-            try:
-                os.remove(f"{self._fname}{self._fend}")
-            except FileNotFoundError:
-                pass
-
-        # delete loaded modules from the system
-        if self._fname in sys.modules:
-            del sys.modules[self._fname]
-
         # clear code generator
         self.backend.clear()
-
-    def _generate_func(self, func_str: str, func_name: str, to_file: bool = True, **kwargs):
-
-        if to_file:
-
-            # save rhs function to file
-            file = f'{self._fdir}/{self._fname}' if self._fdir else self._fname
-            with open(f'{file}{self._fend}', 'w') as f:
-                f.writelines(func_str)
-                f.close()
-
-            # import function from file
-            exec(f"from {self._fname} import {func_name}", globals())
-
-        else:
-
-            # just execute the function string, without writing it to file
-            exec(func_str, globals())
-
-        rhs_eval = globals().pop(func_name)
-
-        # apply function decorator
-        decorator = kwargs.pop('decorator', None)
-        if decorator:
-            decorator_kwargs = kwargs.pop('decorator_kwargs', dict())
-            rhs_eval = decorator(rhs_eval, **decorator_kwargs)
-
-        return rhs_eval
 
     def _to_str(self):
 
@@ -504,7 +454,7 @@ class ComputeGraph(MultiDiGraph):
 
             # extract state variable from state vector
             rhs_idx, _ = code_gen.create_index_str(idx)
-            code_gen.add_code_line(f"{var} = y{rhs_idx}")
+            code_gen.add_var_update(lhs=self.get_var(var), rhs=f"y{rhs_idx}")
             rhs_indices_str.append(idx)
 
         code_gen.add_linebreak()
@@ -582,8 +532,9 @@ class ComputeGraph(MultiDiGraph):
                                  'have to be passed to this method.')
 
             # DE updates stored in a state-vector
+            dy = self.get_var("dy")
             for idx, expr, shape in zip(indices, expressions, rhs_shapes):
-                code_gen.add_var_update(lhs="dy", rhs=expr, lhs_idx=idx, rhs_shape=shape)
+                code_gen.add_var_update(lhs=dy, rhs=expr, lhs_idx=idx, rhs_shape=shape)
 
             # add rhs var to function arguments
             func_args = ['dy'] + func_args
@@ -598,7 +549,7 @@ class ComputeGraph(MultiDiGraph):
 
             # non-DE update stored in a single variable
             for target_var, expr, idx, shape in zip(var_names, expressions, indices, rhs_shapes):
-                code_gen.add_var_update(lhs=target_var, rhs=expr, lhs_idx=idx, rhs_shape=shape)
+                code_gen.add_var_update(lhs=self.get_var(target_var), rhs=expr, lhs_idx=idx, rhs_shape=shape)
 
         return func_args, defined_vars
 
@@ -623,7 +574,7 @@ class ComputeGraph(MultiDiGraph):
             # replace generic function calls with the backend-specific function calls
             try:
                 expr_old = expr.func.__name__
-                func_info = self.get_op(expr_old)
+                func_info = self.get_op(expr_old, shape=node.shape)
                 expr = expr.replace(Function(expr_old), Function(func_info['call']))
             except (AttributeError, KeyError):
                 pass

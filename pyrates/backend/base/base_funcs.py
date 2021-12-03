@@ -40,43 +40,34 @@ __status__ = "development"
 # function definitions
 ######################
 
-neg_one = """
-def neg_one(x):
-    return -1*x
-"""
+def identity(x):
+    return x
+
+
+def index_1d(x, idx):
+    return x[idx]
+
+
+def index_2d(x, idx1, idx2):
+    return x[idx1, idx2]
+
+
+def index_range(x, idx1, idx2):
+    return x[idx1:idx2]
+
+
+def index_axis(x, idx=None, axis=0):
+    if idx is not None:
+        return x[idx] if axis == 0 else x[:, idx]
+    else:
+        return x[:]
+
 
 sigmoid = """
 def sigmoid(x):
     return 1./(1. + exp(-x))
 """
 
-identity = """
-def identity(x):
-    return x
-"""
-
-index_1d = """
-def index_1d(x, idx):
-    return x[idx]
-"""
-
-index_2d = """
-def index_2d(x, idx1, idx2):
-    return x[idx1, idx2]
-"""
-
-index_range = """
-def index_range(x, idx1, idx2):
-    return x[idx1:idx2]
-"""
-
-index_axis = """
-def index_axis(x, idx=None, axis=0):
-    if idx is not None:
-        return x[idx] if axis == 0 else x[:, idx]
-    else:
-        return x[:]
-"""
 
 # dictionary for backend import
 ###############################
@@ -102,11 +93,10 @@ base_funcs = {
     'tan': {'call': 'tan', 'func': np.tan, 'imports': ['numpy.tan']},
     'exp': {'call': 'exp', 'func': np.exp, 'imports': ['numpy.exp']},
     'interp': {'call': 'interp', 'func': np.interp, 'imports': ['numpy.interp']},
-    'neg_one': {'call': 'neg_one', 'def': neg_one},
     'sigmoid': {'call': 'sigmoid', 'def': sigmoid, 'imports': ['numpy.exp']},
-    'no_op': {'call': 'identity', 'def': identity},
-    'index': {'call': 'index_1d', 'def': index_1d},
-    'index_range': {'call': 'index_range', 'def': index_range},
-    'index_2d': {'call': 'index_2d', 'def': index_2d},
-    'index_axis': {'call': 'index_axis', 'def': index_axis}
+    'no_op': {'call': 'identity', 'func': identity},
+    'index': {'call': 'index_1d', 'func': index_1d},
+    'index_range': {'call': 'index_range', 'func': index_range},
+    'index_2d': {'call': 'index_2d', 'func': index_2d},
+    'index_axis': {'call': 'index_axis', 'func': index_axis}
 }

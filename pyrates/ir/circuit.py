@@ -1118,7 +1118,7 @@ class CircuitIR(AbstractBaseIR):
 
         if not file_name:
             file_name = f"pyrates_func"
-        return self.graph.to_func(func_name=func_name, file_name=file_name, **kwargs)
+        return self.graph.to_func(func_name=func_name, file_name=file_name, dt_adapt=self._dt_adapt, **kwargs)
 
     def network_to_computegraph(self, graph: NetworkGraph, **kwargs):
 
@@ -1126,7 +1126,8 @@ class CircuitIR(AbstractBaseIR):
         cg = ComputeGraph(**kwargs)
 
         # add global time variable to compute graph
-        cg.add_var(label="t", vtype="state_var", value=0.0 if self._dt_adapt else 0)
+        cg.add_var(label="t", vtype="state_var", value=0.0 if self._dt_adapt else 0, shape=(),
+                   dtype='float' if self._dt_adapt else 'int')
 
         # node operators
         parsing_kwargs = ['parsing_method']

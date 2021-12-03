@@ -79,7 +79,7 @@ def test_2_1_operator():
 
         # simulate operator behavior
         results = simulate("model_templates.test_resources.test_backend.net0", simulation_time=sim_time, step_size=dt,
-                           outputs={'a': 'pop0/op0/a'}, vectorize=True, backend=b, clear=True, file_name='net0')
+                           outputs={'a': 'pop0/op0/a'}, vectorize=False, backend=b, clear=True, file_name='net0')
 
         # generate target values
         update0_1 = lambda x: x * 0.5

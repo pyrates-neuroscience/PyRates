@@ -30,7 +30,6 @@
 """
 
 # external _imports
-import tensorflow as tf
 import numpy as np
 
 # meta infos
