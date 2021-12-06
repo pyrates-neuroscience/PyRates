@@ -425,7 +425,7 @@ class CircuitTemplate(AbstractBaseTemplate):
                 edges.append((edge_ir.output, target, edge_dict))
 
         # instantiate an intermediate representation of the circuit template
-        self._ir = CircuitIR(label, nodes=nodes, edges=edges, verbose=verbose, adaptive_steps=adaptive_steps,
+        self._ir = CircuitIR(label, nodes=nodes, edges=edges, verbose=verbose, step_size_adaptation=adaptive_steps,
                              scalar_shape=scalar_shape, **kwargs)
 
     def get_nodes(self, node_identifier: Union[str, list, tuple], var_identifier: Optional[tuple] = None) -> list:

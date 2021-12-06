@@ -69,10 +69,10 @@ class ComputeNode:
 
         self.name = name
         self.symbol = symbol
-        self.dtype = dtype
-        self._value = np.zeros(())
         self.shape = self._get_shape(shape, def_shape)
         self._value = np.zeros(self.shape)
+        self.dtype = dtype
+        self._set_dtype()
 
     def reshape(self, shape: tuple, **kwargs):
 
@@ -86,7 +86,7 @@ class ComputeNode:
         return self
 
     def set_value(self, v: Union[float, np.ndarray]):
-        self._value = v
+        self._value = np.asarray(v, dtype=self.dtype)
         self.shape = tuple(v.shape)
 
     @property
@@ -137,6 +137,10 @@ class ComputeNode:
         # case IV: just ensure the correct data type of the value array
         return np.asarray(value, dtype=dtype)
 
+    def _set_dtype(self):
+        if not self.dtype:
+            self.dtype = 'float' if 'float' in str(self.value.dtype) else 'int'
+
     @staticmethod
     def _get_shape(s: Union[tuple, None], s_def: tuple):
         if s is None or sum(s) < 2:
@@ -171,15 +175,10 @@ class ComputeVar(ComputeNode):
 
         # adjust variable value
         self.set_value(self._get_value(value=value, shape=self.shape, dtype=self.dtype))
-        self._set_dtype()
 
     @property
     def is_constant(self):
         return self.vtype == 'constant'
-
-    def _set_dtype(self):
-        if not self.dtype:
-            self.dtype = 'float' if 'float' in str(self.value.dtype) else 'int'
 
 
 class ComputeOp(ComputeNode):

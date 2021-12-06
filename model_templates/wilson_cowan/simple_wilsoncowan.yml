@@ -60,7 +60,7 @@ STP_op:
   base: OperatorTemplate
   equations:
     - "d/dt * x = (1.0-x)/tau_r - k_r*u*x*m_in"
-    - "d/dt * u = (1.0-u)/tau_f + k_f*U_0*(1.0/U_0-u)*m_in"
+    - "d/dt * u = (1.0-u)/tau_f + k_f*U0*(1.0/U0-u)*m_in"
     - "m_out = m_in*x*u"
   variables:
     m_in:
@@ -79,7 +79,7 @@ STP_op:
       default: 0.2
     k_f:
       default: 0.0
-    U_0:
+    U0:
       default: 1.0
 
 # alternative edge operator parametrization

@@ -18,7 +18,7 @@ __status__ = "Development"
 ###########
 
 # set backends to run the tests for
-backends = ['fortran']
+backends = ['default']
 
 # set accuracy for all tests
 accuracy = 1e-4
@@ -341,9 +341,9 @@ def test_2_4_solver():
     """
 
     # define input
-    dt = 1e-3
+    dt = 1e-4
     dts = 1e-1
-    sim_time = 100.
+    sim_time = 20.
     sim_steps = int(np.round(sim_time / dt, decimals=0))
     inp = np.zeros((sim_steps, 1)) + 0.5
 
@@ -352,13 +352,13 @@ def test_2_4_solver():
         # standard euler solver (trusted)
         r = simulate("model_templates.test_resources.test_backend.net13", simulation_time=sim_time,
                      outputs={'a1': 'p1/op9/a', 'a2': 'p2/op10/a'}, inputs={'p1/op9/I_ext': inp},
-                     vectorization=True, step_size=dt, backend=b, solver='euler', clear=True, file_name='euler_solver',
+                     vectorize=False, step_size=dt, backend=b, solver='euler', clear=True, file_name='euler_solver',
                      sampling_step_size=dts)
 
         # scipy solver (tested)
         r2 = simulate("model_templates.test_resources.test_backend.net13", simulation_time=sim_time,
                       outputs={'a1': 'p1/op9/a', 'a2': 'p2/op10/a'}, inputs={'p1/op9/I_ext': inp}, method='RK23',
-                      vectorization=True, step_size=dt, backend=b, solver='scipy', clear=True, file_name='scipy_solver',
+                      vectorize=False, step_size=dt, backend=b, solver='scipy', clear=True, file_name='scipy_solver',
                       sampling_step_size=dts)
 
         assert np.mean(r.loc[:, 'a2'].values - r2.loc[:, 'a2'].values) == pytest.approx(0., rel=accuracy, abs=accuracy)
@@ -386,7 +386,7 @@ def test_2_5_inputs_outputs():
 
         # perform simulation
         r1 = simulate("model_templates.test_resources.test_backend.net13", simulation_time=sim_time,
-                      outputs={'a1': 'p1/op9/a'}, inputs={'p1/op9/I_ext': inp}, vectorization=True, step_size=dt,
+                      outputs={'a1': 'p1/op9/a'}, inputs={'p1/op9/I_ext': inp}, vectorize=True, step_size=dt,
                       backend=b, solver='euler', clear=True, file_name='inout_1', sampling_step_size=dts)
 
         # define input and output for both populations simultaneously
@@ -394,7 +394,7 @@ def test_2_5_inputs_outputs():
 
         # perform simulation
         r2 = simulate("model_templates.test_resources.test_backend.net13", simulation_time=sim_time,
-                      outputs=['all/op9/a'], inputs={'all/op9/I_ext': inp}, vectorization=True, step_size=dt, backend=b,
+                      outputs=['all/op9/a'], inputs={'all/op9/I_ext': inp}, vectorize=True, step_size=dt, backend=b,
                       solver='euler', clear=True, file_name='inout_2', sampling_step_size=dts)
 
         assert np.mean(r1.values.flatten() - r2.values.flatten()) == pytest.approx(0., rel=accuracy, abs=accuracy)
@@ -406,7 +406,7 @@ def test_2_5_inputs_outputs():
         inp2 = np.zeros((sim_steps, 1)) + 0.1
 
         # perform simulation
-        r1 = simulate("model_templates.test_resources.test_backend.net14", simulation_time=sim_time, vectorization=True,
+        r1 = simulate("model_templates.test_resources.test_backend.net14", simulation_time=sim_time, vectorize=True,
                       step_size=dt, backend=b, solver='euler', clear=True, sampling_step_size=dts,
                       outputs={'a1': 'c1/p1/op9/a', 'a2': 'c1/p2/op10/a', 'a3': 'c2/p1/op9/a', 'a4': 'c2/p2/op10/a'},
                       inputs={'c1/p1/op9/I_ext': inp, 'c1/p2/op10/I_ext': inp2, 'c2/p1/op9/I_ext': inp,
@@ -416,7 +416,7 @@ def test_2_5_inputs_outputs():
         r2 = simulate("model_templates.test_resources.test_backend.net14", simulation_time=sim_time,
                       outputs={'a1': 'all/all/op9/a', 'a2': 'all/all/op10/a'},
                       inputs={'all/all/op9/I_ext': inp, 'all/all/op10/I_ext': inp2},
-                      vectorization=True, step_size=dt, backend=b, solver='euler', clear=True, file_name='inout_4',
+                      vectorize=True, step_size=dt, backend=b, solver='euler', clear=True, file_name='inout_4',
                       sampling_step_size=dts)
 
         assert np.mean(r1.values.flatten() - r2.values.flatten()) == pytest.approx(0., rel=accuracy, abs=accuracy)
@@ -467,7 +467,7 @@ def test_2_7_backends():
 
     r0 = simulate("model_templates.montbrio.simple_montbrio.QIF_sfa", simulation_time=T, sampling_step_size=dts,
                   inputs=None, outputs={"r": "p/Op_sfa/r"}, solver='euler', step_size=dt, clear=True,
-                  file_name='m0')
+                  file_name='m0', vectorize=False)
 
     for i, b in enumerate(backends):
 
@@ -475,6 +475,6 @@ def test_2_7_backends():
 
             r = simulate("model_templates.montbrio.simple_montbrio.QIF_sfa",
                          inputs=None, outputs={"r": "p/Op_sfa/r"}, backend=b, solver='euler', step_size=dt, clear=True,
-                         simulation_time=T, sampling_step_size=dts, file_name=f'm{i+1}')
+                         simulation_time=T, sampling_step_size=dts, file_name=f'm{i+1}', vectorize=False)
 
             assert np.mean(r0.values - r.values) == pytest.approx(0.0, rel=accuracy, abs=accuracy)

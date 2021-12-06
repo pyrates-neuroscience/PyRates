@@ -274,7 +274,7 @@ class ExpressionParser:
 
             # parse variables as nodes into compute graph
             inputs, func_args = [], []
-            for arg in expr.args:
+            for arg in self._sort_expr_args(expr.args):
 
                 if isinstance(arg, Symbol):
 
@@ -402,6 +402,34 @@ class ExpressionParser:
         self.cg.add_var_update(v.name, self.rhs[0], differential_equation=self._diff_eq)
         if lhs_key in self.vars:
             self.vars[lhs_key] = v
+
+    @staticmethod
+    def _sort_expr_args(args: tuple) -> list:
+
+        args = list(args)
+        args_sorted = []
+        prioritized = []
+
+        # add arguments that need to be treated with priority
+        for i, arg in enumerate(args.copy()):
+
+            prioritize = False
+            if isinstance(arg, Expr):
+                for arg_tmp in args:
+                    if arg_tmp != arg and len(arg.find(arg_tmp)):
+                        prioritize = True
+                        break
+
+            if prioritize:
+                args_sorted.append(args[i])
+                prioritized.append(i)
+
+        # add remaining arguments
+        for i in range(len(args)):
+            if i not in prioritized:
+                args_sorted.append(args[i])
+
+        return args_sorted
 
 ################################
 # helper classes and functions #

@@ -297,26 +297,40 @@ class FortranBackend(BaseBackend):
 
         return dtype, intent, shape
 
-    def _solve_euler(self, func: Callable, args: tuple, T: float, dt: float, dts: float, y: np.ndarray):
+    def _solve(self, solver: str, func: Callable, args: tuple, T: float, dt: float, dts: float, y0: np.ndarray,
+               times: np.ndarray, **kwargs) -> np.ndarray:
 
-        # preparations for fixed step-size integration
-        idx = 0
-        steps = int(np.round(T / dt))
-        store_steps = int(np.round(T / dts))
-        store_step = int(np.round(dts / dt))
-        state_rec = np.zeros((store_steps, y.shape[0]) if y.shape else (store_steps, 1))
-
-        # solve ivp for forward Euler method
+        # extract delta vector
         dy = args[0]
-        args = args[1:]
-        for step in range(self._start_idx, steps + self._start_idx):
-            if step % store_step == 0:
-                state_rec[idx, :] = y
-                idx += 1
-            func(step, y, dy, *args)
-            y += dt * dy
 
-        return state_rec
+        # define wrapper function for fortran subroutine
+        def fort_func(t, y, *args):
+            func(t, y, *args)
+            return dy
+
+        return super()._solve(solver=solver, func=fort_func, args=args, T=T, dt=dt, dts=dts, y0=y0, times=times,
+                              **kwargs)
+
+    # def _solve_euler(self, func: Callable, args: tuple, T: float, dt: float, dts: float, y: np.ndarray):
+    #
+    #     # preparations for fixed step-size integration
+    #     idx = 0
+    #     steps = int(np.round(T / dt))
+    #     store_steps = int(np.round(T / dts))
+    #     store_step = int(np.round(dts / dt))
+    #     state_rec = np.zeros((store_steps, y.shape[0]) if y.shape else (store_steps, 1))
+    #
+    #     # solve ivp for forward Euler method
+    #     dy = args[0]
+    #     args = args[1:]
+    #     for step in range(self._start_idx, steps + self._start_idx):
+    #         if step % store_step == 0:
+    #             state_rec[idx, :] = y
+    #             idx += 1
+    #         func(step, y, dy, *args)
+    #         y += dt * dy
+    #
+    #     return state_rec
 
     def _get_dtype(self, dtype: Union[str, np.dtype]):
         dtype = dtype
@@ -335,7 +349,7 @@ class FortranBackend(BaseBackend):
 
     @staticmethod
     def _get_shape(shape: tuple, var: str):
-        shape = str(shape)
+        shape = str(shape) if shape else ''
         if len(shape) < 3:
             shape = '(1)' if (var == 'dy' or var == 'y') else ''
         elif shape[-2] == ',':
