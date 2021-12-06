@@ -33,6 +33,7 @@
 from ..base import BaseBackend
 from ..computegraph import ComputeVar
 from .fortran_funcs import fortran_funcs
+from ..parser import replace
 
 # external _imports
 from typing import Optional, Dict, List, Callable, Iterable, Union, Tuple
@@ -178,65 +179,6 @@ class FortranBackend(BaseBackend):
             return False
         return False
 
-    @staticmethod
-    def _find_first_op(code, start, stop):
-        if stop < len(code):
-            code_tmp = code[start:stop]
-            ops = ["+", "-", "*", "/", "**", "^", "%", "<", ">", "==", "!=", "<=", ">="]
-            indices = [code_tmp.index(op) for op in ops if op in code_tmp]
-            if indices and max(indices) > 0:
-                return max(indices) + start
-            idx = start
-            for break_sign in [',', ')', ' ']:
-                if break_sign in code_tmp:
-                    idx_tmp = len(code_tmp) - code_tmp[::-1].index(break_sign)
-                    if len(code_tmp)-idx_tmp < len(code_tmp)-idx:
-                        idx = idx_tmp
-            return idx + start
-        return stop + start
-
-    def _get_func_info(self, name: str, shape: tuple = ()):
-
-        func_info = self._funcs[name]
-
-        # case I: generate shape-specific fortran function call
-        if type(func_info['call']) is Callable:
-
-            # extract unique index for input variable shape
-            try:
-                shapes, indices = self._op_calls[name]
-                try:
-                    idx = shapes.index(shape)
-                    idx = indices[idx]
-                except IndexError:
-                    idx = indices[-1]
-                    shapes.append(shape)
-                    indices.append(idx)
-            except KeyError:
-                idx = 1
-                self._op_calls[name] = [shape], [idx]
-
-            # generate function call and string
-            func_call, func_str = func_info['call'](idx, shape)
-            func_info['call'] = func_call
-            func_info['def'] = func_str
-
-        return func_info
-
-    def _add_func_call(self, name: str, args: Iterable):
-
-        # add function header
-        self.add_code_line(f"subroutine {name}({','.join(args)})")
-        self.add_linebreak()
-        self.add_code_line("implicit none")
-        self.add_linebreak()
-
-        # add variable declarations
-        for arg in self._var_declaration_info:
-            dtype, intent, shape = self._get_var_declaration_info(arg, args)
-            intent = f", intent({intent})" if intent else ""
-            self.add_code_line(f"{dtype}{intent} :: {arg}{shape}")
-
     def generate_func(self, func_name: str, to_file: bool = True, **kwargs):
 
         if to_file:
@@ -278,17 +220,71 @@ class FortranBackend(BaseBackend):
         # call parent method
         super().clear()
 
+    @staticmethod
+    def expr_to_str(expr: str, args: tuple):
+
+        func = 'cshift('
+        if func in expr:
+
+            old_shift = f"{args[-1]}"
+            new_shift = f"-{old_shift}"
+            start = expr.find(func) + len(func)
+            stop = expr[start:].find(')')
+            old_expr = expr[start:start+stop]
+            new_expr = replace(expr[start:start+stop], old_shift, new_shift)
+            expr = replace(expr, old_expr, new_expr)
+
+        return expr
+
+    def _get_func_info(self, name: str, shape: tuple = (), dtype: str = 'float'):
+
+        func_info = self._funcs[name]
+
+        # case I: generate shape-specific fortran function call
+        if callable(func_info['call']):
+
+            # extract unique index for input variable shape
+            try:
+                shapes, indices = self._op_calls[name]
+                try:
+                    idx = shapes.index(shape)
+                    idx = indices[idx]
+                except IndexError:
+                    idx = indices[-1]
+                    shapes.append(shape)
+                    indices.append(idx)
+            except KeyError:
+                idx = 1
+                self._op_calls[name] = [shape], [idx]
+
+            # generate function call and string
+            func_call, func_str = func_info['call'](idx, self._get_shape(shape, var=''), self._get_dtype(dtype))
+            func_info['call'] = func_call
+            func_info['def'] = func_str
+
+        return func_info
+
+    def _add_func_call(self, name: str, args: Iterable):
+
+        # add function header
+        self.add_code_line(f"subroutine {name}({','.join(args)})")
+        self.add_linebreak()
+        self.add_code_line("implicit none")
+        self.add_linebreak()
+
+        # add variable declarations
+        for arg in self._var_declaration_info:
+            dtype, intent, shape = self._get_var_declaration_info(arg, args)
+            intent = f", intent({intent})" if intent else ""
+            self.add_code_line(f"{dtype}{intent} :: {arg}{shape}")
+
     def _get_var_declaration_info(self, var: str, args: Iterable) -> tuple:
 
         # extract variable definition
         v = self._var_declaration_info[var]
 
         # define data type
-        dtype = str(v.dtype)
-        if 'float' in dtype:
-            dtype = 'double precision' if '64' in dtype else 'real'
-        else:
-            dtype = 'integer'
+        dtype = self._get_dtype(v.dtype)
 
         # define intent of input arguments
         if v.name in args:
@@ -297,18 +293,11 @@ class FortranBackend(BaseBackend):
             intent = ""
 
         # define shape
-        shape = str(v.shape)
-        if not shape and (var == 'dy' or var == 'y'):
-            shape = '(1)'
-        elif shape[-2] == ',':
-            shape = f"{shape[:-2]})"
-        else:
-            shape = ""
+        shape = self._get_shape(v.shape, var)
 
         return dtype, intent, shape
 
-    @staticmethod
-    def _solve_euler(func: Callable, args: tuple, T: float, dt: float, dts: float, y: np.ndarray):
+    def _solve_euler(self, func: Callable, args: tuple, T: float, dt: float, dts: float, y: np.ndarray):
 
         # preparations for fixed step-size integration
         idx = 0
@@ -320,7 +309,7 @@ class FortranBackend(BaseBackend):
         # solve ivp for forward Euler method
         dy = args[0]
         args = args[1:]
-        for step in range(steps):
+        for step in range(self._start_idx, steps + self._start_idx):
             if step % store_step == 0:
                 state_rec[idx, :] = y
                 idx += 1
@@ -328,6 +317,47 @@ class FortranBackend(BaseBackend):
             y += dt * dy
 
         return state_rec
+
+    def _get_dtype(self, dtype: Union[str, np.dtype]):
+        dtype = dtype
+        if dtype == 'float':
+            dtype = self._float_precision
+        if 'float' in dtype:
+            dtype = 'double precision' if '64' in dtype else 'real'
+        else:
+            dtype = 'integer'
+        return dtype
+
+    def _process_idx(self, idx: Union[Tuple[int, int], int, str, ComputeVar], **kwargs) -> str:
+        if idx == ':':
+            return ''
+        return super()._process_idx(idx=idx, **kwargs)
+
+    @staticmethod
+    def _get_shape(shape: tuple, var: str):
+        shape = str(shape)
+        if len(shape) < 3:
+            shape = '(1)' if (var == 'dy' or var == 'y') else ''
+        elif shape[-2] == ',':
+            shape = f"{shape[:-2]})"
+        return shape
+
+    @staticmethod
+    def _find_first_op(code, start, stop):
+        if stop < len(code):
+            code_tmp = code[start:stop]
+            ops = ["+", "-", "*", "/", "**", "^", "%", "<", ">", "==", "!=", "<=", ">="]
+            indices = [code_tmp.index(op) for op in ops if op in code_tmp]
+            if indices and max(indices) > 0:
+                return max(indices) + start
+            idx = start
+            for break_sign in [',', ')', ' ']:
+                if break_sign in code_tmp:
+                    idx_tmp = len(code_tmp) - code_tmp[::-1].index(break_sign)
+                    if len(code_tmp) - idx_tmp < len(code_tmp) - idx:
+                        idx = idx_tmp
+            return idx + start
+        return stop + start
 
 # class PyAutoBackend(FortranBackend):
 #

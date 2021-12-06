@@ -150,7 +150,7 @@ class BaseBackend(CodeGen):
         self._no_funcs = ["identity", "index_1d", "index_2d", "index_range", "index_axis"]
 
         # file-creation-related attributes
-        fdir, fname = self.get_fname(kwargs.pop('file_name', 'run'))
+        fdir, fname = self.get_fname(kwargs.pop('file_name', 'pyrates_run'))
         if fdir:
             sys.path.append(fdir)
         else:
@@ -366,11 +366,16 @@ class BaseBackend(CodeGen):
     def finalize_idx_str(var: ComputeVar, idx: str):
         return f"{var.name}{idx}"
 
+    @staticmethod
+    def expr_to_str(expr: str, args: tuple):
+        return expr
+
     def _get_func_info(self, name: str, **kwargs):
         return self._funcs[name]
 
     def _process_idx(self, idx: Union[Tuple[int, int], int, str, ComputeVar], **kwargs) -> str:
         if type(idx) is ComputeVar:
+            idx.set_value(idx.value + self._start_idx)
             return idx.name
         if type(idx) is tuple:
             return f"{idx[0] + self._start_idx}:{idx[1]}"

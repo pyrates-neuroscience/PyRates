@@ -195,6 +195,9 @@ class CircuitTemplate(AbstractBaseTemplate):
             for target, in_array in inputs.items():
                 net = net._add_input(target, in_array, adaptive_steps, simulation_time, vectorize)
 
+        # validate backend settings
+        self._validate_backend_args(backend, vectorize, adaptive_steps)
+
         # apply template (translate into compute graph, optional vectorization process)
         net.apply(adaptive_steps=adaptive_steps, vectorize=vectorize, verbose=verbose, backend=backend,
                   step_size=step_size, **kwargs)
@@ -925,6 +928,13 @@ class CircuitTemplate(AbstractBaseTemplate):
         elif var_node in var_map:
             var = f"{var_map[var_node]}/{var_split[-2]}/{var_split[-1]}"
         return var
+
+    @staticmethod
+    def _validate_backend_args(backend: str, vectorize: bool, dt_adapt: bool) -> None:
+
+        if backend == 'fortran' and vectorize:
+            raise PyRatesException(f'Vectorization is not enabled for your choice of backend: {backend}. Please either '
+                                   f'choose another backend or set `vectorize` to `False`.')
 
 
 def extend_var_dict(origin: dict, extension: dict):

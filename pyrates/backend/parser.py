@@ -308,8 +308,9 @@ class ExpressionParser:
             # create callable function of the operation
             label = expr.func.__name__
             try:
-                backend_funcs = {label: self.cg.get_op(label)['func']}
-            except KeyError:
+                v_tmp = self.cg.get_var(func_args[0].name)
+                backend_funcs = {label: self.cg.get_op(label, shape=v_tmp.shape, dtype=v_tmp.dtype)['func']}
+            except (KeyError, IndexError):
                 backend_funcs = dict()
             func = lambdify(func_args, expr=expr, modules=[backend_funcs, "numpy"])
 

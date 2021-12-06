@@ -18,7 +18,7 @@ __status__ = "Development"
 ###########
 
 # set backends to run the tests for
-backends = ['tensorflow', 'torch', 'default']
+backends = ['fortran']
 
 # set accuracy for all tests
 accuracy = 1e-4
@@ -97,7 +97,7 @@ def test_2_1_operator():
 
         # simulate operator behavior
         results = simulate("model_templates.test_resources.test_backend.net1", simulation_time=sim_time, step_size=dt,
-                           inputs={'pop0/op1/u': inp}, outputs={'a': 'pop0/op1/a'}, vectorize=True, backend=b,
+                           inputs={'pop0/op1/u': inp}, outputs={'a': 'pop0/op1/a'}, vectorize=False, backend=b,
                            clear=True, file_name='net1')
 
         # calculate operator behavior from hand
@@ -113,7 +113,7 @@ def test_2_1_operator():
         ################################################################################################
 
         results = simulate("model_templates.test_resources.test_backend.net2", simulation_time=sim_time,
-                           outputs={'a': 'pop0/op2/a'}, step_size=dt, vectorization=True, backend=b,
+                           outputs={'a': 'pop0/op2/a'}, step_size=dt, vectorize=False, backend=b,
                            clear=True, file_name='net_2')
 
         # calculate operator behavior from hand
@@ -131,7 +131,7 @@ def test_2_1_operator():
 
         results = simulate("model_templates.test_resources.test_backend.net3", simulation_time=sim_time,
                            outputs={'b': 'pop0/op3/b'}, inputs={'pop0/op3/u': inp}, out_dir="/tmp/log",
-                           step_size=dt, vectorization=True, backend=b, clear=True, file_name='net_3')
+                           step_size=dt, vectorize=True, backend=b, clear=True, file_name='net_3')
 
         # calculate operator behavior from hand
         update3_0 = lambda a, b, u: a + dt * (-10. * a + b ** 2 + u)
@@ -164,7 +164,8 @@ def test_2_2_node():
 
         # simulate node behavior
         results = simulate("model_templates.test_resources.test_backend.net4", simulation_time=sim_time,
-                           outputs={'a': 'pop0/op1/a'}, step_size=dt, vectorization=True, backend=b, clear=True)
+                           outputs={'a': 'pop0/op1/a'}, step_size=dt, vectorize=True, backend=b, clear=True,
+                           file_name='net4')
 
         # calculate node behavior from hand
         update0 = lambda x: x + dt * 2.
@@ -182,7 +183,8 @@ def test_2_2_node():
 
         # simulate node behavior
         results = simulate("model_templates.test_resources.test_backend.net5", simulation_time=sim_time,
-                           outputs={'a': 'pop0/op5/a'}, step_size=dt, vectorization=True, backend=b, clear=True)
+                           outputs={'a': 'pop0/op5/a'}, step_size=dt, vectorize=True, backend=b, clear=True,
+                           file_name='net5')
 
         # calculate node behavior from hand
         targets = np.zeros((sim_steps, 2), dtype=np.float32)
@@ -197,7 +199,8 @@ def test_2_2_node():
         ###############################################################################################################
 
         results = simulate("model_templates.test_resources.test_backend.net6", simulation_time=sim_time,
-                           outputs={'a': 'pop0/op1/a'}, step_size=dt, vectorization=True, backend=b, clear=True)
+                           outputs={'a': 'pop0/op1/a'}, step_size=dt, vectorize=True, backend=b, clear=True,
+                           file_name='net6')
 
         # calculate node behavior from hand
         targets = np.zeros((sim_steps, 3), dtype=np.float32)
@@ -214,8 +217,8 @@ def test_2_2_node():
         ######################################################################################################
 
         results = simulate("model_templates.test_resources.test_backend.net7", simulation_time=sim_time,
-                           outputs={'a': 'pop0/op1/a', 'b': 'pop0/op3/b'}, step_size=dt, vectorization=True,
-                           backend=b, clear=True)
+                           outputs={'a': 'pop0/op1/a', 'b': 'pop0/op3/b'}, step_size=dt, vectorize=True,
+                           backend=b, clear=True, file_name='net7')
 
         # calculate node behavior from hand
         targets = np.zeros((sim_steps, 4), dtype=np.float32)
@@ -265,8 +268,8 @@ def test_2_3_edge():
 
         # simulate edge behavior
         results = simulate("model_templates.test_resources.test_backend.net8", simulation_time=sim_time,
-                           outputs={'a': 'pop1/op1/a', 'b': 'pop2/op1/a'}, step_size=dt, vectorization=True,
-                           backend=b, clear=True)
+                           outputs={'a': 'pop1/op1/a', 'b': 'pop2/op1/a'}, step_size=dt, vectorize=False,
+                           backend=b, clear=True, file_name='net8')
 
         diff = np.mean(np.abs(results['a'].values[:] - targets[:, 2])) + \
                np.mean(np.abs(results['b'].values[:] - targets[:, 3]))
@@ -277,7 +280,7 @@ def test_2_3_edge():
 
         results = simulate("model_templates.test_resources.test_backend.net9", simulation_time=sim_time,
                            outputs={'a': 'pop0/op1/a', 'b': 'pop1/op7/a'}, inputs={'pop1/op7/inp': inp},
-                           step_size=dt, vectorization=True, backend=b, clear=True)
+                           step_size=dt, vectorize=False, backend=b, clear=True, file_name='net9')
 
         # calculate edge behavior from hand
         update3 = lambda x, y, z: x + dt * (y + z - x)
@@ -294,8 +297,8 @@ def test_2_3_edge():
         #######################################################################################
 
         results = simulate("model_templates.test_resources.test_backend.net10", simulation_time=sim_time,
-                           outputs={'a': 'pop0/op8/a', 'b': 'pop1/op8/a'}, step_size=dt, vectorization=True,
-                           backend=b, clear=True)
+                           outputs={'a': 'pop0/op8/a', 'b': 'pop1/op8/a'}, step_size=dt, vectorize=False,
+                           backend=b, clear=True, file_name='net10')
 
         # calculate edge behavior from hand
         delay0 = int(0.5 / dt)
@@ -317,7 +320,8 @@ def test_2_3_edge():
 
         results = simulate("model_templates.test_resources.test_backend.net13", simulation_time=sim_time,
                            outputs={'a1': 'p1/op9/a', 'a2': 'p2/op10/a'}, inputs={'p1/op9/I_ext': inp},
-                           vectorization=True, step_size=dt, backend=b, solver='euler', clear=True)
+                           vectorize=False, step_size=dt, backend=b, solver='euler', clear=True,
+                           file_name='net11')
         final_results_comparison.append(results.values)
 
     if len(final_results_comparison) > 1:

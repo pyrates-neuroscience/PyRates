@@ -492,7 +492,7 @@ class NetworkGraph(AbstractBaseIR):
 
             # create buffer equations
             if len(target_shape) < 1 or (len(target_shape) == 1 and target_shape[0] == 1):
-                buffer_eqs = [f"index_axis({var}_buffer) = roll({var}_buffer, 1, 0)",
+                buffer_eqs = [f"index_axis({var}_buffer) = roll({var}_buffer, 1)",
                               f"index({var}_buffer, 0) = {var}",
                               f"{var}_buffered = index({var}_buffer, {var}_delays)"]
             else:

@@ -650,13 +650,16 @@ class ComputeGraph(MultiDiGraph):
             replacement = self.backend.finalize_idx_str(var=self.get_var(var), idx=idx)
             expr_str = self._process_func_call(expr=expr_str, func=func, replacement=replacement)
 
-        # handle dummy function calls
+        # handle other function calls
         #############################
 
         if 'identity(' in expr_str:
 
             # replace `no_op` calls with first argument to the function call
             expr_str = self._process_func_call(expr=expr_str, func='identity', replacement=var)
+
+        # backend-specific function call adjustments
+        expr_str = self.backend.expr_to_str(expr_str, expr.args)
 
         return expr_str, index_args, var, idx
 

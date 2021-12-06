@@ -41,62 +41,64 @@ sigmoid = lambda x: 1./(1. + np.exp(-x))
 
 
 # function for calculating the logistic function of an nd-array
-def get_sigmoid_def(idx: int, out_shape: Union[tuple, str]) -> str:
-
-    sigmoid_n = f"s = size(x)\ndo n=1,s\n  fsigmoid_{idx}(n) = 1 / (1 + exp(-x(n)))\nend do"
-    sigmoid_0 = f"fsigmoid_{idx} = 1 / (1 + exp(-x))"
+def get_sigmoid_def(idx: int, out_shape: Union[tuple, str] = '', dtype: str = 'real') -> tuple:
+    isarray = len(out_shape) > 0
+    fname = f"fsigmoid_{idx}"
+    sigmoid_n = f"s = size(x)\ndo n=1,s\n  {fname}(n) = 1 / (1 + exp(-x(n)))\nend do"
+    sigmoid_0 = f"{fname} = 1 / (1 + exp(-x))"
 
     func = f"""
-function fsigmoid_{idx}(x)
+function {fname}(x)
 
 implicit none
 
-double precision :: fsigmoid_{idx}{out_shape}
-double precision :: x{'(:)' if len(out_shape) > 0 else ''}
-{"integer :: n, s" if len(out_shape) > 0 else ""}
+{dtype} :: {fname}{out_shape if isarray else ''}
+{dtype} :: x{out_shape if isarray else ''}
+{"integer :: n, s" if isarray else ""}
 
-{sigmoid_n if len(out_shape) > 0 else sigmoid_0}
+{sigmoid_n if isarray else sigmoid_0}
 
-end function fsigmoid_{idx}
+end function {fname}
     """
-    return func
+    return fname, func
 
 
 # wrapper function for interpolating a 1d-array
-def get_interp_def(idx: int, out_shape: Union[tuple, str]) -> str:
+def get_interp_def(idx: int, out_shape: Union[tuple, str] = '', dtype: str = 'real') -> tuple:
+    fname = f"finterp_{idx}"
     func = f"""
-function finterp_{idx}(x,y,x_new)
+function {fname}(x_new,x,y)
 
 implicit none 
 
-double precision :: finterp_{idx}
-double precision :: x(:), y(:), x_new
-double precision :: x_inc
+{dtype} :: {fname}
+{dtype} :: x(:), y(:), x_new
+{dtype} :: x_inc
 integer :: n, s
 
 s = size(x) 
 
 if (x_new < x(1)) then
-  finterp_{idx} = y(1)
+  {fname} = y(1)
 else if (x_new > x(s)) then
-  finterp_{idx} = y(s)
+  {fname} = y(s)
 else
   do n = 1, s 
     if (x(n) > x_new) exit 
   end do
   if (n == 1) then 
-    finterp_{idx} = y(1)
+    {fname} = y(1)
   else if (n == s+1) then
-    finterp_{idx} = y(s)
+    {fname} = y(s)
   else
     x_inc = (x_new - x(n-1)) / (x(n) - x(n-1))
-    finterp_{idx} = y(n) + x_inc*(y(n) - y(n-1))
+    {fname} = y(n) + x_inc*(y(n) - y(n-1))
   end if 
 end if 
 
-end function finterp_{idx}
+end function {fname}
 """
-    return func
+    return fname, func
 
 
 # dictionary for backend import
@@ -109,7 +111,7 @@ fortran_funcs = {
     'sum': {'call': 'sum', 'func': np.sum},
     'matmul': {'call': 'matmul', 'func': np.dot},
     'matvec': {'call': 'matmul', 'func': np.dot},
-    'roll': {'call': 'cshiftl', 'func': np.roll},
+    'roll': {'call': 'cshift', 'func': np.roll},
     'tanh': {'call': 'tanh', 'func': np.tanh},
     'sinh': {'call': 'sinh', 'func': np.sinh},
     'cosh': {'call': 'cosh', 'func': np.cosh},
