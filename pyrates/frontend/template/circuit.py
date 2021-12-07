@@ -409,18 +409,39 @@ class CircuitTemplate(AbstractBaseTemplate):
                     i_, in_var = edge_ir.inputs.copy().popitem()
                     sources[f"{edge_ir.label}/{in_var[0]}"] = 'source'
 
-                edge_idx = np.arange(edge_ir.length - n, edge_ir.length).tolist()
-
-                edge_ir_sources = self._extract_sources_from_edge_dict(sources, orig_source=source)
+                # collect new edge attributes
+                edge_idx = list(np.arange(edge_ir.length - n, edge_ir.length))
+                edge_ir_sources = self._extract_sources_from_edge_dict(sources, orig_source=source, vectorize=vectorize)
+                new_edges = {}
                 for edge_source, edge_target in edge_ir_sources.items():
 
+                    if vectorize:
+
+                        # case I: vectorized edges
+                        edge_source, idx = edge_source
+
+                        # add edge attributes to dict
+                        if (edge_source, edge_target) in new_edges:
+                            new_edges[(edge_source, edge_target)]['source_idx'].append(source_idx[idx])
+                            new_edges[(edge_source, edge_target)]['weight'].append(1.0)
+                        else:
+                            new_edges[(edge_source, edge_target)] = {'source_idx': [source_idx[idx]], 'weight': [1.0]}
+
+                    else:
+
+                        # case II: non-vectorized edges
+                        new_edges[(edge_source, edge_target)] = {'source_idx': source_idx, 'weight': 1.0}
+
+                # add an edge for each source node that projects to new edge node
+                for (s, t), data in new_edges.items():
+
                     # add edge from source node to the new edge node
-                    edge_dict = self._prepare_edge_for_circuit(weight=weight, delay=delay, spread=spread,
-                                                               source_idx=source_idx, target_idx=edge_idx)
-                    edges.append((edge_source, edge_target, edge_dict))
+                    edge_dict = self._prepare_edge_for_circuit(weight=data['weight'], source_idx=data['source_idx'],
+                                                               target_idx=edge_idx)
+                    edges.append((s, t, edge_dict))
 
                 # add edge from new edge node to target node
-                edge_dict = self._prepare_edge_for_circuit(weight=1.0, delay=None, spread=None,
+                edge_dict = self._prepare_edge_for_circuit(weight=weight, delay=delay, spread=spread,
                                                            source_idx=edge_idx, target_idx=target_idx)
                 edges.append((edge_ir.output, target, edge_dict))
 
@@ -428,7 +449,7 @@ class CircuitTemplate(AbstractBaseTemplate):
         self._ir = CircuitIR(label, nodes=nodes, edges=edges, verbose=verbose, step_size_adaptation=adaptive_steps,
                              scalar_shape=scalar_shape, **kwargs)
 
-    def get_nodes(self, node_identifier: Union[str, list, tuple], var_identifier: Optional[tuple] = None) -> list:
+    def get_nodes(self, node_identifier: Union[str, list, tuple], var_identifier: Optional[tuple] = None) -> List[str]:
         """Extracts nodes from the CircuitTemplate that match the provided identifier.
 
         Parameters
@@ -442,7 +463,7 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         Returns
         -------
-        list
+        List
             List of node keys that match the provided identifier. Each entry is a string that refers to a node of the
             circuit with circuit hierarchy levels separated via slashes.
 
@@ -855,9 +876,10 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         return edge_col
 
-    def _extract_sources_from_edge_dict(self, edge_dict: dict, orig_source: str) -> dict:
+    def _extract_sources_from_edge_dict(self, edge_dict: dict, orig_source: str, vectorize: bool = False) -> dict:
 
         label_map = self._vectorization_labels
+        indices = self._vectorization_indices
 
         edge_sources = {}
         for key, value in edge_dict.copy().items():
@@ -878,7 +900,24 @@ class CircuitTemplate(AbstractBaseTemplate):
             else:
                 edge_dict.pop(key)
 
-            edge_sources[self._relabel_var(value, label_map)] = self._relabel_var(key, label_map)
+            # add new mapping from edge source to edge input variable
+            source_key = self._relabel_var(value, label_map)
+
+            if vectorize:
+
+                # case I: vectorized edges
+                *snode, _, _ = value.split('/')
+                idx = indices['/'.join(snode)]
+                edge_sources[(source_key, idx)] = self._relabel_var(key, label_map)
+
+            else:
+
+                # case II: non-vectorized edges
+                if source_key in edge_sources:
+                    raise ValueError(f'The same source variable ({value})is used for two distinct edge variables of the '
+                                     f'same edge. Either provide different sources for the two edge variables, collapse '
+                                     f'them into a single edge variable, or set `vectorize` to `True`.')
+                edge_sources[source_key] = self._relabel_var(key, label_map)
 
         return edge_sources
 

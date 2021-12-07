@@ -479,10 +479,11 @@ class ComputeGraph(MultiDiGraph):
 
         # extract relevant compute graph nodes and bring them into the correct order
         nodes = self.var_updates['DEs' if differential_equations else 'non-DEs']
-        nodes, updates, defined_vars = self._sort_var_updates(nodes=nodes, differential_equations=differential_equations)
+        nodes, updates, def_vars, undef_vars = self._sort_var_updates(nodes=nodes,
+                                                                      differential_equations=differential_equations)
 
         # collect right-hand side expression and all input variables to these expressions
-        func_args, expressions, var_names, rhs_shapes, lhs_indices = [], [], [], [], []
+        func_args, expressions, var_names, rhs_shapes, lhs_indices = undef_vars, [], [], [], []
         for node, update in zip(nodes, updates):
 
             # collect expression and variables of right-hand side of equation
@@ -507,7 +508,7 @@ class ComputeGraph(MultiDiGraph):
 
                 # process indexing of left-hand side variable
                 idx_args, lhs = self._node_to_expr(node)
-                if lhs.args[0].name not in defined_vars:
+                if lhs.args[0].name not in def_vars:
                     idx_args.append(lhs.args[0].name)
                 func_args.extend(idx_args)
                 _, idx_args, lhs_var, idx = self._expr_to_str(lhs, apply=False)
@@ -550,7 +551,7 @@ class ComputeGraph(MultiDiGraph):
             for target_var, expr, idx, shape in zip(var_names, expressions, indices, rhs_shapes):
                 code_gen.add_var_update(lhs=self.get_var(target_var), rhs=expr, lhs_idx=idx, rhs_shape=shape)
 
-        return func_args, defined_vars
+        return func_args, def_vars
 
     def _node_to_expr(self, n: str, **kwargs) -> tuple:
 
@@ -683,7 +684,7 @@ class ComputeGraph(MultiDiGraph):
 
         # case I: for differential equations, do not perform any sorting
         if differential_equations:
-            return list(nodes.keys()), list(nodes.values()), []
+            return list(nodes.keys()), list(nodes.values()), [], []
 
         # case II: for non-differential equations, sort them according to their graph connections
         #########################################################################################
@@ -698,7 +699,8 @@ class ComputeGraph(MultiDiGraph):
                 node_names.append(list(self._get_inputs(node))[0])
             node_keys.append(node)
 
-        keys, values, defined_vars = [], [], []
+        keys, values, defined_vars, undefined_vars = [], [], [], []
+        n_nodes = len(nodes)
         while nodes:
 
             for node, update in nodes.copy().items():
@@ -725,7 +727,21 @@ class ComputeGraph(MultiDiGraph):
                     if isinstance(self.get_var(node), ComputeVar):
                         defined_vars.append(node)
 
-        return keys, values, defined_vars
+            # check whether the algorithm is stuck
+            n_nodes_new = len(nodes)
+            if n_nodes_new == n_nodes:
+                break
+            else:
+                n_nodes = n_nodes_new
+
+        # add mutually depended nodes
+        if nodes:
+            node_keys = list(nodes.keys())
+            keys.extend(node_keys)
+            values.extend(list(nodes.values()))
+            undefined_vars.extend(node_keys)
+
+        return keys, values, defined_vars, undefined_vars
 
     def _get_inputs(self, n: str):
 

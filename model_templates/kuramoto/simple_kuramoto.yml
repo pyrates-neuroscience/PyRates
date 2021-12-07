@@ -1,34 +1,10 @@
 %YAML 1.2
 ---
 
-Op_noise:
-  base: OperatorTemplate
-  equations:
-    - "t_old = t_new"
-    - "t_new = t"
-    - "d/dt * theta = omega + xi*sqrt(t_new-t_old) + K*net_in"
-  variables:
-    theta:
-      default: output
-    omega:
-      default: 10.0
-    K:
-      default: 1.0
-    t_old:
-      default: variable(0.0)
-    t_new:
-      default: variable(0.0)
-    xi:
-      default: input
-    net_in:
-      default: input
-    t:
-      default: variable
-
 Op_base:
   base: OperatorTemplate
   equations:
-    - "d/dt * theta = omega + K*net_in"
+    - "d/dt * theta = omega + K*net_in + ext_in"
   variables:
     theta:
       default: output
@@ -37,6 +13,8 @@ Op_base:
     K:
       default: 1.0
     net_in:
+      default: input
+    ext_in:
       default: input
 
 Op_coupling:
@@ -61,20 +39,10 @@ KM:
   operators:
     - Op_base
 
-KM_noise:
-  base: NodeTemplate
-  operators:
-    - Op_noise
-
 KM_single:
   base: CircuitTemplate
   nodes:
     p1: KM
-
-KM_single_noise:
-  base: CircuitTemplate
-  nodes:
-    p1: KM_noise
 
 KMN:
   base: CircuitTemplate
@@ -82,18 +50,7 @@ KMN:
     p1: KM
     p2: KM
   edges:
-    - [p2/Op_base/theta, p2/Op_base/net_in, Sin_edge, {weight: 2.0, Sin_edge/Op_coupling/theta_s: source,
+    - [p1/Op_base/theta, p2/Op_base/net_in, Sin_edge, {weight: -4.0, Sin_edge/Op_coupling/theta_s: source,
                                                        Sin_edge/Op_coupling/theta_t: p2/Op_base/theta}]
-    - [p1/Op_base/theta, p1/Op_base/net_in, Sin_edge, {weight: -2.0, Sin_edge/Op_coupling/theta_s: source,
+    - [p2/Op_base/theta, p1/Op_base/net_in, Sin_edge, {weight: -4.0, Sin_edge/Op_coupling/theta_s: source,
                                                        Sin_edge/Op_coupling/theta_t: p1/Op_base/theta}]
-
-KMN_noise:
-  base: CircuitTemplate
-  nodes:
-    p1: KM_noise
-    p2: KM_noise
-  edges:
-    - [ p2/Op_noise/theta, p2/Op_noise/net_in, Sin_edge, { weight: 4.0, Sin_edge/Op_coupling/theta_s: source,
-                                                         Sin_edge/Op_coupling/theta_t: p2/Op_noise/theta } ]
-    - [ p1/Op_noise/theta, p1/Op_noise/net_in, Sin_edge, { weight: -4.0, Sin_edge/Op_coupling/theta_s: source,
-                                                         Sin_edge/Op_coupling/theta_t: p1/Op_noise/theta } ]

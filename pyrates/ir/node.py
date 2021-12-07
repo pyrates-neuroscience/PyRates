@@ -31,17 +31,20 @@ from typing import Iterator, Callable
 
 from pyrates.ir.abc import AbstractBaseIR
 from pyrates.ir.operator_graph import OperatorGraph, VectorizedOperatorGraph
+from pyrates.backend.parser import get_unique_label
 
 __author__ = "Daniel Rose"
 __status__ = "Development"
 
 node_cache = {}
 op_cache = {}
+node_labels = []
 
 
 def clear_ir_caches():
     node_cache.clear()
     op_cache.clear()
+    node_labels.clear()
 
 
 def cache_func(label: str, operators: dict, values: dict = None, template: str = None, ir_class: Callable = None,
@@ -84,8 +87,11 @@ def cache_func(label: str, operators: dict, values: dict = None, template: str =
 
         # create new node
         op_cache[h] = op_graph
+        if label in node_labels:
+            label = get_unique_label(label, node_labels)
         node = ir_class(label, operators=op_graph, values=values, template=template, **kwargs)
         node_cache[h] = node
+        node_labels.append(label)
 
     return node, changed_labels
 

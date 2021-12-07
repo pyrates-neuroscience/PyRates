@@ -49,7 +49,7 @@ def nmrse(x: np.ndarray,
 
 # define backends for which to run the tests
 backends = ['tensorflow', 'torch', 'fortran', 'default']
-vectorization = [True, True, False, True]
+vectorization = [True, True, False, False]
 
 # define test accuracy
 accuracy = 1e-4
@@ -180,6 +180,11 @@ def test_3_4_kuramoto():
     dt = 1e-4
     dts = 1e-2
 
+    in_start = int(np.round(0.0 / dt))
+    in_dur = int(np.round(0.1 / dt))
+    inp = np.zeros((int(np.round(T / dt)),))
+    inp[in_start:in_start + in_dur] = 1.0
+
     for b, v in zip(backends, vectorization):
 
         # assess correct response of single base oscillator
@@ -201,23 +206,11 @@ def test_3_4_kuramoto():
 
         # perform simulation
         r2 = simulate("model_templates.kuramoto.simple_kuramoto.KMN", simulation_time=T, sampling_step_size=dts,
-                      outputs={"theta1": "p1/Op_base/theta", "theta2": "p2/Op_base/theta"},
-                      backend=b, solver='scipy', step_size=dt, clear=True, file_name='km2', vectorize=v)
+                      outputs={"theta1": "p1/Op_base/theta", "theta2": "p2/Op_base/theta"}, backend=b, solver='scipy',
+                      inputs={"p1/Op_base/ext_in": inp}, step_size=dt, clear=True, file_name='km2', vectorize=v)
 
-        # test whether oscillator 2 showed a faster phase development than oscillator 1
-        assert r2['theta1'].iloc[-1] < r2['theta2'].iloc[-1]
-
-        # repeat test 2 for two coupled noisy oscillators
-        #################################################
-
-        inp1 = np.random.randn(int(np.round(T / dt))) * 0.5
-        inp2 = np.random.randn(int(np.round(T / dt))) * 0.1
-
-        # perform simulation
-        r3 = simulate("model_templates.kuramoto.simple_kuramoto.KMN_noise", simulation_time=T, sampling_step_size=dts,
-                      outputs={"theta1": "p1/Op_noise/theta", "theta2": "p2/Op_noise/theta"},
-                      inputs={"p1/Op_noise/xi": inp1, "p2/Op_noise/xi": inp2}, backend=b, solver='scipy',
-                      step_size=dt, clear=True, method='RK23', file_name='km3', vectorize=v)
-
-        # test whether oscillator 2 showed a faster phase development than oscillator 1
-        assert r3['theta1'].iloc[-1] < r3['theta2'].iloc[-1]
+        # test whether the oscillators expressed de-phasing
+        init = int(in_dur*dt/dts)
+        diff_init = r2['theta1'].iloc[init] - r2['theta2'].iloc[init]
+        diff_end = r2['theta1'].iloc[-1] - r2['theta2'].iloc[-1]
+        assert diff_end > diff_init
