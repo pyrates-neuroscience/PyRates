@@ -81,20 +81,19 @@ class TorchBackend(BaseBackend):
         return torch.from_numpy(super().get_var(v))
 
     def _solve(self, solver: str, func: Callable, args: tuple, T: float, dt: float, dts: float, y0: torch.Tensor,
-               times: np.ndarray, **kwargs) -> np.ndarray:
+               t0: torch.tensor, times: np.ndarray, **kwargs) -> np.ndarray:
 
         # perform integration via scipy solver (mostly Runge-Kutta methods)
         if solver == 'euler':
 
             # solve ivp via forward euler method (fixed integration step-size)
-            results = self._solve_euler(func, args, T, dt, dts, y0)
+            results = self._solve_euler(func, args, T, dt, dts, y0, int(t0))
             results = results.numpy()
 
         else:
 
             # solve ivp via scipy methods (solvers of various orders with adaptive step-size)
             from scipy.integrate import solve_ivp
-            t = 0.0
             kwargs['t_eval'] = times
             try:
                 dtype = getattr(torch, self._float_precision)
@@ -107,23 +106,22 @@ class TorchBackend(BaseBackend):
                 return rhs.numpy()
 
             # call scipy solver
-            results = solve_ivp(fun=f, t_span=(t, T), y0=y0, first_step=dt, **kwargs)
+            results = solve_ivp(fun=f, t_span=(t0, T), y0=y0, first_step=dt, **kwargs)
             results = results['y'].T
 
         return results
 
     @staticmethod
-    def _solve_euler(func: Callable, args: tuple, T: float, dt: float, dts: float, y: torch.Tensor) -> torch.Tensor:
+    def _solve_euler(func: Callable, args: tuple, T: float, dt: float, dts: float, y: torch.Tensor, idx: int) -> torch.Tensor:
 
         # preparations for fixed step-size integration
-        idx = 0
         steps = int(np.round(T / dt))
         store_steps = int(np.round(T / dts))
         store_step = int(np.round(dts / dt))
         state_rec = torch.zeros((store_steps, y.shape[0]) if y.shape else (store_steps, 1))
 
         # solve ivp for forward Euler method
-        for step in torch.arange(steps):
+        for step in torch.arange(idx, steps):
             if step % store_step == 0:
                 state_rec[idx, :] = y
                 idx += 1

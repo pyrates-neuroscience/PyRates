@@ -156,14 +156,13 @@ class TensorflowBackend(BaseBackend):
         return f"{var.name}{idx}"
 
     def _solve(self, solver: str, func: Callable, args: tuple, T: float, dt: float, dts: float, y0: tf.Variable,
-               times: np.ndarray, **kwargs) -> np.ndarray:
+               t0: tf.Variable, times: np.ndarray, **kwargs) -> np.ndarray:
 
         # perform integration via scipy solver (mostly Runge-Kutta methods)
         if solver == 'euler':
 
             # preparations for fixed step-size integration
             zero = tf.constant(0, dtype=tf.int32)
-            idx = tf.Variable(0, dtype=tf.int32)
             steps = tf.constant(int(np.round(T / dt)))
             store_steps = int(np.round(T / dts))
             store_step = tf.constant(int(np.round(dts / dt)))
@@ -171,14 +170,13 @@ class TensorflowBackend(BaseBackend):
             dt = tf.constant(dt)
 
             # solve ivp via forward euler method (fixed integration step-size)
-            self._solve_euler(func, args, steps, store_step, zero, state_rec, idx, y0, dt)
+            self._solve_euler(func, args, steps, store_step, zero, state_rec, y0, t0, dt)
             results = state_rec.numpy()
 
         else:
 
             # solve ivp via scipy methods (solvers of various orders with adaptive step-size)
             from scipy.integrate import solve_ivp
-            t = 0.0
             kwargs['t_eval'] = times
             func = tf.function(func)
             dtype = y0.dtype
@@ -189,7 +187,7 @@ class TensorflowBackend(BaseBackend):
                 return rhs.numpy()
 
             # call scipy solver
-            results = solve_ivp(fun=f, t_span=(t, T), y0=y0.numpy(), first_step=dt, **kwargs)
+            results = solve_ivp(fun=f, t_span=(t0.numpy(), T), y0=y0.numpy(), first_step=dt, **kwargs)
             results = results['y'].T
 
         return results
@@ -259,7 +257,7 @@ class TensorflowBackend(BaseBackend):
     @staticmethod
     @tf.function
     def _solve_euler(func: Callable, args: tuple, steps: tf.constant, store_step: int, zero: tf.constant,
-                     state_rec: tf.Variable, idx: tf.Variable, y: tf.Variable, dt: tf.constant):
+                     state_rec: tf.Variable, y: tf.Variable, idx: tf.Variable, dt: tf.constant):
 
         for step in tf.range(steps):
 

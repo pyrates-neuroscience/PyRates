@@ -227,6 +227,9 @@ class ComputeGraph(MultiDiGraph):
         elif backend == 'PyAuto' or backend == 'pyauto':
             from pyrates.backend.fortran import PyAutoBackend
             backend = PyAutoBackend
+        elif backend == 'julia':
+            from pyrates.backend.julia import JuliaBackend
+            backend = JuliaBackend
         else:
             from pyrates.backend.base import BaseBackend
             backend = BaseBackend
@@ -399,7 +402,7 @@ class ComputeGraph(MultiDiGraph):
         func = code_gen.generate_func(func_name=func_name, to_file=to_file, func_args=func_args[3:],
                                       state_vars=self.state_vars, **kwargs)
 
-        return func, func_args
+        return func, tuple([self.get_var(arg, from_backend=True) for arg in func_args])
 
     def run(self, func: Callable, func_args: tuple, T: float, dt: float, dts: Optional[float] = None,
             outputs: Optional[dict] = None, **kwargs):
@@ -416,14 +419,8 @@ class ComputeGraph(MultiDiGraph):
             dts = dt
         solver = kwargs.pop('solver', 'euler')
 
-        # extract backend-specific state vector
-        y = self.get_var('y', from_backend=True)
-
-        # extract backend-specific function arguments
-        args = tuple(self.get_var(v, from_backend=True) for v in func_args[2:])
-
         # call backend method
-        return self.backend.run(func=func, func_args=args, T=T, dt=dt, dts=dts, y0=y, outputs=outputs, solver=solver,
+        return self.backend.run(func=func, func_args=func_args, T=T, dt=dt, dts=dts, outputs=outputs, solver=solver,
                                 **kwargs)
 
     def clear(self) -> None:

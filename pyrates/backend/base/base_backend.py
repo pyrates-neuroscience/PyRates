@@ -319,15 +319,17 @@ class BaseBackend(CodeGen):
 
         return rhs_eval
 
-    def run(self, func: Callable, func_args: tuple, T: float, dt: float, dts: float, y0: np.ndarray, outputs: dict,
+    def run(self, func: Callable, func_args: tuple, T: float, dt: float, dts: float, outputs: dict,
             solver: str, **kwargs) -> dict:
 
-        # simulation specs
-        times = np.arange(0, T, dts) if dts else np.arange(0, T, dt)
+        # initial values
+        t0 = func_args[0]
+        times = np.arange(t0, T, dts) if dts else np.arange(t0, T, dt)
+        y0 = func_args[1]
 
         # perform simulation
-        results = self._solve(solver=solver, func=func, args=func_args, T=T, dt=dt, dts=dts, y0=y0, times=times,
-                              **kwargs)
+        results = self._solve(solver=solver, func=func, args=func_args[2:], T=T, dt=dt, dts=dts, y0=y0, t0=t0,
+                              times=times, **kwargs)
 
         # reduce state recordings to requested state variables
         for key, idx in outputs.items():
@@ -387,23 +389,22 @@ class BaseBackend(CodeGen):
             return idx
 
     def _solve(self, solver: str, func: Callable, args: tuple, T: float, dt: float, dts: float, y0: np.ndarray,
-               times: np.ndarray, **kwargs) -> np.ndarray:
+               t0: np.ndarray, times: np.ndarray, **kwargs) -> np.ndarray:
 
         # perform integration via scipy solver (mostly Runge-Kutta methods)
         if solver == 'euler':
 
             # solve ivp via forward euler method (fixed integration step-size)
-            results = self._solve_euler(func, args, T, dt, dts, y0)
+            results = self._solve_euler(func, args, T, dt, dts, y0, t0)
 
         else:
 
             # solve ivp via scipy methods (solvers of various orders with adaptive step-size)
             from scipy.integrate import solve_ivp
-            t = 0.0
             kwargs['t_eval'] = times
 
             # call scipy solver
-            results = solve_ivp(fun=func, t_span=(t, T), y0=y0, first_step=dt, args=args, **kwargs)
+            results = solve_ivp(fun=func, t_span=(t0, T), y0=y0, first_step=dt, args=args, **kwargs)
             results = results['y'].T
 
         return results
@@ -412,7 +413,7 @@ class BaseBackend(CodeGen):
         self.add_code_line(f"def {name}({','.join(args)}):")
 
     @staticmethod
-    def _solve_euler(func: Callable, args: tuple, T: float, dt: float, dts: float, y: np.ndarray):
+    def _solve_euler(func: Callable, args: tuple, T: float, dt: float, dts: float, y: np.ndarray, t0: np.ndarray):
 
         # preparations for fixed step-size integration
         idx = 0
@@ -422,7 +423,7 @@ class BaseBackend(CodeGen):
         state_rec = np.zeros((store_steps, y.shape[0]) if y.shape else (store_steps, 1))
 
         # solve ivp for forward Euler method
-        for step in range(steps):
+        for step in range(t0, steps):
             if step % store_step == 0:
                 state_rec[idx, :] = y
                 idx += 1

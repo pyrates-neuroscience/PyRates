@@ -322,6 +322,10 @@ class FortranBackend(BaseBackend):
                 increment += blocked_indices[1] - blocked_indices[0]
                 idx += increment
             p = self._var_declaration_info[arg]
+            if sum(p.shape) > 1:
+                raise ValueError(f'Vector-valued parameter detected ({p.name} with shape {p.shape}), which cannot be '
+                                 f'handled by Auto-07p. Please change the definition of your network (e.g. remove '
+                                 f'extrinsic inputs) such that no vectorized model parameters exist.')
             self.add_code_line(f"args({idx}) = {p.value}")
 
         # define initial state
@@ -432,7 +436,7 @@ class FortranBackend(BaseBackend):
         return dtype, intent, shape
 
     def _solve(self, solver: str, func: Callable, args: tuple, T: float, dt: float, dts: float, y0: np.ndarray,
-               times: np.ndarray, **kwargs) -> np.ndarray:
+               t0: np.ndarray, times: np.ndarray, **kwargs) -> np.ndarray:
 
         # extract delta vector
         dy = args[0]
@@ -442,7 +446,7 @@ class FortranBackend(BaseBackend):
             func(t, y, *args)
             return dy
 
-        return super()._solve(solver=solver, func=fort_func, args=args, T=T, dt=dt, dts=dts, y0=y0, times=times,
+        return super()._solve(solver=solver, func=fort_func, args=args, T=T, dt=dt, dts=dts, y0=y0, t0=t0, times=times,
                               **kwargs)
 
     def _get_dtype(self, dtype: Union[str, np.dtype]):

@@ -196,7 +196,7 @@ class CircuitTemplate(AbstractBaseTemplate):
                 net = net._add_input(target, in_array, adaptive_steps, simulation_time, vectorize)
 
         # validate backend settings
-        self._validate_backend_args(backend, vectorize, adaptive_steps)
+        self._validate_backend_args(backend, vectorize, adaptive_steps, **kwargs)
 
         # apply template (translate into compute graph, optional vectorization process)
         net.apply(adaptive_steps=adaptive_steps, vectorize=vectorize, verbose=verbose, backend=backend,
@@ -970,11 +970,14 @@ class CircuitTemplate(AbstractBaseTemplate):
         return var
 
     @staticmethod
-    def _validate_backend_args(backend: str, vectorize: bool, dt_adapt: bool) -> None:
+    def _validate_backend_args(backend: str, vectorize: bool, dt_adapt: bool, **kwargs) -> None:
 
-        if backend == 'fortran' and vectorize:
+        if vectorize and backend in ['fortran', 'julia']:
             raise PyRatesException(f'Vectorization is not enabled for your choice of backend: {backend}. Please either '
                                    f'choose another backend or set `vectorize` to `False`.')
+        if backend == 'julia' and 'julia_path' not in kwargs:
+            raise PyRatesException('You chose the Julia backend, which compiles Julia code via PyJulia. To do this,'
+                                   'please provide the path to Julia executable via `julia_path`.')
 
 
 def extend_var_dict(origin: dict, extension: dict):
@@ -1027,8 +1030,7 @@ def update_dict(base_dict: dict, updates: dict):
 
 
 def is_integration_adaptive(solver: str, **solver_kwargs):
-
-    return solver == 'scipy'
+    return solver != 'euler'
 
 
 input_labels = []  # cache for input nodes
@@ -1048,6 +1050,7 @@ def create_input_node(var: str, inp: np.ndarray, continuous: bool, T: float, vec
     if continuous:
 
         # case I: interpolate input variable if time steps can vary
+        inp = inp.squeeze()
         inp = inp.squeeze()
         time = np.linspace(0, T, inp.shape[0])
         y_new = np.interp(0.0, time, inp)
