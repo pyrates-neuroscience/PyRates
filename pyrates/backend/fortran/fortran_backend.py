@@ -179,15 +179,39 @@ class FortranBackend(BaseBackend):
             return False
         return False
 
-    def generate_func(self, func_name: str, to_file: bool = True, **kwargs):
+    def generate_func(self, func_name: str, to_file: bool = True, func_args: tuple = (), state_vars: tuple = (),
+                      **kwargs):
 
         if to_file:
             file = f'{self._fdir}/{self._fname}{self._fend}' if self._fdir else f'{self._fname}{self._fend}'
         else:
             file = None
 
-        # compile fortran function
-        f2py.compile(self.generate(), modulename=self._fname, extension=self._fend, source_fn=file, verbose=False)
+        # generate the final string representing the function file
+        auto_compatible = kwargs.pop('auto', False)
+        if auto_compatible:
+
+            # case I: generate both the auto function and auto constants strings and write the constants string to file
+            func_file, const_file = self._generate_auto_files(func_name=func_name, func_args=func_args,
+                                                              state_vars=state_vars, **kwargs)
+
+            # write auto constants to file
+            build_dir = f"{self._fdir}/" if self._fdir else ""
+            cname = kwargs.pop('auto_constants_file', 'ivp')
+            try:
+                with open(f'{build_dir}c.{cname}', 'wt') as cfile:
+                    cfile.write(const_file)
+            except FileNotFoundError:
+                with open(f'{build_dir}c.{cname}', 'xt') as cfile:
+                    cfile.write(const_file)
+
+        else:
+
+            # case II: generate a standard fortran function string
+            func_file = self.generate()
+
+        # compile fortran function and write it to file
+        f2py.compile(func_file, modulename=self._fname, extension=self._fend, source_fn=file, verbose=False)
 
         # import function from temporary file
         exec(f"from {self._fname} import {self._fname}", globals())
@@ -235,6 +259,116 @@ class FortranBackend(BaseBackend):
             expr = replace(expr, old_expr, new_expr)
 
         return expr
+
+    def _generate_auto_files(self, func_name: str, func_args: tuple = (), state_vars: tuple = (),
+                             blocked_indices: tuple = (10, 32), **kwargs):
+
+        # wrapper to the right-hand side evaluation function
+        ####################################################
+
+        # add function header that Auto-07p expects
+        self.add_linebreak()
+        self.add_linebreak()
+        self.add_code_line("subroutine func(ndim,y,icp,args,ijac,dy,dfdu,dfdp)")
+        self.add_linebreak()
+
+        # load the module in which the pyrates function has been defined
+        self.add_code_line(f"use {self._fname}")
+
+        # declare auto-related variables
+        dtype = self._get_dtype(self._var_declaration_info['y'].dtype)
+        self.add_code_line("implicit none")
+        self.add_code_line("integer, intent(in) :: ndim, icp(*), ijac")
+        self.add_code_line(f"{dtype}, intent(in) :: y(ndim), args(*)")
+        self.add_code_line(f"{dtype}, intent(out) :: dy(ndim)")
+        self.add_code_line(f"{dtype}, intent(inout) :: dfdu(ndim,ndim), dfdp(ndim,*)")
+
+        # extract parameters from args list
+        increment = 1
+        params = []
+        for i, arg in enumerate(func_args):
+            idx = i + increment
+            if blocked_indices[0] <= idx <= blocked_indices[1]:
+                increment += blocked_indices[1] - blocked_indices[0]
+                idx += increment
+            params.append(f'args({idx})')
+
+        # call the pyrates subroutine
+        additional_args = f", {', '.join(params)}" if params else ""
+        self.add_linebreak()
+        self.add_code_line(f"call {func_name}(args(14), y, dy{additional_args})")
+        self.add_linebreak()
+        self.add_code_line("end subroutine func")
+        self.add_linebreak()
+
+        # routine that sets up an initial value problem
+        ###############################################
+
+        # generate subroutine header
+        self.add_linebreak()
+        self.add_code_line("subroutine stpnt(ndim, y, args, t)")
+        self.add_linebreak()
+        self.add_code_line("implicit None")
+        self.add_code_line("integer, intent(in) :: ndim")
+        self.add_code_line(f"{dtype}, intent(inout) :: y(ndim), args(*)")
+        self.add_code_line(f"{dtype}, intent(in) :: t")
+        self.add_linebreak()
+
+        # define parameter values
+        increment = 1
+        for i, arg in enumerate(func_args):
+            idx = i + increment
+            if blocked_indices[0] <= idx <= blocked_indices[1]:
+                increment += blocked_indices[1] - blocked_indices[0]
+                idx += increment
+            p = self._var_declaration_info[arg]
+            self.add_code_line(f"args({idx}) = {p.value}")
+
+        # define initial state
+        for i, var in enumerate(state_vars):
+            v = self._var_declaration_info[var]
+            self.add_code_line(f"y({i+1}) = {v.value}")
+
+        # end subroutine
+        self.add_linebreak()
+        self.add_code_line("end subroutine stpnt")
+        self.add_linebreak()
+
+        # dummy routines (could be made available for more complex Auto-07p usages)
+        ###########################################################################
+
+        self.add_linebreak()
+        for routine in ['bcnd', 'icnd', 'fopt', 'pvls']:
+            self.add_linebreak()
+            self.add_code_line(f"subroutine {routine}")
+            self.add_code_line(f"end subroutine {routine}")
+            self.add_linebreak()
+
+        func_file = self.generate()
+        self.code.clear()
+
+        # create auto constants file
+        ############################
+
+        auto_constants = {'NDIM': 1, 'NPAR': 1, 'IPS': -2, 'ILP': 0, 'ICP': [14], 'NTST': 1, 'NCOL': 3, 'IAD': 0,
+                          'ISP': 0, 'ISW': 1, 'IPLT': 0, 'NBC': 0, 'NINT': 0, 'NMX': 10000, 'NPR': 1, 'MXBF': 10,
+                          'IID': 2, 'ITMX': 2, 'ITNW': 5, 'NWTN': 2, 'JAC': 0, 'EPSL': 1e-6, 'EPSU': 1e-6, 'EPSS': 1e-4,
+                          'IRS': 0, 'DS': 1e-4, 'DSMIN': 1e-8, 'DSMAX': 1e-2, 'IADS': 1, 'THL': {}, 'THU': {},
+                          'UZR': {}, 'STOP': {}}
+
+        auto_constants['NDIM'] = len(state_vars)
+        auto_constants['NPAR'] = len(func_args)
+        for key in kwargs:
+            if key in auto_constants:
+                auto_constants[key] = kwargs.pop(key)
+
+        # write auto constants to string
+        for key, val in auto_constants.items():
+            self.add_code_line(f"{key} = {val}")
+        const_file = self.generate()
+        self.code.clear()
+
+        return func_file, const_file
 
     def _get_func_info(self, name: str, shape: tuple = (), dtype: str = 'float'):
 
@@ -311,27 +445,6 @@ class FortranBackend(BaseBackend):
         return super()._solve(solver=solver, func=fort_func, args=args, T=T, dt=dt, dts=dts, y0=y0, times=times,
                               **kwargs)
 
-    # def _solve_euler(self, func: Callable, args: tuple, T: float, dt: float, dts: float, y: np.ndarray):
-    #
-    #     # preparations for fixed step-size integration
-    #     idx = 0
-    #     steps = int(np.round(T / dt))
-    #     store_steps = int(np.round(T / dts))
-    #     store_step = int(np.round(dts / dt))
-    #     state_rec = np.zeros((store_steps, y.shape[0]) if y.shape else (store_steps, 1))
-    #
-    #     # solve ivp for forward Euler method
-    #     dy = args[0]
-    #     args = args[1:]
-    #     for step in range(self._start_idx, steps + self._start_idx):
-    #         if step % store_step == 0:
-    #             state_rec[idx, :] = y
-    #             idx += 1
-    #         func(step, y, dy, *args)
-    #         y += dt * dy
-    #
-    #     return state_rec
-
     def _get_dtype(self, dtype: Union[str, np.dtype]):
         dtype = dtype
         if dtype == 'float':
@@ -372,284 +485,3 @@ class FortranBackend(BaseBackend):
                         idx = idx_tmp
             return idx + start
         return stop + start
-
-# class PyAutoBackend(FortranBackend):
-#
-#     _blocked_indices = (10, 32)
-#     _time_scale = 1e1
-#
-#     def __init__(self,
-#                  ops: Optional[Dict[str, str]] = None,
-#                  dtypes: Optional[Dict[str, object]] = None,
-#                  name: str = 'net_0',
-#                  float_default_type: str = 'float64',
-#                  imports: Optional[List[str]] = None,
-#                  build_dir: Optional[str] = None,
-#                  **kwargs
-#                  ) -> None:
-#
-#         # validate auto directory
-#         try:
-#             self._auto_dir = kwargs.pop('auto_dir')
-#         except KeyError as e:
-#             print("WARNING: No auto installation directory has been passed to the backend. If this directory has "
-#                   "not been set as an environment variable, this will cause an error when attempting to perform "
-#                   "simulations. The Auto-07p installation directory can be passed to the `run()` method as follows: "
-#                   "apply_kwargs={'backend_kwargs': {'auto_dir': '<path>'}}.")
-#
-#         # set auto default constants
-#         self.auto_constants = {'NDIM': 1, 'NPAR': 1,
-#                               'IPS': -2, 'ILP': 0, 'ICP': [14], 'NTST': 1, 'NCOL': 3, 'IAD': 0, 'ISP': 0, 'ISW': 1,
-#                               'IPLT': 0, 'NBC': 0, 'NINT': 0, 'NMX': 10000, 'NPR': 1, 'MXBF': 10, 'IID': 2, 'ITMX': 2,
-#                               'ITNW': 5, 'NWTN': 2, 'JAC': 0, 'EPSL': 1e-6, 'EPSU': 1e-6, 'EPSS': 1e-4, 'IRS': 0,
-#                               'DS': 1e-4, 'DSMIN': 1e-8, 'DSMAX': 1e-2, 'IADS': 1, 'THL': {},
-#                               'THU': {}, 'UZR': {}, 'STOP': {}}
-#
-#         super().__init__(ops=ops, dtypes=dtypes, name=name, float_default_type=float_default_type, imports=imports,
-#                          build_dir=build_dir, **kwargs)
-#
-#     def clear(self) -> None:
-#         """Removes all layers, variables and operations from graph. Deletes build directory.
-#         """
-#
-#         # call parent method
-#         super().clear()
-#
-#         # delete fortran-specific temporary files
-#         wdir = f"{self._orig_dir}/{self._build_dir}" if self._build_dir != self._orig_dir else self._orig_dir
-#         fendings = ["so", "exe", "mod", "o"]
-#         for f in [f for f in os.listdir(wdir)]:
-#             fname = self._file_name
-#             fsplit = f.split('.')
-#             if fsplit[0] == fname and fsplit[-1] in fendings:
-#                 os.remove(f"{wdir}/{f}")
-#             elif fsplit[0] == 'fort':
-#                 os.remove(f"{wdir}/{f}")
-#
-#     def _generate_func(self, func_str: str, func_name: str = None, file_name: str = None, build_dir: str = None,
-#                        decorator: Any = None, **kwargs):
-#
-#         # preparations
-#         if not file_name:
-#             file_name = self._file_name
-#         if not build_dir:
-#             build_dir = f'{self._orig_dir}/{self._build_dir}' if self._build_dir else self._orig_dir
-#
-#         # add auto-related subroutines
-#         code_gen = FortranGen()
-#         code_gen.add_code_line(func_str)
-#         code_gen.add_linebreak()
-#         code_gen.add_linebreak()
-#         code_gen, constants_gen = self._generate_auto_routines(code_gen, file_name, func_name, **kwargs)
-#         func_str = code_gen.generate()
-#         code_gen.clear()
-#
-#         # add global variables and module definition above the funcion definitions
-#         code_gen = FortranGen()
-#         code_gen.add_code_line(f"module {self._file_name}")
-#         code_gen.add_linebreak()
-#         for line in self._global_variables:
-#             code_gen.add_code_line(line)
-#         code_gen.add_linebreak()
-#         code_gen.add_code_line("contains")
-#         code_gen.add_linebreak()
-#         code_gen.add_linebreak()
-#         code_gen.add_code_line(func_str)
-#
-#         # write rhs function to file
-#         f2py.compile(code_gen.generate(), modulename=file_name, extension=self._file_ending,
-#                      source_fn=f'{build_dir}/{file_name}{self._file_ending}', verbose=False)
-#
-#         # import function from temporary file
-#         exec(f"from {file_name} import func", globals())
-#         rhs_eval = globals().pop('func')
-#
-#         # apply function decorator
-#         if decorator:
-#             rhs_eval = decorator(rhs_eval, **kwargs)
-#
-#         # write auto constants to file
-#         try:
-#             with open(f'{build_dir}/c.ivp', 'wt') as cfile:
-#                 cfile.write(constants_gen.generate())
-#         except FileNotFoundError:
-#             with open(f'{build_dir}/c.ivp', 'xt') as cfile:
-#                 cfile.write(constants_gen.generate())
-#
-#         return rhs_eval
-#
-#     def _generate_auto_routines(self, code_gen: FortranGen, module_name: str, func_name: str, **kwargs) -> tuple:
-#
-#         # wrapper to the right-hand side evaluation function
-#         ####################################################
-#
-#         # add function header that Auto-07p expects
-#         code_gen.add_code_line("subroutine func(ndim,state_vec,icp,args,ijac,state_vec_update,dfdu,dfdp)")
-#         code_gen.add_linebreak()
-#
-#         # load the module in which the pyrates function has been defined
-#         code_gen.add_code_line(f"use {module_name}")
-#
-#         # declare auto-related variables
-#         code_gen.add_code_line("implicit none")
-#         code_gen.add_code_line("integer, intent(in) :: ndim, icp(*), ijac")
-#         code_gen.add_code_line("double precision, intent(in) :: state_vec(ndim), args(*)")
-#         code_gen.add_code_line("double precision, intent(out) :: state_vec_update(ndim)")
-#         code_gen.add_code_line("double precision, intent(inout) :: dfdu(ndim,ndim), dfdp(ndim,*)")
-#
-#         # declare variables that need to be extracted from args array
-#         for arg in self._func_args.copy():
-#             dtype, _, shape = self._get_var_declaration_info(arg)
-#             try:
-#                 s = [int(s) for s in shape[1:-1].split(',')]
-#                 if len(s) == 1:
-#                     val = self.graph.eval_node(var)
-#                     val_init = f"{dtype}, parameter :: {var}{shape} = (/{','.join(val.tolist())}/)"
-#                     self._global_variables.append(val_init)
-#                 else:
-#                     raise NotImplementedError('The PyAutoBackend cannot generate run functions that include parameters '
-#                                               'of dimensionality 2 or higher.')
-#
-#                 idx = self._func_args.index(arg)
-#                 self._func_args.pop(idx)
-#             except ValueError:
-#                 code_gen.add_code_line(f"{dtype} :: {arg}{shape}")
-#         code_gen.add_linebreak()
-#
-#         # extract variables from args array
-#         increment = 1
-#         for i, arg in enumerate(self._func_args):
-#             idx = i + increment
-#             if idx >= self._blocked_indices[0] and idx <= self._blocked_indices[1]:
-#                 increment += self._blocked_indices[1] - self._blocked_indices[0]
-#                 idx += increment
-#             code_gen.add_code_line(f"{arg} = args({idx})")
-#
-#         # call the pyrates subroutine
-#         additional_args = f", {', '.join(self._func_args)}" if self._func_args else ""
-#         code_gen.add_code_line(f"call {func_name}(args(14), state_vec, state_vec_update{additional_args})")
-#         code_gen.add_linebreak()
-#         code_gen.add_code_line("end subroutine func")
-#
-#         # routine that sets up an initial value problem
-#         ###############################################
-#
-#         # generate subroutine header
-#         code_gen.add_linebreak()
-#         code_gen.add_code_line("subroutine stpnt(ndim, state_vec, args, t)")
-#         code_gen.add_linebreak()
-#         code_gen.add_code_line("implicit None")
-#         code_gen.add_code_line("integer, intent(in) :: ndim")
-#         code_gen.add_code_line("double precision, intent(inout) :: state_vec(ndim), args(*)")
-#         code_gen.add_code_line("double precision, intent(in) :: t")
-#         code_gen.add_linebreak()
-#
-#         # define parameter values
-#         code_gen.add_linebreak()
-#         increment = 1
-#         idx = 0
-#         for i, arg in enumerate(self._func_args):
-#             idx = i + increment
-#             if idx >= self._blocked_indices[0] and idx <= self._blocked_indices[1]:
-#                 increment += self._blocked_indices[1] - self._blocked_indices[0]
-#                 idx += increment
-#             val = self.graph.eval_node(arg)
-#             code_gen.add_code_line(f"args({idx}) = {val}")
-#         npar = idx
-#
-#         # define initial state
-#         code_gen.add_linebreak()
-#         for key, info in self._state_vars.items():
-#             idx = info['index']
-#             v_init = info['init']
-#             code_gen.add_code_line(f"state_vec({idx}) = {v_init}")
-#         code_gen.add_linebreak()
-#
-#         # end subroutine
-#         code_gen.add_linebreak()
-#         code_gen.add_code_line("end subroutine stpnt")
-#         code_gen.add_linebreak()
-#
-#         # dummy routines (could be made available for more complex Auto-07p usages)
-#         ###########################################################################
-#
-#         code_gen.add_linebreak()
-#         for routine in ['bcnd', 'icnd', 'fopt', 'pvls']:
-#             code_gen.add_linebreak()
-#             code_gen.add_code_line(f"subroutine {routine}")
-#             code_gen.add_code_line(f"end subroutine {routine}")
-#             code_gen.add_linebreak()
-#
-#         # create auto constants file
-#         ############################
-#
-#         self.auto_constants['NDIM'] = len(self.graph.eval_node('state_vec'))
-#         self.auto_constants['NPAR'] = npar
-#         for key, val in kwargs:
-#             if key in self.auto_constants:
-#                 self.auto_constants[key] = kwargs.pop(key)
-#
-#         # write auto constants to string
-#         const_gen = FortranGen()
-#         for key, val in self.auto_constants.items():
-#             const_gen.add_code_line(f"{key} = {val}")
-#
-#         return code_gen, const_gen
-#
-#     def _solve_ivp(self, solver: str, T: float, state_vec: np.ndarray, rhs: np.ndarray, dt: float,
-#                    eval_times: np.ndarray, dts: float, rhs_func: Callable, *args, **kwargs) -> np.ndarray:
-#         """
-#
-#         Parameters
-#         ----------
-#         rhs_func
-#         func_args
-#         state_vars
-#         T
-#         dt
-#         dts
-#         t
-#         solver
-#         output_indices
-#         kwargs
-#
-#         Returns
-#         -------
-#
-#         """
-#
-#         from pyrates.utility.pyauto import PyAuto
-#         from scipy.interpolate import interp1d
-#
-#         # preparations
-#         pyauto = PyAuto(working_dir=self._build_dir, auto_dir=self._auto_dir)
-#         ds = dt * self._time_scale
-#         dsmin = ds*1e-2
-#         auto_defs = {'DSMIN': dsmin, 'DSMAX': ds*1e1, 'NMX': int(T/dsmin)}
-#         for key, val in auto_defs.items():
-#             if key not in kwargs:
-#                 kwargs[key] = val
-#         ndim = len(state_vec)
-#
-#         # solve ivp
-#         kwargs_tmp = {key: val for key, val in kwargs.items() if key in self.auto_constants}
-#         pyauto.run(e=self._file_name, c='ivp', DS=ds, name='t', UZR={14: T}, STOP={'UZ1'},
-#                    **kwargs_tmp)
-#
-#         # extract results
-#         extract = [f'U({i+1})' for i in range(ndim)]
-#         extract.append('PAR(14)')
-#         results_tmp = pyauto.extract(keys=extract, cont='t')
-#         times = results_tmp.pop('PAR(14)')
-#         results = []
-#         for i in range(ndim):
-#             y_inter = interp1d(times, np.squeeze(results_tmp.pop(f'U({i+1})')))
-#             results.append(y_inter(eval_times))
-#
-#         return np.asarray(results).T
-#
-#     def _idx_to_str(self, idx, var: str):
-#         index = f"{self._idx[0]}{idx}{self._idx[1]}"
-#         value = self.graph.eval_node(var)
-#         self._state_vars[var] = {'index': index, 'init': value}
-#         return index

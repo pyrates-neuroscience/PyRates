@@ -182,8 +182,8 @@ class CircuitTemplate(AbstractBaseTemplate):
 
     def run(self, simulation_time: float, step_size: float, inputs: Optional[dict] = None,
             outputs: Optional[Union[dict, list]] = None, sampling_step_size: Optional[float] = None,
-            solver: str = 'euler', backend: str = None, out_dir: Optional[str] = None, vectorize: bool = True,
-            verbose: bool = True, clear: bool = True, **kwargs) -> pd.DataFrame:
+            solver: str = 'euler', backend: str = None,  vectorize: bool = True, verbose: bool = True,
+            clear: bool = True, **kwargs) -> pd.DataFrame:
 
         # translate circuit template into a graph representation
         ########################################################
@@ -218,7 +218,7 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         # perform simulation
         outputs = net._ir.run(simulation_time=simulation_time, step_size=step_size, solver=solver,
-                              sampling_step_size=sampling_step_size, outputs=outputs_ir, out_dir=out_dir, **kwargs)
+                              sampling_step_size=sampling_step_size, outputs=outputs_ir, **kwargs)
 
         # apply indices to output variables
         outputs_final = {}
@@ -263,24 +263,25 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         return results
 
-    def get_run_func(self, step_size: float, inputs: Optional[dict] = None, backend: str = None,
-                     out_dir: Optional[str] = None, verbose: bool = True, apply_kwargs: dict = None, clear: bool = True,
-                     **kwargs) -> tuple:
+    def get_run_func(self, func_name: str, step_size: float, inputs: Optional[dict] = None, backend: str = None,
+                     vectorize: bool = True, verbose: bool = True, clear: bool = False, **kwargs) -> tuple:
 
         # add extrinsic inputs to network
-        adaptive_steps = kwargs.pop('adaptive_step_size', False)
+        adaptive_steps = is_integration_adaptive(kwargs.pop('solver', 'euler'), **kwargs)
         net = self
         if inputs:
             for target, in_array in inputs.items():
-                net = net._add_input(target, in_array, adaptive_steps, in_array.shape[0] * step_size)
+                net = net._add_input(target, in_array, adaptive_steps, in_array.shape[0] * step_size, vectorize)
+
+        # validate backend settings
+        net._validate_backend_args(backend, vectorize, adaptive_steps)
 
         # translate circuit template into a graph representation
-        if not apply_kwargs:
-            apply_kwargs = {}
-        net.apply(adaptive_steps=adaptive_steps, verbose=verbose, backend=backend, step_size=step_size, **apply_kwargs)
+        net.apply(adaptive_steps=adaptive_steps, verbose=verbose, backend=backend, step_size=step_size,
+                  vectorize=vectorize, **kwargs)
 
         # generate the run function
-        func, args = net._ir.get_run_func(step_size=step_size, out_dir=out_dir, **kwargs)
+        func, args = net._ir.get_run_func(func_name=func_name, step_size=step_size, **kwargs)
 
         # clear the network temporary files
         if clear:

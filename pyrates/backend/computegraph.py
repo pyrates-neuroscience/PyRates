@@ -396,7 +396,8 @@ class ComputeGraph(MultiDiGraph):
         code_gen.generate_func_tail(rhs_var=rhs_var_key)
 
         # generate the function (and write to file, optionally)
-        func = code_gen.generate_func(func_name=func_name, to_file=to_file, **kwargs)
+        func = code_gen.generate_func(func_name=func_name, to_file=to_file, func_args=func_args[3:],
+                                      state_vars=self.state_vars, **kwargs)
 
         return func, func_args
 

@@ -91,25 +91,22 @@ results, results_map = grid_search(circuit_template="model_templates.jansen_rit.
 #
 # Now, lets visualize the results of this parameter sweep for each value of :math:`C`:
 
-from pyrates.utility.visualization import create_cmap, plot_timeseries
 import matplotlib.pyplot as plt
 
-fig, axes = plt.subplots(nrows=len(param_grid['C']), figsize=(8, 12))
-
-# create the color map
-cmap = create_cmap('pyrates_blue', as_cmap=False, n_colors=1, reverse=True)
+fig, axes = plt.subplots(nrows=results_map['V_pce'].shape[1], figsize=(8, 12))
 
 # sort the results map via the values of C
-results_map.sort_values('C', inplace=True)
+results_map.sort_values('C', inplace=True, axis=1)
 
 # plot the raw output variable for each condition
-for i, ax in enumerate(axes):
-    key = results_map.index[i]
-    psp_e = results.loc[1.0:, ('V_pce', key)]
-    psp_i = results.loc[1.0:, ('V_pci', key)]
-    plot_timeseries(psp_e - psp_i, ax=ax, cmap=cmap, ylabel='PSP')
-    ax.legend([f"C = {results_map.at[key, 'C']}"], loc='upper right')
-
+for ax, key_e, key_i in zip(axes, results_map['V_pce'].columns, results_map['V_pci'].columns):
+    psp_e = results['V_pce'].loc[1.0:, key_e]
+    psp_i = results['V_pci'].loc[1.0:, key_i]
+    ax.plot(psp_e - psp_i)
+    ax.legend([f"C = {results_map['V_pce'].at['C', key_e]}"], loc='upper right')
+    ax.set_ylabel(r'$V = V_{pce} - V_{pci}$')
+axes[-1].set_xlabel('time')
+plt.tight_layout()
 plt.show()
 
 # %%
@@ -145,22 +142,22 @@ results, results_map = grid_search(circuit_template="model_templates.jansen_rit.
 #
 # Now, lets have a look at the results again:
 
-fig, axes = plt.subplots(nrows=len(param_grid['C']), figsize=(8, 12))
+import matplotlib.pyplot as plt
 
-# create the color map
-cmap = create_cmap('pyrates_blue', as_cmap=False, n_colors=1, reverse=True)
+fig, axes = plt.subplots(nrows=results_map['V_pce'].shape[1], figsize=(8, 12))
 
 # sort the results map via the values of C
-results_map.sort_values('C', inplace=True)
+results_map.sort_values('C', inplace=True, axis=1)
 
 # plot the raw output variable for each condition
-for i, ax in enumerate(axes):
-    key = results_map.index[i]
-    psp_e = results.loc[1.0:, ('V_pce', key)]
-    psp_i = results.loc[1.0:, ('V_pci', key)]
-    plot_timeseries(psp_e - psp_i, ax=ax, cmap=cmap, ylabel='PSP')
-    ax.legend([f"C = {results_map.at[key, 'C']}"], loc='upper right')
-
+for ax, key_e, key_i in zip(axes, results_map['V_pce'].columns, results_map['V_pci'].columns):
+    psp_e = results['V_pce'].loc[1.0:, key_e]
+    psp_i = results['V_pci'].loc[1.0:, key_i]
+    ax.plot(psp_e - psp_i)
+    ax.legend([f"C = {results_map['V_pce'].at['C', key_e]}"], loc='upper right')
+    ax.set_ylabel(r'$V = V_{pce} - V_{pci}$')
+axes[-1].set_xlabel('time')
+plt.tight_layout()
 plt.show()
 
 # %%

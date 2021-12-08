@@ -142,11 +142,18 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
                           vectorization=vectorization,
                           **kwargs)    # type: pd.DataFrame
 
+    # create dataframe that maps between output names and parameter sets
+    data, index = [], []
+    for key in results.keys():
+        param_key = key[1].split('/')[0]
+        data.append(param_grid.loc[param_key, :].values)
+    param_map = pd.DataFrame(data=np.asarray(data).T, columns=results.columns, index=param_grid.columns)
+
     # return results
     if 'profile' in kwargs:
         results, duration = results
-        return results, param_grid, duration
-    return results, param_grid
+        return results, param_map, duration
+    return results, param_map
 
 
 class ClusterCompute:
