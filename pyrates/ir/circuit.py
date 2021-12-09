@@ -92,7 +92,8 @@ class NetworkGraph(AbstractBaseIR):
 
         # translate edge operations and attributes into graph operators
         self._preprocess_edge_operations(dde_approx=kwargs.pop('dde_approx', 0),
-                                         matrix_sparseness=kwargs.pop('matrix_sparseness', 0.1))
+                                         matrix_sparseness=kwargs.pop('matrix_sparseness', 0.1),
+                                         vectorized=kwargs.pop('vectorized'))
 
         if verbose:
             print("\t\t...finished.")
@@ -167,7 +168,7 @@ class NetworkGraph(AbstractBaseIR):
     def getitem_from_iterator(self, key: str, key_iter: Iterator[str]):
         return self.graph.nodes[key]["node"]
 
-    def _preprocess_edge_operations(self, dde_approx: int = 0, **kwargs):
+    def _preprocess_edge_operations(self, dde_approx: int = 0, vectorized: bool = True, **kwargs):
         """Restructures network graph to collapse nodes and edges that share the same operator graphs. Variable values
         get an additional vector dimension. References to the respective index is saved in the internal `label_map`."""
 
@@ -188,8 +189,20 @@ class NetworkGraph(AbstractBaseIR):
 
                 # add synaptic buffer to output variables with delay
                 if add_delay:
-                    self._add_edge_buffer(node_name, op_name, var_name, edges=edges, delays=delays,
-                                          nodes=nodes, spreads=spreads, dde_approx=dde_approx)
+                    if vectorized:
+                        self._add_edge_buffer(node_name, op_name, var_name, edges=edges, delays=delays,
+                                              nodes=nodes, spreads=spreads, dde_approx=dde_approx)
+                    else:
+                        # TODO: sort edges into unique delay/spread combinations and only loop over those
+                        if spreads:
+                            for i, (edge, delay, spread, node) in enumerate(zip(edges, delays, spreads, nodes)):
+                                self._add_edge_buffer(node_name, op_name, var_name, edges=[edge], delays=[delay],
+                                                      nodes=[node], spreads=[spread], dde_approx=dde_approx,
+                                                      buffer_id=f"_{i}")
+                        else:
+                            for i, (edge, delay, node) in enumerate(zip(edges, delays, nodes)):
+                                self._add_edge_buffer(node_name, op_name, var_name, edges=[edge], delays=[delay],
+                                                      nodes=[node], dde_approx=dde_approx, buffer_id=f"_{i}")
 
         # go through nodes again, and collect and process all inputs to each node variable
         ##################################################################################
@@ -265,9 +278,13 @@ class NetworkGraph(AbstractBaseIR):
     def _collect_delays_from_edges(self, edges):
         means, stds, nodes = [], [], []
         for s, t, e in edges:
+
+            # extract delay
             d = self.edges[s, t, e]['delay']
             if type(d) is list:
                 d = [1 if d_tmp is None else d_tmp for d_tmp in d]
+
+            # extract and process delay distribution spread
             v = self.edges[s, t, e].pop('spread', [0])
             if v is None or np.sum(v) == 0:
                 v = [0] * len(self.edges[s, t, e]['target_idx'])
@@ -275,6 +292,8 @@ class NetworkGraph(AbstractBaseIR):
             else:
                 discretize = False
                 v = self._process_delays(v, discretize=discretize)
+
+            # finalize edge delay
             if d is None or np.sum(d) == 0:
                 d = [1] * len(self.edges[s, t, e]['target_idx'])
             else:
@@ -282,17 +301,20 @@ class NetworkGraph(AbstractBaseIR):
             means += d
             stds += v
 
+            # extract source var index
+            source = self.edges[s, t, e].pop('source_idx')
+            if len(d) > 1 and len(source) == 1:
+                source = source*len(d)
+            nodes.append(source)
+            self.edges[s, t, e]['source_idx'] = []
+            self.edges[s, t, e]['delay'] = None
+
+        # check whether edge delays have to be implemented or can be ignored
         max_delay = np.max(means)
         add_delay = ("int" in str(type(max_delay)) and max_delay > 1) or \
                     ("float" in str(type(max_delay)) and max_delay > self.step_size)
         if sum(stds) == 0:
             stds = None
-
-        for s, t, e in edges:
-            if add_delay:
-                nodes.append(self.edges[s, t, e].pop('source_idx'))
-                self.edges[s, t, e]['source_idx'] = []
-            self.edges[s, t, e]['delay'] = None
 
         return means, stds, nodes, add_delay
 
@@ -306,7 +328,7 @@ class NetworkGraph(AbstractBaseIR):
         return data
 
     def _add_edge_buffer(self, node: str, op: str, var: str, edges: list, delays: list, nodes: list,
-                         spreads: Optional[list] = None, dde_approx: int = 0) -> None:
+                         spreads: Optional[list] = None, dde_approx: int = 0, buffer_id: str = "") -> None:
         """Adds a buffer variable to an edge.
 
         Parameters
@@ -384,20 +406,20 @@ class NetworkGraph(AbstractBaseIR):
                 var_dict.update(idx_var)
 
                 # define new equation variable/parameter names
-                var_next = f"{var}_d{k}"
-                var_prev = f"{var}_d{i}" if i > 0 else var
-                rate = f"k_d{k}"
+                var_next = f"{var}_d{k}{buffer_id}"
+                var_prev = f"{var}_d{i}{buffer_id}" if i > 0 else var
+                rate = f"k_d{k}{buffer_id}"
 
                 # prepare variables for the next ODE
                 idx_apply = len(idx) != len(orders_tmp)
                 val = rates_tmp[idx] if idx_apply else rates_tmp
                 var_shape = (len(val),) if val.shape else ()
                 if i == 0 and idx != [0] and (sum(target_shape) != len(idx) or any(np.diff(order_idx) != 1)):
-                    var_prev_idx = f"index({var_prev}, source_idx)"
-                    var_dict["source_idx"] = {'vtype': 'constant',
-                                              'dtype': 'int',
-                                              'shape': (len(source_idx_tmp[idx]),),
-                                              'value': source_idx_tmp[idx]}
+                    var_prev_idx = f"index({var_prev}, source_idx{buffer_id})"
+                    var_dict[f"source_idx{buffer_id}"] = {'vtype': 'constant',
+                                                          'dtype': 'int',
+                                                          'shape': (len(source_idx_tmp[idx]),),
+                                                          'value': source_idx_tmp[idx]}
                 elif i != 0 and idx_apply:
                     var_prev_idx = get_indexed_var_str(var_prev, idx_str, var_length=len(rates_tmp))
                 else:
@@ -440,28 +462,29 @@ class NetworkGraph(AbstractBaseIR):
             # remove unnecessary ODEs
             for _ in range(len(buffer_eqs) - final_idx[-1][0]):
                 i = len(buffer_eqs)
-                var_dict.pop(f"{var}_d{i}")
-                var_dict.pop(f"k_d{i}")
+                var_dict.pop(f"{var}_d{i}{buffer_id}")
+                var_dict.pop(f"k_d{i}{buffer_id}")
                 buffer_eqs.pop(-1)
 
             # create edge buffer variable
             buffer_length = len(delays)
             for i, idx_l, idx_r in final_idx:
-                lhs = get_indexed_var_str(f"{var}_buffered", idx_l, var_length=buffer_length)
-                rhs = get_indexed_var_str(f"{var}_d{i}" if i != 0 else var, idx_r, var_length=buffer_length)
+                lhs = get_indexed_var_str(f"{var}_buffered{buffer_id}", idx_l, var_length=buffer_length)
+                rhs = get_indexed_var_str(f"{var}_d{i}{buffer_id}" if i != 0 else var, idx_r, var_length=buffer_length)
                 buffer_eqs.append(f"{lhs} = {rhs}")
-            var_dict[f"{var}_buffered"] = {'vtype': 'state_var',
-                                           'dtype': 'float',
-                                           'shape': (buffer_length,),
-                                           'value': 0.0}
+            var_dict[f"{var}_buffered{buffer_id}"] = {'vtype': 'state_var',
+                                                      'dtype': 'float',
+                                                      'shape': (buffer_length,),
+                                                      'value': 0.0}
 
             # re-order buffered variable if necessary
             if any(np.diff(order_idx) != 1):
-                buffer_eqs.append(f"{var}_buffered = index({var}_buffered, {var}_buffered_idx)")
-                var_dict[f"{var}_buffered_idx"] = {'vtype': 'constant',
-                                                   'dtype': 'int',
-                                                   'shape': (len(order_idx),),
-                                                   'value': np.argsort(order_idx, kind='stable')}
+                buffer_eqs.append(f"{var}_buffered{buffer_id} = index({var}_buffered{buffer_id}, "
+                                  f"{var}_buffered_idx{buffer_id})")
+                var_dict[f"{var}_buffered_idx{buffer_id}"] = {'vtype': 'constant',
+                                                              'dtype': 'int',
+                                                              'shape': (len(order_idx),),
+                                                              'value': np.argsort(order_idx, kind='stable')}
 
         # discretized edge buffers
         ##########################
@@ -475,30 +498,31 @@ class NetworkGraph(AbstractBaseIR):
                 buffer_shape = (target_shape[0], max_delay + 1)
 
             # create buffer variable definitions
-            var_dict = {f'{var}_buffer': {'vtype': 'variable',
-                                          'dtype': 'float',
-                                          'shape': buffer_shape,
-                                          'value': 0.},
-                        f'{var}_buffered': {'vtype': 'variable',
-                                            'dtype': 'float',
-                                            'shape': (len(delays),),
-                                            'value': 0.},
-                        f'{var}_delays': {'vtype': 'constant',
-                                          'dtype': 'int',
-                                          'value': delays},
-                        f'source_idx': {'vtype': 'constant',
-                                        'dtype': 'int',
-                                        'value': source_idx}}
+            var_dict = {f'{var}_buffer{buffer_id}': {'vtype': 'variable',
+                                                     'dtype': 'float',
+                                                     'shape': buffer_shape,
+                                                     'value': 0.},
+                        f'{var}_buffered{buffer_id}': {'vtype': 'variable',
+                                                       'dtype': 'float',
+                                                       'shape': (len(delays),),
+                                                       'value': 0.},
+                        f'{var}_delays{buffer_id}': {'vtype': 'constant',
+                                                     'dtype': 'int',
+                                                     'value': delays},
+                        f'source_idx{buffer_id}': {'vtype': 'constant',
+                                                   'dtype': 'int',
+                                                   'value': source_idx}}
 
             # create buffer equations
             if len(target_shape) < 1 or (len(target_shape) == 1 and target_shape[0] == 1):
-                buffer_eqs = [f"index_axis({var}_buffer) = roll({var}_buffer, 1)",
-                              f"index({var}_buffer, 0) = {var}",
-                              f"{var}_buffered = index({var}_buffer, {var}_delays)"]
+                buffer_eqs = [f"index_axis({var}_buffer{buffer_id}) = roll({var}_buffer{buffer_id}, 1)",
+                              f"index({var}_buffer{buffer_id}, 0) = {var}",
+                              f"{var}_buffered{buffer_id} = index({var}_buffer{buffer_id}, {var}_delays{buffer_id})"]
             else:
-                buffer_eqs = [f"index_axis({var}_buffer) = roll({var}_buffer, 1, 1)",
-                              f"index_axis({var}_buffer, 0, 1) = {var}",
-                              f"{var}_buffered = index_2d({var}_buffer, source_idx, {var}_delays)"]
+                buffer_eqs = [f"index_axis({var}_buffer{buffer_id}) = roll({var}_buffer{buffer_id}, 1, 1)",
+                              f"index_axis({var}_buffer{buffer_id}, 0, 1) = {var}",
+                              f"{var}_buffered{buffer_id} = index_2d({var}_buffer{buffer_id}, source_idx{buffer_id}, "
+                              f"{var}_delays{buffer_id})"]
 
         # continuous delay buffers
         ##########################
@@ -506,71 +530,74 @@ class NetworkGraph(AbstractBaseIR):
         else:
 
             # TODO: rework continuous edge buffers
+            raise ValueError('Interpolation of delay buffers is currently not implemented. Either translate your edge'
+                             'delays into gamma-kernel convolutions (e.g. by providing the `spread` attributes for '
+                             'edges) or choose a solver with fixed integration step-size (e.g. `euler`).')
 
-            # create buffer variables
-            max_delay_int = int(np.round(max_delay / self.step_size, decimals=0)) + 2
-            times = [0. - i * self.step_size for i in range(max_delay_int)]
-            if len(target_shape) < 1 or (len(target_shape) == 1 and target_shape[0] == 1):
-                buffer_shape = (len(times),)
-            else:
-                buffer_shape = (target_shape[0], len(times))
-
-            # create buffer variable definitions
-            var_dict = {f'{var}_buffer': {'vtype': 'variable',
-                                          'dtype': 'float',
-                                          'shape': buffer_shape,
-                                          'value': 0.
-                                          },
-                        'times': {'vtype': 'variable',
-                                  'dtype': 'float',
-                                  'shape': (len(times),),
-                                  'value': np.asarray(times)
-                                  },
-                        't': {'vtype': 'state_var',
-                              'dtype': 'float',
-                              'shape': (),
-                              'value': 0.0
-                              },
-                        f'{var}_buffered': {'vtype': 'variable',
-                                            'dtype': 'float',
-                                            'shape': (len(delays),),
-                                            'value': 0.},
-                        f'{var}_delays': {'vtype': 'constant',
-                                          'dtype': 'float',
-                                          'value': delays},
-                        f'source_idx': {'vtype': 'constant',
-                                        'dtype': 'int',
-                                        'value': source_idx},
-                        f'{var}_maxdelay': {'vtype': 'constant',
-                                            'dtype': 'float',
-                                            'value': (max_delay_int + 1) * self.step_size},
-                        f'{var}_idx': {'vtype': 'variable',
-                                       'dtype': 'bool',
-                                       'value': True}}
-
-            # create buffer equations
-            if len(target_shape) < 1 or (len(target_shape) == 1 and target_shape[0] == 1):
-                buffer_eqs = [f"{var}_idx = times >= (t - {var}_maxdelay)",
-                              f"{var}_buffer = {var}_buffer[{var}_idx]",
-                              f"times = times[{var}_idx]",
-                              f"times = append(t, times)",
-                              f"{var}_buffer = append({var}, {var}_buffer)",
-                              f"{var}_buffered = interpolate_1d(times, {var}_buffer, t - {var}_delays)"
-                              ]
-            else:
-                buffer_eqs = [f"{var}_idx = times >= (t - {var}_maxdelay)",
-                              f"{var}_buffer = {var}_buffer[:, {var}_idx]",
-                              f"times = times[{var}_idx]",
-                              f"times = append(t, times)",
-                              f"{var}_buffer = append({var}, {var}_buffer, 1)",
-                              f"{var}_buffered = interpolate_nd(times, {var}_buffer, {var}_delays, source_idx, t)"
-                              ]
+            # # create buffer variables
+            # max_delay_int = int(np.round(max_delay / self.step_size, decimals=0)) + 2
+            # times = [0. - i * self.step_size for i in range(max_delay_int)]
+            # if len(target_shape) < 1 or (len(target_shape) == 1 and target_shape[0] == 1):
+            #     buffer_shape = (len(times),)
+            # else:
+            #     buffer_shape = (target_shape[0], len(times))
+            #
+            # # create buffer variable definitions
+            # var_dict = {f'{var}_buffer': {'vtype': 'variable',
+            #                               'dtype': 'float',
+            #                               'shape': buffer_shape,
+            #                               'value': 0.
+            #                               },
+            #             'times': {'vtype': 'variable',
+            #                       'dtype': 'float',
+            #                       'shape': (len(times),),
+            #                       'value': np.asarray(times)
+            #                       },
+            #             't': {'vtype': 'state_var',
+            #                   'dtype': 'float',
+            #                   'shape': (),
+            #                   'value': 0.0
+            #                   },
+            #             f'{var}_buffered': {'vtype': 'variable',
+            #                                 'dtype': 'float',
+            #                                 'shape': (len(delays),),
+            #                                 'value': 0.},
+            #             f'{var}_delays': {'vtype': 'constant',
+            #                               'dtype': 'float',
+            #                               'value': delays},
+            #             f'source_idx': {'vtype': 'constant',
+            #                             'dtype': 'int',
+            #                             'value': source_idx},
+            #             f'{var}_maxdelay': {'vtype': 'constant',
+            #                                 'dtype': 'float',
+            #                                 'value': (max_delay_int + 1) * self.step_size},
+            #             f'{var}_idx': {'vtype': 'variable',
+            #                            'dtype': 'bool',
+            #                            'value': True}}
+            #
+            # # create buffer equations
+            # if len(target_shape) < 1 or (len(target_shape) == 1 and target_shape[0] == 1):
+            #     buffer_eqs = [f"{var}_idx = times >= (t - {var}_maxdelay)",
+            #                   f"{var}_buffer = {var}_buffer[{var}_idx]",
+            #                   f"times = times[{var}_idx]",
+            #                   f"times = append(t, times)",
+            #                   f"{var}_buffer = append({var}, {var}_buffer)",
+            #                   f"{var}_buffered = interpolate_1d(times, {var}_buffer, t - {var}_delays)"
+            #                   ]
+            # else:
+            #     buffer_eqs = [f"{var}_idx = times >= (t - {var}_maxdelay)",
+            #                   f"{var}_buffer = {var}_buffer[:, {var}_idx]",
+            #                   f"times = times[{var}_idx]",
+            #                   f"times = append(t, times)",
+            #                   f"{var}_buffer = append({var}, {var}_buffer, 1)",
+            #                   f"{var}_buffered = interpolate_nd(times, {var}_buffer, {var}_delays, source_idx, t)"
+            #                   ]
 
         # add buffer equations to node operator
         op_info = node_ir[op]
         op_info['equations'] += buffer_eqs
         op_info['variables'].update(var_dict)
-        op_info['output'] = f"{var}_buffered"
+        op_info['output'] = f"{var}_buffered{buffer_id}"
 
         # update input information of node operators connected to this operator
         for succ in node_ir.op_graph.succ[op]:
@@ -582,7 +609,7 @@ class NetworkGraph(AbstractBaseIR):
         idx_l = 0
         for i, edge in enumerate(edges):
             s, t, e = edge
-            self.edges[s, t, e]['source_var'] = f"{op}/{var}_buffered"
+            self.edges[s, t, e]['source_var'] = f"{op}/{var}_buffered{buffer_id}"
             if len(edges) > 1:
                 idx_h = idx_l + len(nodes[i])
                 self.edges[s, t, e]['source_idx'] = list(range(idx_l, idx_h))
@@ -627,7 +654,7 @@ class NetworkGraph(AbstractBaseIR):
             # define new input variable if necessary
             if multiple_inputs:
                 in_shape = (tsize,)
-                in_var = f'{tvar}_input_col_{i}' if len(inputs) > 1 else tvar
+                in_var = f'{tvar}_input_col_{i}'
                 args[in_var] = {'value': np.zeros(in_shape), 'dtype': 'float', 'vtype': 'variable', 'shape': in_shape}
             else:
                 in_var = tvar
@@ -650,7 +677,7 @@ class NetworkGraph(AbstractBaseIR):
                     weight_mat[row, col] = w
 
                 # define edge projection equation
-                eq = f"{in_var} = matvec(weight_{i},{svar})"
+                eq = f"{in_var} = matvec(weight_{i},{svar}_{i})"
                 args[f'weight_{i}'] = {'vtype': 'constant', 'value': weight_mat, 'dtype': 'float',
                                        'shape': weight_mat.shape}
 
@@ -660,10 +687,10 @@ class NetworkGraph(AbstractBaseIR):
                 # check whether source variable requires indexing
                 if m > 1 or (ssize > 1 and m):
                     ssize = len(sidx)
-                    svar_final = f"index({svar},source_idx_{i})"
+                    svar_final = f"index({svar}_{i},source_idx_{i})"
                     args[f'source_idx_{i}'] = {'vtype': 'constant', 'value': sidx, 'dtype': 'int', 'shape': (ssize,)}
                 else:
-                    svar_final = svar
+                    svar_final = f"{svar}_{i}"
                     ssize = len(weight)
 
                 # check wether weighting of source variables is required
@@ -685,7 +712,7 @@ class NetworkGraph(AbstractBaseIR):
 
             # add equation and source information
             eqs.append(eq)
-            source_vars[svar] = {'sources': [sop], 'node': snode, 'var': svar}
+            source_vars[f"{svar}_{i}"] = {'sources': [sop], 'node': snode, 'var': svar}
             in_vars.append(in_var)
 
         # step 3: process multiple inputs to same variable
@@ -1266,8 +1293,7 @@ class CircuitIR(AbstractBaseIR):
                         in_ops[var_name] = self._map_multiple_inputs(in_ops_col, scope=scope, tvar=var_name)
                     else:
                         key, _ = in_ops_col.popitem()
-                        *in_node, in_op, in_var = key.split("/")
-                        in_ops[var_name] = (None, {in_var: key})
+                        in_ops[var_name] = (None, {var_name: key})
 
             # replace input variables with input in operator equations
             for var, (eq, inp) in in_ops.items():

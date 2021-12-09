@@ -387,6 +387,9 @@ class CircuitTemplate(AbstractBaseTemplate):
             # add edge from EdgeIR
             else:
 
+                # TODO: ensure that this works the same way for vectorized and non-vectorized networks
+                #  (check source/target indices)
+
                 sources = {}
                 for key, v in values.copy().items():
                     if type(v) is str:
@@ -448,7 +451,7 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         # instantiate an intermediate representation of the circuit template
         self._ir = CircuitIR(label, nodes=nodes, edges=edges, verbose=verbose, step_size_adaptation=adaptive_steps,
-                             scalar_shape=scalar_shape, **kwargs)
+                             scalar_shape=scalar_shape, vectorized=vectorize, **kwargs)
 
     def get_nodes(self, node_identifier: Union[str, list, tuple], var_identifier: Optional[tuple] = None) -> List[str]:
         """Extracts nodes from the CircuitTemplate that match the provided identifier.
@@ -973,8 +976,9 @@ class CircuitTemplate(AbstractBaseTemplate):
     def _validate_backend_args(backend: str, vectorize: bool, dt_adapt: bool, **kwargs) -> None:
 
         if vectorize and backend in ['fortran', 'julia']:
-            raise PyRatesException(f'Vectorization is not enabled for your choice of backend: {backend}. Please either '
-                                   f'choose another backend or set `vectorize` to `False`.')
+            raise PyRatesException(f'Vectorization of the network has been requested but is not implemented for your '
+                                   f'choice of backend: {backend}. Please either choose another backend or set '
+                                   f'`vectorize` to `False`.')
         if backend == 'julia' and 'julia_path' not in kwargs:
             raise PyRatesException('You chose the Julia backend, which compiles Julia code via PyJulia. To do this,'
                                    'please provide the path to Julia executable via `julia_path`.')

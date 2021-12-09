@@ -34,6 +34,8 @@ operations.
 import math
 import typing as tp
 from numbers import Number
+
+import numpy as np
 from pyparsing import Literal, CaselessLiteral, Word, Combine, Optional, \
     ZeroOrMore, Forward, nums, alphas, ParserElement
 from sympy import Expr, Symbol, lambdify, sympify
@@ -273,7 +275,7 @@ class ExpressionParser:
         if expr.args:
 
             # parse variables as nodes into compute graph
-            inputs, func_args = [], []
+            inputs, func_args, old_args = [], [], []
             for arg in self._sort_expr_args(expr.args):
 
                 if isinstance(arg, Symbol):
@@ -298,12 +300,18 @@ class ExpressionParser:
 
                 if isinstance(var, ComputeNode):
 
-                    # replace name of variable in expression with new variable symbol
-                    expr = expr.subs(arg, var.symbol)
-
                     # store input to mathematical expression, if it is not a simple scalar
                     inputs.append(label)
                     func_args.append(var.symbol)
+                    old_args.append(arg)
+
+            # replace names of old expression arguments with new variable symbols
+            replacements = {old: new for old, new in zip(old_args, func_args) if old != new}
+            if replacements:
+                expr = expr.subs(replacements, simultaneous=True)
+                for arg_old in replacements:
+                    if expr.count(arg_old):
+                        expr = expr.replace(arg_old, replacements[arg_old])
 
             # create callable function of the operation
             label = expr.func.__name__
@@ -406,30 +414,31 @@ class ExpressionParser:
     @staticmethod
     def _sort_expr_args(args: tuple) -> list:
 
-        args = list(args)
-        args_sorted = []
-        prioritized = []
+        # sort arguments from longest to shortest expression
+        arg_lengths = [len(str(arg)) for arg in args]
+        args_sorted = [args[idx] for idx in np.argsort(arg_lengths)[::-1]]
 
         # add arguments that need to be treated with priority
-        for i, arg in enumerate(args.copy()):
+        args_final = []
+        while args_sorted:
 
+            arg = args_sorted.pop(0)
+
+            # check whether the position between arguments should be swapped
             prioritize = False
             if isinstance(arg, Expr):
-                for arg_tmp in args:
-                    if arg_tmp != arg and len(arg.find(arg_tmp)):
+                for arg_tmp in args_sorted:
+                    if len(arg_tmp.find(arg)):
                         prioritize = True
                         break
 
             if prioritize:
-                args_sorted.append(args[i])
-                prioritized.append(i)
+                idx = args_sorted.index(arg_tmp)
+                args_final.append(args_sorted.pop(idx))
+            else:
+                args_final.append(arg)
 
-        # add remaining arguments
-        for i in range(len(args)):
-            if i not in prioritized:
-                args_sorted.append(args[i])
-
-        return args_sorted
+        return args_final
 
 ################################
 # helper classes and functions #
@@ -485,10 +494,6 @@ def parse_equations(equations: list, equation_args: dict, cg: ComputeGraph, def_
                         if inp not in equation_args:
                             raise KeyError(inp)
 
-                        # extract input variable name and scope
-                        in_key_split = inp.split('/')
-                        in_scope = "/".join(in_key_split[:-1])
-
                         # extract input variable
                         inp_tmp = equation_args[inp]
 
@@ -496,7 +501,7 @@ def parse_equations(equations: list, equation_args: dict, cg: ComputeGraph, def_
                         op_args[in_key] = inp_tmp
 
                         # remember to update the variable entry in the variable collection later
-                        update_vars[f"{in_scope}/{in_key}"] = in_key
+                        update_vars[inp] = in_key
 
                         # add variable to operator inputs
                         in_vars.append(in_key)

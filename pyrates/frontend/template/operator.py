@@ -74,8 +74,8 @@ class OperatorTemplate(AbstractBaseTemplate):
                 pass  # pass equations string to constructor
             # else, update according to predefined rules, assuming dict structure
             elif isinstance(equations, dict):
-                equations = [_update_equation(eq, **equations) for eq in self.equations]
-
+                new_eqs = equations.pop('add', [])
+                equations = [_update_equation(eq, **equations) for eq in self.equations] + new_eqs
             else:
                 raise TypeError("Unknown data type for attribute 'equations'.")
         else:

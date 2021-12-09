@@ -717,13 +717,15 @@ class ComputeGraph(MultiDiGraph):
                     continue
                 else:
                     idx = node_keys.index(node)
-                    node_names.pop(idx)
+                    n = node_names.pop(idx)
                     node_keys.pop(idx)
                     nodes.pop(node)
                     keys.append(node)
                     values.append(update)
-                    if isinstance(self.get_var(node), ComputeVar):
-                        defined_vars.append(node)
+                    if isinstance(self.get_var(node), ComputeVar) and n not in undefined_vars:
+                        defined_vars.append(n)
+                    elif n not in undefined_vars:
+                        undefined_vars.append(n)
 
             # check whether the algorithm is stuck
             n_nodes_new = len(nodes)
@@ -737,7 +739,9 @@ class ComputeGraph(MultiDiGraph):
             node_keys = list(nodes.keys())
             keys.extend(node_keys)
             values.extend(list(nodes.values()))
-            undefined_vars.extend(node_keys)
+            for n in node_names:
+                if n not in undefined_vars:
+                    undefined_vars.append(n)
 
         return keys, values, defined_vars, undefined_vars
 

@@ -30,6 +30,8 @@
 """
 
 # pyrates internal _imports
+import sys
+
 from ..base import BaseBackend
 from ..computegraph import ComputeVar
 from .julia_funcs import julia_funcs
@@ -71,7 +73,7 @@ class JuliaBackend(BaseBackend):
 
         # set up pyjulia
         from julia.api import Julia
-        jl = Julia(kwargs.pop('julia_path'), compiled_modules=False)
+        jl = Julia(runtime=kwargs.pop('julia_path'), compiled_modules=False)
         from julia import Main
         self._jl = Main
 
