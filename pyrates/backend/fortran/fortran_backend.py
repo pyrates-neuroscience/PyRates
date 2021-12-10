@@ -79,7 +79,6 @@ class FortranBackend(BaseBackend):
 
         # define fortran-specific imports
         self._imports.pop(0)
-        self._imports.pop(0)
         self._imports.append("double precision :: PI = 4.0*atan(1.0)")
 
     def add_var_update(self, lhs: ComputeVar, rhs: str, lhs_idx: Optional[str] = None, rhs_shape: Optional[tuple] = ()):

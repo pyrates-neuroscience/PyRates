@@ -73,10 +73,6 @@ class TorchBackend(BaseBackend):
         # call parent method
         super().__init__(ops=torch_ops, imports=imports, **kwargs)
 
-        # define tensorflow-specific _imports
-        self._imports.pop(0)
-        self._imports.append("from torch import sqrt")
-
     def get_var(self, v: ComputeVar):
         return torch.from_numpy(super().get_var(v))
 

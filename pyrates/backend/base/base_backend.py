@@ -135,7 +135,7 @@ class BaseBackend(CodeGen):
         self._helper_funcs = []
 
         # definition of extrinsic function _imports
-        self._imports = ["from numpy import sqrt", "from math import pi"]
+        self._imports = ["from math import pi, sqrt"]
         if imports:
             for imp in imports:
                 if imp not in self._imports:

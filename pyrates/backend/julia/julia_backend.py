@@ -69,7 +69,6 @@ class JuliaBackend(BaseBackend):
 
         # define fortran-specific imports
         self._imports.pop(0)
-        self._imports.pop(0)
 
         # set up pyjulia
         from julia.api import Julia
