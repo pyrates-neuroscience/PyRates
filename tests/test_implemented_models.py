@@ -17,6 +17,13 @@ __status__ = "Development"
 # Utility #
 ###########
 
+# define backends for which to run the tests
+backends = ['default', 'torch', 'tensorflow', 'fortran']
+vectorization = [True, True, True, False]
+
+# define test accuracy
+accuracy = 1e-4
+
 
 def setup_module():
     print("\n")
@@ -45,14 +52,6 @@ def nmrse(x: np.ndarray,
     diff = x - y
 
     return np.sqrt(np.sum(diff ** 2, axis=0)) / (max_val - min_val)
-
-
-# define backends for which to run the tests
-backends = ['tensorflow', 'torch', 'fortran', 'default']
-vectorization = [True, True, False, False]
-
-# define test accuracy
-accuracy = 1e-4
 
 #########
 # Tests #
@@ -123,17 +122,17 @@ def test_3_3_wilson_cowan():
     # assess correct response of model to input
     ###########################################
 
-    T = 80.0
-    dt = 1e-3
-    dts = 1e-2
-
-    in_start = int(np.round(30.0 / dt))
-    in_dur = int(np.round(20.0 / dt))
-    inp = np.zeros((int(np.round(T / dt)),))
-    inp[in_start:in_start + in_dur] = 5.0
-    inp = np.round(inp, decimals=4)
-
     for b, v in zip(backends, vectorization):
+
+        T = 80.0
+        dt = 1e-3
+        dts = 1e-2
+
+        in_start = int(np.round(30.0 / dt))
+        in_dur = int(np.round(20.0 / dt))
+        inp = np.zeros((int(np.round(T / dt)),))
+        inp[in_start:in_start + in_dur] = 5.0
+        inp = np.round(inp, decimals=4)
 
         # perform simulation
         r1 = simulate("model_templates.wilson_cowan.simple_wilsoncowan.WC_simple", simulation_time=T,

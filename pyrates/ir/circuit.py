@@ -198,11 +198,11 @@ class NetworkGraph(AbstractBaseIR):
                             for i, (edge, delay, spread, node) in enumerate(zip(edges, delays, spreads, nodes)):
                                 self._add_edge_buffer(node_name, op_name, var_name, edges=[edge], delays=[delay],
                                                       nodes=[node], spreads=[spread], dde_approx=dde_approx,
-                                                      buffer_id=f"_{i}")
+                                                      buffer_id=f"_out{i}")
                         else:
                             for i, (edge, delay, node) in enumerate(zip(edges, delays, nodes)):
                                 self._add_edge_buffer(node_name, op_name, var_name, edges=[edge], delays=[delay],
-                                                      nodes=[node], dde_approx=dde_approx, buffer_id=f"_{i}")
+                                                      nodes=[node], dde_approx=dde_approx, buffer_id=f"_out{i}")
 
         # go through nodes again, and collect and process all inputs to each node variable
         ##################################################################################
@@ -298,16 +298,16 @@ class NetworkGraph(AbstractBaseIR):
                 d = [1] * len(self.edges[s, t, e]['target_idx'])
             else:
                 d = self._process_delays(d, discretize=discretize)
-            means += d
-            stds += v
 
             # extract source var index
-            source = self.edges[s, t, e].pop('source_idx')
+            source = self.edges[s, t, e]['source_idx']
             if len(d) > 1 and len(source) == 1:
-                source = source*len(d)
+                source = source * len(d)
+
+            # collect values
+            means += d
+            stds += v
             nodes.append(source)
-            self.edges[s, t, e]['source_idx'] = []
-            self.edges[s, t, e]['delay'] = None
 
         # check whether edge delays have to be implemented or can be ignored
         max_delay = np.max(means)
@@ -315,6 +315,12 @@ class NetworkGraph(AbstractBaseIR):
                     ("float" in str(type(max_delay)) and max_delay > self.step_size)
         if sum(stds) == 0:
             stds = None
+
+        # if delays are going to be added from the created lists, remove the delays from the edges themselves
+        if add_delay:
+            for s, t, e in edges:
+                self.edges[s, t, e]['source_idx'] = []
+                self.edges[s, t, e]['delay'] = None
 
         return means, stds, nodes, add_delay
 
@@ -364,7 +370,7 @@ class NetworkGraph(AbstractBaseIR):
         node_var = self[f"{node}/{op}/{var}"]
         target_shape = node_var['shape']
         node_ir = self[node]
-        nodes_tmp = []
+        nodes_tmp = list()
         for n in nodes:
             nodes_tmp += n
         source_idx = np.asarray(nodes_tmp, dtype='int').flatten()
@@ -441,6 +447,13 @@ class NetworkGraph(AbstractBaseIR):
                     # right-hand side index
                     if len(orders_tmp) < 2:
                         idx_rhs_str = ''
+                    elif i == 0:
+                         idx_rhs = np.asarray(source_idx_tmp)[orders_tmp == i]
+                         idx_rhs_str = f"source_idx2{buffer_id}"
+                         var_dict[f"source_idx2{buffer_id}"] = {'vtype': 'constant',
+                                                               'dtype': 'int',
+                                                               'shape': (len(idx_rhs),),
+                                                               'value': idx_rhs}
                     else:
                         _, idx_rhs_str, _ = self._bool_to_idx(orders_tmp == i)
 
@@ -654,10 +667,18 @@ class NetworkGraph(AbstractBaseIR):
             # define new input variable if necessary
             if multiple_inputs:
                 in_shape = (tsize,)
-                in_var = f'{tvar}_input_col_{i}'
-                args[in_var] = {'value': np.zeros(in_shape), 'dtype': 'float', 'vtype': 'variable', 'shape': in_shape}
+                t_str = f'{tvar}_in{i}'
+                w_str = f'weight_in{i}'
+                s_str = f'{svar}_in{i}'
+                sidx_str = f'source_idx_in{i}'
+                tidx_str = f'target_idx_in{i}'
+                args[t_str] = {'value': np.zeros(in_shape), 'dtype': 'float', 'vtype': 'variable', 'shape': in_shape}
             else:
-                in_var = tvar
+                t_str = tvar
+                w_str = 'weight'
+                s_str = svar
+                sidx_str = 'source_idx'
+                tidx_str = 'target_idx'
 
             # check whether the edge can be realized via a matrix productr
             if not tidx:
@@ -677,9 +698,8 @@ class NetworkGraph(AbstractBaseIR):
                     weight_mat[row, col] = w
 
                 # define edge projection equation
-                eq = f"{in_var} = matvec(weight_{i},{svar}_{i})"
-                args[f'weight_{i}'] = {'vtype': 'constant', 'value': weight_mat, 'dtype': 'float',
-                                       'shape': weight_mat.shape}
+                eq = f"{t_str} = matvec({w_str},{s_str})"
+                args[w_str] = {'vtype': 'constant', 'value': weight_mat, 'dtype': 'float', 'shape': weight_mat.shape}
 
             # case II: realize edge projection via source and target indexing
             else:
@@ -687,33 +707,32 @@ class NetworkGraph(AbstractBaseIR):
                 # check whether source variable requires indexing
                 if m > 1 or (ssize > 1 and m):
                     ssize = len(sidx)
-                    svar_final = f"index({svar}_{i},source_idx_{i})"
-                    args[f'source_idx_{i}'] = {'vtype': 'constant', 'value': sidx, 'dtype': 'int', 'shape': (ssize,)}
+                    s_str_final = f"index({s_str},{sidx_str})"
+                    args[sidx_str] = {'vtype': 'constant', 'value': sidx, 'dtype': 'int', 'shape': (ssize,)}
                 else:
-                    svar_final = f"{svar}_{i}"
+                    s_str_final = s_str
                     ssize = len(weight)
 
                 # check wether weighting of source variables is required
                 if all([abs(abs(w) - 1) < weight_minimum for w in weight]):
                     weighting = ""
                 else:
-                    weighting = f" * weight_{i}"
-                    args[f'weight_{i}'] = {'vtype': 'constant', 'dtype': 'float', 'value': weight}
+                    weighting = f" * {w_str}"
+                    args[w_str] = {'vtype': 'constant', 'dtype': 'float', 'value': weight}
 
                 # define edge equation
                 if len(tidx) > 1:
-                    eq = f"index({in_var}, target_idx_{i}) = {svar_final}{weighting}"
-                    args[f'target_idx_{i}'] = {'vtype': 'constant', 'dtype': 'int', 'value': tidx,
-                                               'shape': (len(tidx),)}
+                    eq = f"index({t_str}, {tidx_str}) = {s_str_final}{weighting}"
+                    args[tidx_str] = {'vtype': 'constant', 'dtype': 'int', 'value': tidx, 'shape': (len(tidx),)}
                 elif tsize > 1 or ssize < tsize:
-                    eq = f"index({in_var}, {tidx[0]}) = {svar_final}{weighting}"
+                    eq = f"index({t_str}, {tidx[0]}) = {s_str_final}{weighting}"
                 else:
-                    eq = f"{in_var} = {svar_final}{weighting}"
+                    eq = f"{t_str} = {s_str_final}{weighting}"
 
             # add equation and source information
             eqs.append(eq)
-            source_vars[f"{svar}_{i}"] = {'sources': [sop], 'node': snode, 'var': svar}
-            in_vars.append(in_var)
+            source_vars[s_str] = {'sources': [sop], 'node': snode, 'var': svar}
+            in_vars.append(t_str)
 
         # step 3: process multiple inputs to same variable
         if multiple_inputs:
@@ -761,7 +780,7 @@ class NetworkGraph(AbstractBaseIR):
         if v_idx.shape and v_idx.shape[0] > 1 and all(np.diff(v_idx) == 1):
             v_idx_str = (f"{v_idx[0]}", f"{v_idx[-1] + 1}")
         elif v_idx.shape and v_idx.shape[0] > 1:
-            var_name = f"delay_idx_{self._edge_idx_counter}"
+            var_name = f"delay_idx{self._edge_idx_counter}"
             v_idx_str = f"{var_name}"
             v_dict[var_name] = {'value': v_idx, 'vtype': 'constant'}
             self._edge_idx_counter += 1

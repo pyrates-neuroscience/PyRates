@@ -388,12 +388,16 @@ class CircuitTemplate(AbstractBaseTemplate):
             else:
 
                 # TODO: ensure that this works the same way for vectorized and non-vectorized networks
-                #  (check source/target indices)
 
                 sources = {}
                 for key, v in values.copy().items():
-                    if type(v) is str:
-                        sources[key] = values.pop(key)
+                    if type(v) is list and type(v[0]) is str:
+                        if key in sources:
+                            sources[key].extend(values.pop(key))
+                        else:
+                            sources[key] = values.pop(key)
+                    elif type(v) is str:
+                        sources[key] = [values.pop(key)]
 
                 # create edge ir
                 n = len(source_idx)
@@ -411,30 +415,16 @@ class CircuitTemplate(AbstractBaseTemplate):
                 # project inputs to edge ir node
                 if not sources:
                     i_, in_var = edge_ir.inputs.copy().popitem()
-                    sources[f"{edge_ir.label}/{in_var[0]}"] = 'source'
+                    sources[f"{edge_ir.label}/{in_var[0]}"] = ['source']*len(source_idx)
 
                 # collect new edge attributes
                 edge_idx = list(np.arange(edge_ir.length - n, edge_ir.length))
-                edge_ir_sources = self._extract_sources_from_edge_dict(sources, orig_source=source, vectorize=vectorize)
+                edge_ir_sources = self._extract_sources_from_edge_dict(sources, orig_source=source,
+                                                                       source_idx=source_idx)
                 new_edges = {}
-                for edge_source, edge_target in edge_ir_sources.items():
-
-                    if vectorize:
-
-                        # case I: vectorized edges
-                        edge_source, idx = edge_source
-
-                        # add edge attributes to dict
-                        if (edge_source, edge_target) in new_edges:
-                            new_edges[(edge_source, edge_target)]['source_idx'].append(source_idx[idx])
-                            new_edges[(edge_source, edge_target)]['weight'].append(1.0)
-                        else:
-                            new_edges[(edge_source, edge_target)] = {'source_idx': [source_idx[idx]], 'weight': [1.0]}
-
-                    else:
-
-                        # case II: non-vectorized edges
-                        new_edges[(edge_source, edge_target)] = {'source_idx': source_idx, 'weight': 1.0}
+                for edge_target, edge_sources in edge_ir_sources.items():
+                    for edge_source, idx in edge_sources.items():
+                        new_edges[(edge_source, edge_target)] = {'source_idx': idx, 'weight': [1.0]*len(idx)}
 
                 # add an edge for each source node that projects to new edge node
                 for (s, t), data in new_edges.items():
@@ -859,8 +849,10 @@ class CircuitTemplate(AbstractBaseTemplate):
                 # extend edge dict by edge variables
                 base_dict = edge_col[(source_new, target_new, template, delayed)]
                 for key, val in edge_dict.items():
-                    if type(val) is not str:
+                    try:
                         base_dict[key].append(val)
+                    except AttributeError:
+                        base_dict[key] = [base_dict[key], val]
                 base_dict['source_idx'].append(s_idx)
                 base_dict['target_idx'].append(t_idx)
 
@@ -880,7 +872,7 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         return edge_col
 
-    def _extract_sources_from_edge_dict(self, edge_dict: dict, orig_source: str, vectorize: bool = False) -> dict:
+    def _extract_sources_from_edge_dict(self, edge_dict: dict, orig_source: str, source_idx: list) -> dict:
 
         label_map = self._vectorization_labels
         indices = self._vectorization_indices
@@ -888,40 +880,37 @@ class CircuitTemplate(AbstractBaseTemplate):
         edge_sources = {}
         for key, value in edge_dict.copy().items():
 
-            # handle edge input source
-            try:
-                _, _, _ = value.split("/")
-            except AttributeError:
-                continue
-            except ValueError:
-                value = orig_source
+            source_dict = {}
 
-            # handle edge input variable
-            try:
-                _, _, _ = key.split("/")
-            except ValueError as e:
-                raise e
-            else:
-                edge_dict.pop(key)
+            for i, source in enumerate(value):
 
-            # add new mapping from edge source to edge input variable
-            source_key = self._relabel_var(value, label_map)
+                # handle edge input variable
+                try:
+                    _, _, _ = key.split("/")
+                except ValueError as e:
+                    raise e
+                else:
+                    edge_dict.pop(key, None)
 
-            if vectorize:
+                # add new mapping from edge source to edge input variable
+                if source == 'source':
+                    source_key = orig_source
+                    idx = source_idx[i]
+                else:
+                    source_key = self._relabel_var(source, label_map)
+                    try:
+                        *snode, _, _ = source.split('/')
+                        idx = indices['/'.join(snode)]
+                    except KeyError:
+                        idx = 0
 
-                # case I: vectorized edges
-                *snode, _, _ = value.split('/')
-                idx = indices['/'.join(snode)]
-                edge_sources[(source_key, idx)] = self._relabel_var(key, label_map)
+                # add source variable information to dict
+                try:
+                    source_dict[source_key].append(idx)
+                except KeyError:
+                    source_dict[source_key] = [idx]
 
-            else:
-
-                # case II: non-vectorized edges
-                if source_key in edge_sources:
-                    raise ValueError(f'The same source variable ({value})is used for two distinct edge variables of the '
-                                     f'same edge. Either provide different sources for the two edge variables, collapse '
-                                     f'them into a single edge variable, or set `vectorize` to `True`.')
-                edge_sources[source_key] = self._relabel_var(key, label_map)
+            edge_sources[self._relabel_var(key, label_map)] = source_dict
 
         return edge_sources
 
