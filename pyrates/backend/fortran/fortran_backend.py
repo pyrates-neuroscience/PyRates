@@ -325,12 +325,12 @@ class FortranBackend(BaseBackend):
                 raise ValueError(f'Vector-valued parameter detected ({p.name} with shape {p.shape}), which cannot be '
                                  f'handled by Auto-07p. Please change the definition of your network (e.g. remove '
                                  f'extrinsic inputs) such that no vectorized model parameters exist.')
-            self.add_code_line(f"args({idx}) = {p.value}")
+            self.add_code_line(f"args({idx}) = {p.value}  ! {p.name}")
 
         # define initial state
         for i, var in enumerate(state_vars):
             v = self._var_declaration_info[var]
-            self.add_code_line(f"y({i+1}) = {v.value}")
+            self.add_code_line(f"y({i+1}) = {v.value}  ! {v.name}")
 
         # end subroutine
         self.add_linebreak()

@@ -171,7 +171,7 @@ class OperatorTemplate(AbstractBaseTemplate):
 
 def check_vname(v: str, dtype: str):
 
-    disallowed_names = ['state_vec', 'state_vec_update', 'source_idx', 'target_idx', 'I', 'i', 'pi']
+    disallowed_names = ['y', 'dy', 'source_idx', 'target_idx', 'I', 'i', 'pi']
     disallowed_name_parts = ['_buffer', '_delays', '_maxdelay', '_idx']
 
     if v == 't' and dtype != 'state_var':
@@ -190,14 +190,14 @@ def check_vname(v: str, dtype: str):
 
 def _update_variables(variables: dict, updates: dict):
     updated = deepcopy(variables)
-
-    for var, var_dict in updates.items():
-        if var in updated:
-            # update dictionary defining single variable
-            updated[var].update(var_dict)
-        else:
-            # copy new variable into variables dictionary
-            updated.update({var: var_dict})
+    updated.update(updates)
+    # for var, val in updates.items():
+    #     if var in updated:
+    #         # update dictionary defining single variable
+    #         updated[var] = val
+    #     else:
+    #         # copy new variable into variables dictionary
+    #         updated.update({var: var_dict})
 
     return updated
 
@@ -244,8 +244,7 @@ def _parse_defaults(expr: Union[str, int, float]) -> dict:
     if isinstance(expr, int):
         vtype = "constant"
         value = expr
-        # dtype = "int32"
-        dtype = "float32"  # default to float for maximum compatibility
+        dtype = "int32"
     elif isinstance(expr, float):
         vtype = "constant"
         value = expr
@@ -253,9 +252,7 @@ def _parse_defaults(expr: Union[str, int, float]) -> dict:
         # restriction to 32bit float for consistency. May not be reasonable at all times.
     else:
         # set vtype
-        if expr.startswith("input_variable"):
-            vtype = "input_variable"
-        elif expr.startswith("input"):
+        if expr.startswith("input"):
             vtype = "input"
         elif expr.startswith("output"):
             vtype = "output"
@@ -277,20 +274,18 @@ def _parse_defaults(expr: Union[str, int, float]) -> dict:
 
         # set dtype and value
         if expr.endswith("(float)"):
-            dtype = "float32"  # why float32 and not float64?
+            dtype = "float"
         elif expr.endswith("(int)"):
-            # dtype = "int32"
-            dtype = "float32"  # default to float for maximum compatibility
+            dtype = "int"
         elif "." in expr:
-            dtype = "float32"
+            dtype = "float"
             value = float(re.search("[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)", expr).group())
             # see https://stackoverflow.com/questions/12643009/regular-expression-for-floating-point-numbers
         elif re.search("[0-9]+", expr):
-            # dtype = "int32"
-            dtype = "float32"  # default to float for maximum compatibility
+            dtype = "int"
             value = float(re.search("[0-9]+", expr).group())
         else:
-            dtype = "float32"  # base assumption
+            dtype = "float"  # base assumption
 
     return {'vtype': vtype, 'dtype': dtype, 'value': value, 'shape': (1,)}
 
@@ -307,17 +302,8 @@ def _separate_variables(variables: dict):
     """
     # this part can be improved a lot with a proper expression parser
 
-    for vname, properties in variables.items():
+    for vname, vinfo in variables.items():
 
         # identify variable type and data type
-        # note: this assume that a "default" must be given for every variable
-        try:
-            default_vals = _parse_defaults(properties["default"])
-        except KeyError:
-            raise PyRatesException("Variables need to have a 'default' (variable type, data type and/or value) "
-                                   "specified.")
-        for key in ['value', 'dtype', 'vtype', 'shape']:
-            if key in properties:
-                default_vals[key] = properties[key]
-
+        default_vals = _parse_defaults(vinfo)
         yield vname, default_vals['vtype'], default_vals['dtype'], default_vals['shape'], default_vals['value']

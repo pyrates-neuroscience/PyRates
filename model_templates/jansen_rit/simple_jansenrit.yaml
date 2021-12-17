@@ -29,48 +29,27 @@ JRC_op:
     - 'd/dt * PSP_t_pc_i =  h_i*c/(ei_ratio*tau_i) * m_max*sigmoid(r*(PSP_iin-V_thr)) - (1./tau_i)^2. * PSP_pc_i - (2./tau_i) * PSP_t_pc_i'
     - 'm_out = m_max*sigmoid(r*(PSP_pc_e - PSP_pc_i - V_thr))'
   variables:
-    m_out:
-      default: output
-    h_e:
-      default: 3.25e-3
-    tau_e:
-      default: 10e-3
-    h_i:
-      default: 22e-3
-    tau_i:
-      default: 20e-3
-    PSP_ein:
-      default: variable
-    PSP_t_ein:
-      default: variable
-    PSP_iin:
-      default: variable
-    PSP_t_iin:
-      default: variable
-    PSP_pc_e:
-      default: variable
-    PSP_t_pc_e:
-      default: variable
-    PSP_pc_i:
-      default: variable
-    PSP_t_pc_i:
-      default: variable
-    m_in:
-      default: input
-    m_max:
-      default: 5.
-    r:
-      default: 560.
-    V_thr:
-      default: 6e-3
-    c:
-      default: 135.0
-    ei_ratio:
-      default: 4.0
-    io_ratio:
-      default: 3.0
-    u:
-      default: input(220.0)
+    m_out: output
+    h_e: 3.25e-3
+    tau_e: 10e-3
+    h_i: 22e-3
+    tau_i: 20e-3
+    PSP_ein: variable
+    PSP_t_ein: variable
+    PSP_iin: variable
+    PSP_t_iin: variable
+    PSP_pc_e: variable
+    PSP_t_pc_e: variable
+    PSP_pc_i: variable
+    PSP_t_pc_i: variable
+    m_in: input
+    m_max: 5.
+    r: 560.
+    V_thr: 6e-3
+    c: 135.0
+    ei_ratio: 4.0
+    io_ratio: 3.0
+    u: input(220.0)
 
 
 JRC_driven_op:
@@ -257,8 +236,8 @@ JRC_delaycoupled:
     JRC1: JRC_pop
     JRC2: JRC_pop
   edges:
-    - [JRC1/JRC_op/m_out, JRC2/JRC_op/m_in, DummyEdge, {weight: 1.0, delay: 0.004, spread: 0.001}]
-    - [JRC2/JRC_op/m_out, JRC1/JRC_op/m_in, DummyEdge, {weight: 1.0, delay: 0.004, spread: 0.001}]
+    - [JRC1/JRC_op/m_out, JRC2/JRC_op/m_in, DummyEdge, {weight: 2.0, delay: 0.004, spread: 0.001}]
+    - [JRC2/JRC_op/m_out, JRC1/JRC_op/m_in, DummyEdge, {weight: 2.0, delay: 0.004, spread: 0.001}]
 
 JRC_dc:
   base: CircuitTemplate

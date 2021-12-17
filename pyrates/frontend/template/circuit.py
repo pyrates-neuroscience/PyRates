@@ -35,7 +35,7 @@ arguments. For more detailed descriptions, see the respective docstrings.
 
 # external packages
 import gc
-from typing import List, Union, Dict, Optional
+from typing import List, Union, Dict, Optional, Tuple, Callable
 from copy import deepcopy
 
 import pandas as pd
@@ -57,10 +57,42 @@ __status__ = "Development"
 
 
 class CircuitTemplate(AbstractBaseTemplate):
+    """Base class for hierarchical networks, composed of either nodes or other circuits, connected by edges.
+
+    Parameters
+    ----------
+    name
+        String-based label of the network. Merely serves identification purposes.
+    path
+        Path to the YAML template this template was loaded from. If the `CircuitTemplate` is not loaded from a YAML
+        template, this parameter can be ignored.
+    description
+        Optional description of the network. Merely serves documentation purposes.
+    circuits
+        For hierarchical networks, `CircuitTemplate` instances can be constructed from a dictionary of other circuits.
+        Keys should be the circuit names and values the `CircuitTemplate` instances.
+    nodes
+        Dictionary with keys being node names and values being `NodeTemplate` instances or paths to YAML definitions of
+        node templates. This parameter has to be left empty of `circuits` are provided.
+    edges
+        Lists of tuples, where each tuple contains (1) a source node name, (2) a target node name, (3) an `EdgeTemplate`
+        instance, path to a YAML definition of an `EdgeTemplate` or `null`, and (4) a dictionary with edge attributes.
+
+    Attributes
+    ----------
+    nodes
+        Dictionary with keys being node names and values being `NodeTemplate` instances.
+    circuits
+        Dictionary with keys being circuit names and values being `CircuitTemplate` instances.
+    edges
+        List with edge tuples that contain: (1) a source node name, (2) a target node name, (3) an `EdgeTemplate`
+        instance or `None`, and (4) a dictionary with edge attributes.
+
+    """
 
     target_ir = CircuitIR
 
-    def __init__(self, name: str, path: str, description: str = "A circuit template.", circuits: dict = None,
+    def __init__(self, name: str, path: str = "", description: str = "A circuit template.", circuits: dict = None,
                  nodes: dict = None, edges: List[tuple] = None):
 
         # initialize base template clase
@@ -109,7 +141,9 @@ class CircuitTemplate(AbstractBaseTemplate):
 
     def update_template(self, name: str = None, path: str = None, description: str = None, circuits: dict = None,
                         nodes: dict = None, edges: List[tuple] = None):
-        """Update all entries of the circuit template in their respective ways."""
+        """Update all entries of the circuit template in their respective ways. See the documentation of
+        `CircuitTemplate` for a detailed description of the method parameters.
+        """
 
         if nodes and circuits:
             raise ValueError('CircuitTemplate cannot use both sub-circuits and nodes, since all '
@@ -146,16 +180,20 @@ class CircuitTemplate(AbstractBaseTemplate):
                               )
 
     def update_var(self, node_vars: dict = None, edge_vars: list = None):
-        """
+        """Update the value of node or edge variables.
 
         Parameters
         ----------
         node_vars
+            Dictionary with keys being pointers to variable names on nodes, using the `*circuit/node/op/var` notation.
         edge_vars
+            List with edge tuples that contain: (1) a source node name, (2) a target node name, (3) an edge index,
+            and (4) a dictionary with edge attributes. The latter can be used to update edge attributes.
 
         Returns
         -------
-
+        CircuitTemplate
+            Pointer to the `CircuitTemplate` instance this method was called from.
         """
 
         if node_vars is None:
@@ -170,8 +208,9 @@ class CircuitTemplate(AbstractBaseTemplate):
             if not target_nodes:
                 print(f'WARNING: Variable {var} has not been found on operator {op} of node {node[0]}.')
             for n in target_nodes:
-                node_temp = self.get_node_template(n)
+                node_temp = deepcopy(self.get_node_template(n))
                 node_temp.update_var(op=op, var=var, val=val)
+                self.add_node_template(n, template=node_temp)
 
         # updates to edge variable values
         for source, target, edge_dict in edge_vars:
@@ -184,6 +223,63 @@ class CircuitTemplate(AbstractBaseTemplate):
             outputs: Optional[Union[dict, list]] = None, sampling_step_size: Optional[float] = None,
             solver: str = 'euler', backend: str = None,  vectorize: bool = True, verbose: bool = True,
             clear: bool = True, **kwargs) -> pd.DataFrame:
+        """Method for calculating numerical solutions to the initial value problem for the dynamical system defined by
+        this `CircuitTemplate` instance.
+
+        Parameters
+        ----------
+        simulation_time
+            Total integration time. Unit depends on the definition of the time constants in the system.
+        step_size
+            Integration step-size. If a numerical solver with fixed step-size is chosen, this step-size determines the
+            accuracy of the numerical solution. Else, it merely defines the inital step-size of the integration
+            algorithm.
+        inputs
+            Dictionary providing extrinsic, time-dependent inputs to the system. Keys are the names of system variables,
+            following the `*circuit/node/op/var` notation. Values are 1D numpy arrays that represent the input over time
+            with time steps of size `step_size`.
+        outputs
+            Dictionary indicating for which system variables the dynamics over time (i.e. the numerical solution to the
+            initial value problem) should be returned. Keys are the names under which the solutions will be available in
+            the returned `pandas.DataFrame`. Values are the names of the system variables, following the
+            `*circuit/node/op/var` notation.
+        sampling_step_size
+            Step-size at which the return values should be sampled.
+        solver
+            Numerical solver method that should be used to solve the initial value problem. Possible choices are:
+                - 'euler': standard forward Euler method
+                - 'scipy': Any method that is available via the `scipy.integrate.solve_ivp` function. See the
+                documentation of that function for ways to adjust its default settings. Any arguments to the `solve_ivp`
+                function can also be passed to the `CircuitTemplate.run` function.
+        backend
+            Name of the backend that should be used for implementing the system equations. Possible choices are:
+                - 'default' or 'numpy': A backend based on `numpy` functions, representing all system variables as
+                    `np.ndarray`.
+                - 'tensorflow': A backend that represents the system equations as a `tensorflow` graph, in which all
+                    system variables are stored as `tf.constant` or `tf.Variable`.
+                - 'torch': A backend based on `pytorch` which represents all variables as `torch.tensor`.
+                - 'fortran': Translates all system variables and equations into Fortran90 equivalents and uses
+                    `numpy.f2py` to make them available via Python. Requires `vectorize` to be set to `False`.
+                - 'julia': Translates all system variables and equations into Julia equivalents and uses `PyJulia` to
+                    make them available via Python. Requires `vectorize` to be set to `False`. Also requires that
+                    the path to the julia executable that should be used for the simulation is provided via the
+                    keyword argument `julia_path`.
+        vectorize
+            If true, nodes that are governed by the same equation sets will be grouped and the respective equations will
+            be vectorized. If false, all equations will be scalar in nature.
+        verbose
+            If true updates regarding the status of the `run` procedure will be displayed.
+        clear
+            If true, all cached variables will be freed and all temporary files will be deleted after the `run`
+            procedure.
+        kwargs
+            Additional keyword arguments.
+
+        Returns
+        -------
+        pd.DataFrame
+            A Dataframe that includes the time series of the requested output variables.
+        """
 
         # translate circuit template into a graph representation
         ########################################################
@@ -264,7 +360,51 @@ class CircuitTemplate(AbstractBaseTemplate):
         return results
 
     def get_run_func(self, func_name: str, step_size: float, inputs: Optional[dict] = None, backend: str = None,
-                     vectorize: bool = True, verbose: bool = True, clear: bool = False, **kwargs) -> tuple:
+                     vectorize: bool = True, verbose: bool = True, clear: bool = False, **kwargs
+                     ) -> Tuple[Callable, tuple]:
+        """Generate a function that evaluates the vector field of the dynamical system represented by this
+        `CircuitTemplate` instance.
+
+        Parameters
+        ----------
+        func_name
+            Name of the vector field evaluation function.
+        step_size
+            Integration step-size. Required for the implementation of the extrinsic inputs.
+        inputs
+            Dictionary providing extrinsic, time-dependent inputs to the system. Keys are the names of system variables,
+            following the `*circuit/node/op/var` notation. Values are 1D numpy arrays that represent the input over time
+            with time steps of size `step_size`.
+        backend
+            Name of the backend that should be used for implementing the system equations. Possible choices are:
+                - 'default' or 'numpy': A backend based on `numpy` functions, representing all system variables as
+                    `np.ndarray`.
+                - 'tensorflow': A backend that represents the system equations as a `tensorflow` graph, in which all
+                    system variables are stored as `tf.constant` or `tf.Variable`.
+                - 'torch': A backend based on `pytorch` which represents all variables as `torch.tensor`.
+                - 'fortran': Translates all system variables and equations into Fortran90 equivalents and uses
+                    `numpy.f2py` to make them available via Python. Requires `vectorize` to be set to `False`.
+                - 'julia': Translates all system variables and equations into Julia equivalents and uses `PyJulia` to
+                    make them available via Python. Requires `vectorize` to be set to `False`. Also requires that
+                    the path to the julia executable that should be used for the simulation is provided via the
+                    keyword argument `julia_path`.
+        vectorize
+            If true, nodes that are governed by the same equation sets will be grouped and the respective equations will
+            be vectorized. If false, all equations will be scalar in nature.
+        verbose
+            If true updates regarding the status of the `run` procedure will be displayed.
+        clear
+            If true, all cached variables will be freed and all temporary files will be deleted after the `run`
+            procedure. To inspect the vector field evaluation function, `clear` should be set to `False`.
+        kwargs
+            Additional keyword arguments.
+
+        Returns
+        -------
+        Tuple[Callable, tuple]
+            The vector field evaluation function and all its positional arguments.
+
+        """
 
         # add extrinsic inputs to network
         adaptive_steps = is_integration_adaptive(kwargs.pop('solver', 'euler'), **kwargs)
@@ -274,7 +414,7 @@ class CircuitTemplate(AbstractBaseTemplate):
                 net = net._add_input(target, in_array, adaptive_steps, in_array.shape[0] * step_size, vectorize)
 
         # validate backend settings
-        net._validate_backend_args(backend, vectorize, adaptive_steps)
+        net._validate_backend_args(backend, vectorize, adaptive_steps, **kwargs)
 
         # translate circuit template into a graph representation
         net.apply(adaptive_steps=adaptive_steps, verbose=verbose, backend=backend, step_size=step_size,
@@ -296,6 +436,8 @@ class CircuitTemplate(AbstractBaseTemplate):
         Parameters
         ----------
         adaptive_steps
+            If true, a numerical solver with step-size adaptation can be used to integrate the network dynamics over
+            time.
         label
             (optional) Assign a label that is saved as a sort of name to the circuit instance. This is particularly
             relevant, when adding multiple circuits to a bigger circuit. This way circuits can be identified by their
@@ -387,8 +529,6 @@ class CircuitTemplate(AbstractBaseTemplate):
             # add edge from EdgeIR
             else:
 
-                # TODO: ensure that this works the same way for vectorized and non-vectorized networks
-
                 sources = {}
                 for key, v in values.copy().items():
                     if type(v) is list and type(v[0]) is str:
@@ -457,7 +597,7 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         Returns
         -------
-        List
+        List[str]
             List of node keys that match the provided identifier. Each entry is a string that refers to a node of the
             circuit with circuit hierarchy levels separated via slashes.
 
@@ -510,7 +650,7 @@ class CircuitTemplate(AbstractBaseTemplate):
 
             return self._get_nodes_with_var(var_identifier, nodes=nodes)
 
-    def get_edges(self, source: Union[str, list], target: Union[str, list]) -> list:
+    def get_edges(self, source: Union[str, list], target: Union[str, list]) -> List[tuple]:
         """Extracts nodes from the CircuitTemplate that match the provided identifier.
 
         Parameters
@@ -522,7 +662,7 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         Returns
         -------
-        list
+        List[tuple]
             List of edge keys that match the provided identifier. Each entry is a tuple that includes the source and
             target variables as well as the edge template. Circuit hierarchy levels are separated via slashes in the
             variable names.
@@ -557,12 +697,11 @@ class CircuitTemplate(AbstractBaseTemplate):
         return [(s, t, template, edge_dict) for s, t, template, edge_dict in all_edges
                 if s in source_ids and t in target_ids]
 
-    def get_node_template(self, node: Union[str, list]):
+    def get_node_template(self, node: Union[str, list]) -> NodeTemplate:
         """Extract NodeTemplate from CircuitTemplate.
 
         Parameters
         ----------
-
         node
             Can be a simple string or a list of strings. If the CircuitTemplate is a hierarchical circuit (composed of
             circuits itself), different list entries should refer to the different hierarchy levels. Alternatively,
@@ -571,7 +710,7 @@ class CircuitTemplate(AbstractBaseTemplate):
         Returns
         -------
         NodeTemplate
-
+            Instance of the `NodeTemplate` of that particular node.
         """
 
         if type(node) is str:
@@ -582,9 +721,39 @@ class CircuitTemplate(AbstractBaseTemplate):
             return net_node.get_node_template(node[1:])
         return net_node
 
-    def collect_edges(self, delay_info: bool = False):
+    def add_node_template(self, node: Union[str, list], template: NodeTemplate) -> None:
+        """Add node template to nodes or circuits list.
+
+        Parameters
+        ----------
+        node
+            Can be a simple string or a list of strings. If the CircuitTemplate is a hierarchical circuit (composed of
+            circuits itself), different list entries should refer to the different hierarchy levels. Alternatively,
+            separation via slashes can be used if a string is provided.
+        template
+            NodeTemplate instance of the node to-be-added.
+
+        Returns
+        -------
+        None
         """
-        Collect all edges that exist in circuit.
+
+        if type(node) is str:
+            node = node.split('/')
+        net = self.circuits if self.circuits else self.nodes
+        net_node = net[node[0]]
+        if isinstance(net_node, CircuitTemplate):
+            self.add_node_template(node[1:], template=template)
+        else:
+            self.nodes[node[0]] = template
+
+    def collect_edges(self, delay_info: bool = False) -> List[tuple]:
+        """Collect all edges that exist in circuit.
+
+        Parameters
+        ----------
+        delay_info
+            If true, it will be indicated via a 5th tuple entry for each edge whether it contains a delay or not.
 
         Returns
         -------
@@ -604,7 +773,24 @@ class CircuitTemplate(AbstractBaseTemplate):
                 edges[i] = (svar, tvar, template, edge, delayed)
         return edges
 
-    def get_edge(self, source: str, target: str, idx: int = None):
+    def get_edge(self, source: str, target: str, idx: int = None) -> tuple:
+        """Extract edge information from network.
+
+        Parameters
+        ----------
+        source
+            Source node.
+        target
+            Target node.
+        idx
+            Index of the desired edge among all edges from `source` to `target`.
+
+        Returns
+        -------
+        tuple
+            Has 4 entries: 1 - source, 2 - target, 3 - edge template, 4 - edge attributes.
+
+        """
 
         if idx is None:
             idx = 0
@@ -969,32 +1155,8 @@ class CircuitTemplate(AbstractBaseTemplate):
                                    f'choice of backend: {backend}. Please either choose another backend or set '
                                    f'`vectorize` to `False`.')
         if backend == 'julia' and 'julia_path' not in kwargs:
-            raise PyRatesException('You chose the Julia backend, which compiles Julia code via PyJulia. To do this,'
+            raise PyRatesException('You chose the Julia backend, which compiles Julia code via PyJulia. To do this, '
                                    'please provide the path to Julia executable via `julia_path`.')
-
-
-def extend_var_dict(origin: dict, extension: dict):
-    value1, vtype = extract_var_value(origin)
-    value2, _ = extract_var_value(extension)
-    if vtype != 'raw':
-        origin['default'] = vtype
-        origin['value'] = np.asarray([value1, value2]).squeeze()
-        origin['shape'] = origin['value'].shape
-    elif value1 != value2:
-        raise NotImplementedError('Raw input variables with different values cannot be vectorized currently.')
-    return origin
-
-
-def extract_var_value(var: dict):
-    if 'value' in var:
-        return var['value'], var['default']
-    if type(var['default']) is str:
-        if '(' in var['default']:
-            idx_start = var['default'].find('(')
-            idx_end = var['default'].find(')')
-            return float(var['default'][idx_start:idx_end]), var['default'][:idx_start]
-        return 0.0, var['default']
-    return var['default'], 'constant'
 
 
 def update_edges(base_edges: List[tuple], updates: List[Union[tuple, dict]]):
@@ -1026,7 +1188,8 @@ def is_integration_adaptive(solver: str, **solver_kwargs):
     return solver != 'euler'
 
 
-input_labels = []  # cache for input nodes
+# cache for input nodes
+input_labels = []
 
 
 def create_input_node(var: str, inp: np.ndarray, continuous: bool, T: float, vectorized_net: bool) -> tuple:
@@ -1052,7 +1215,7 @@ def create_input_node(var: str, inp: np.ndarray, continuous: bool, T: float, vec
             var_name: {'default': 'output', 'value': float(y_new), 'shape': lhs_shape, 'dtype': 'float'},
             f"{var}_input": {'default': 'constant', 'value': inp, 'shape': inp.shape, 'dtype': 'float'},
             't': {'default': 'variable', 'value': 0.0, 'dtype': 'float', 'shape': ()},
-            'time': {'default': 'input_variable', 'value': time, 'shape': time.shape, 'dtype': 'float'}
+            'time': {'default': 'input', 'value': time, 'shape': time.shape, 'dtype': 'float'}
         }
 
     else:
@@ -1076,9 +1239,3 @@ def create_input_node(var: str, inp: np.ndarray, continuous: bool, T: float, vec
     input_labels.append(op_key)
 
     return node_key, op_key, var_name, in_node
-
-
-def collect_nodes(key: str, val: Union[CircuitTemplate, NodeTemplate]):
-    if isinstance(val, CircuitTemplate):
-        return val.get_nodes(['all'])
-    return [key]
