@@ -7,7 +7,7 @@
 # leaky integrator operator
 li_op:
   base: OperatorTemplate
-  equations: "d/dt * r = (r0 - r)/tau + m"
+  equations: "r' = (r0 - r)/tau + m"
   variables:
     r: output(0.0)
     r0: 0.0
@@ -52,7 +52,7 @@ alpha_op:
   base: OperatorTemplate
   equations:
     - "Z' = X"
-    - "X' = r_in - 2*X/tau - Z**2/tau"
+    - "X' = r_in - 2*X/tau - Z/tau**2"
   variables:
     Z: output(0.0)
     X: variable(0.0)

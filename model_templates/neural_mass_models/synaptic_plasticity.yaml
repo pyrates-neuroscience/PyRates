@@ -1,0 +1,63 @@
+%YAML 1.2
+---
+
+# operator templates
+####################
+
+tsodyks_op:
+  base: OperatorTemplate
+  equations:
+    - "x' = (1-x)/tau_x - k*x*u*r_in"
+    - "u' = (U0-u)/tau_u + U0*(1-u)*r_in"
+    - "r_eff = r_in*x*u"
+  variables:
+    r_eff: output
+    x: variable(1.0)
+    u: variable(0.2)
+    tau_x: 100.0
+    tau_u: 200.0
+    k: 1.0
+    U0: 0.2
+    r_in: input(0.0)
+
+depression_op:
+  base: OperatorTemplate
+  equations:
+    - "x' = (1-x)/tau_x - k*x*r_in"
+    - "r_eff = r_in*x"
+  variables:
+    r_eff: output
+    x: variable(1.0)
+    tau_x: 100.0
+    k: 1.0
+    r_in: input(0.0)
+
+facilitation_op:
+  base: OperatorTemplate
+  equations:
+    - "u' = (U0-u)/tau_u - U0*(1-u)*r_in"
+    - "r_eff = r_in*u"
+  variables:
+    r_eff: output
+    u: variable(0.2)
+    tau_u: 100.0
+    U0: 0.2
+    r_in: input(0.0)
+
+# edge templates
+################
+
+tsodyks_edge:
+  base: EdgeTemplate
+  operators:
+    - tsodyks_op
+
+depression_edge:
+  base: EdgeTemplate
+  operators:
+    - depression_op
+
+facilitation_edge:
+  base: EdgeTemplate
+  operators:
+    - facilitation_op
