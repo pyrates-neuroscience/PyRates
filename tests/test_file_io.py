@@ -39,7 +39,7 @@ def get_parent_directory():
 
 
 def test_pickle_template():
-    path = "model_templates.jansen_rit.circuit.JansenRitCircuit"
+    path = "model_templates.neural_mass_models.jansenrit.JRC"
     from pyrates.frontend.template import from_yaml, clear_cache
     clear_cache()
 

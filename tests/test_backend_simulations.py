@@ -465,16 +465,16 @@ def test_2_7_backends():
     dts = 1e-3
     T = 10.
 
-    r0 = simulate("model_templates.montbrio.simple_montbrio.QIF_sfa", simulation_time=T, sampling_step_size=dts,
-                  inputs=None, outputs={"r": "p/Op_sfa/r"}, solver='euler', step_size=dt, clear=True,
+    r0 = simulate("model_templates.neural_mass_models.qif.qif_sfa", simulation_time=T, sampling_step_size=dts,
+                  inputs=None, outputs={"r": "p/qif_sfa_op/r"}, solver='euler', step_size=dt, clear=True,
                   file_name='m0', vectorize=False)
 
     for i, b in enumerate(backends):
 
         if b != 'default':
 
-            r = simulate("model_templates.montbrio.simple_montbrio.QIF_sfa",
-                         inputs=None, outputs={"r": "p/Op_sfa/r"}, backend=b, solver='euler', step_size=dt, clear=True,
-                         simulation_time=T, sampling_step_size=dts, file_name=f'm{i+1}', vectorize=False)
+            r = simulate("model_templates.neural_mass_models.qif.qif_sfa",
+                         inputs=None, outputs={"r": "p/qif_sfa_op/r"}, backend=b, solver='euler', step_size=dt,
+                         clear=True, simulation_time=T, sampling_step_size=dts, file_name=f'm{i+1}', vectorize=False)
 
             assert np.mean(r0.values - r.values) == pytest.approx(0.0, rel=accuracy, abs=accuracy)

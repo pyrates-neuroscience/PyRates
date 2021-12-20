@@ -635,7 +635,7 @@ def replace(eq: str, term: str, replacement: str, rhs_only: tp.Optional[bool] = 
     """
 
     # define follow-up operations/signs that are allowed to follow directly after term in eq
-    allowed_follow_ops = '+=*/^<>=!.%@[]():, '
+    allowed_follow_ops = '-+=*/^<>=!.%@[]():, '
 
     # replace every proper appearance of term in eq with replacement
     ################################################################
@@ -656,7 +656,7 @@ def replace(eq: str, term: str, replacement: str, rhs_only: tp.Optional[bool] = 
                 (idx_follow_op == len(eq) and eq[idx-1] in allowed_follow_ops):
             eq_part = eq[:idx]
             if (rhs_only and "=" in eq_part) or (lhs_only and "=" not in eq_part) or (not rhs_only and not lhs_only):
-                eq_new += f"{eq_part} {replacement}"
+                eq_new += f"{eq_part}{replacement}"
                 replaced = True
         if not replaced:
             eq_new += f"{eq[:idx_follow_op]}"

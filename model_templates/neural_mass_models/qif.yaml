@@ -19,7 +19,7 @@ qif_op:
     v: variable(0.0)
     Delta: 1.0
     tau: 1.0
-    eta: 0.0
+    eta: -2.0
     I_ext: input(0.0)
     r_in: input(0.0)
 
@@ -33,8 +33,17 @@ qif_sfa_op:
       - "a' = alpha*r - a/tau_a"
   variables:
     a: variable(0.0)
-    alpha: 1.0
+    alpha: 0.5
     tau_a: 10.0
+
+# qif neurons with gap junctions
+qif_gap_op:
+  base: qif_op
+  equations:
+    replace:
+      2.0*r*v: r*(2.0*v-g)
+  variables:
+    g: 0.0
 
 # node templates
 ################
@@ -51,6 +60,12 @@ qif_sfa_pop:
   operators:
     - qif_sfa_op
 
+# population of qif neurons with gap junctions
+qif_gap_pop:
+  base: NodeTemplate
+  operators:
+    - qif_gap_op
+
 # circuit templates
 ###################
 
@@ -60,15 +75,7 @@ qif:
   nodes:
     p: qif_pop
   edges:
-    - [p/qif_op/r, p/qif_op/r_in, null, {weight: 1.0}]
-
-# qif population with alpha-kernel synapse
-qif_alpha_syn:
-  base: CircuitTemplate
-  nodes:
-    p: qif_pop
-  edges:
-    - [p/qif_op/r, p/qif_op/r_in, alpha_edge, {weight: 1.0}]
+    - [p/qif_op/r, p/qif_op/r_in, null, {weight: 2.0}]
 
 # single QIF population with SFA
 qif_sfa:
@@ -76,7 +83,23 @@ qif_sfa:
   nodes:
     p: qif_sfa_pop
   edges:
-    - [p/qif_sfa_op/r, p/qif_sfa_op/r_in, null, {weight: 1.0}]
+    - [p/qif_sfa_op/r, p/qif_sfa_op/r_in, null, {weight: 2.0}]
+
+# single QIF population with gap junction coupling
+qif_gap:
+  base: CircuitTemplate
+  nodes:
+    p: qif_gap_pop
+  edges:
+    - [p/qif_op/r, p/qif_op/r_in, null, {weight: 2.0}]
+
+# qif population with alpha-kernel synapse
+qif_alpha_syn:
+  base: CircuitTemplate
+  nodes:
+    p: qif_pop
+  edges:
+    - [p/qif_op/r, p/qif_op/r_in, alpha_edge, {weight: 2.0}]
 
 # qif population with synaptic depression
 qif_sd:
@@ -84,7 +107,7 @@ qif_sd:
   nodes:
     p: qif_pop
   edges:
-    - [p/qif_op/r, p/qif_op/r_in, *depression_edge, {weight: 1.0}]
+    - [p/qif_op/r, p/qif_op/r_in, *depression_edge, {weight: 2.0}]
 
 # qif population with synaptic plasticity
 qif_tsodyks:
@@ -92,4 +115,4 @@ qif_tsodyks:
   nodes:
     p: qif_pop
   edges:
-    - [p/qif_op/r, p/qif_op/r_in, *tsodyks_edge, {weight: 1.0}]
+    - [p/qif_op/r, p/qif_op/r_in, *tsodyks_edge, {weight: 2.0}]

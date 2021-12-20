@@ -9,30 +9,19 @@ LinearOperator:
   base: OperatorTemplate
   equations: "y = m*x + n"
   variables:
-    m:
-      description: linear scaling coefficient
-      default: 1.
-    n:
-      description: additive offset
-      default: 0.
-    x:
-      description: independent variable
-      default: input
-    y:
-      description: dependent variable
-      default: output
+    m: 1.
+    n: 0.
+    x: input
+    y: output
 
 IncrementOperator:
   description: Simple coupling operator that increments its input by a
   base: OperatorTemplate
   equations: "x = y + a"
   variables:
-    x:
-      default: output
-    y:
-      default: input
-    a:
-      default: 1.
+    x: output
+    y: input
+    a: 1.
 
 ExampleNode:
   description: Simple example with one operator

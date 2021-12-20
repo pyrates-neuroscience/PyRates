@@ -40,7 +40,7 @@ pro:
   base: model_templates.base_templates.sigmoid_op
   equations:
     replace:
-      r_in: Z
+      r: Z
       r_thr: Z_thr
   variables:
     m_max: 5.0

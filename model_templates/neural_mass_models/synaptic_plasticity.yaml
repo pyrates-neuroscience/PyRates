@@ -13,11 +13,11 @@ tsodyks_op:
   variables:
     r_eff: output
     x: variable(1.0)
-    u: variable(0.2)
+    u: variable(0.6)
     tau_x: 100.0
     tau_u: 200.0
-    k: 1.0
-    U0: 0.2
+    k: 0.1
+    U0: 0.6
     r_in: input(0.0)
 
 depression_op:

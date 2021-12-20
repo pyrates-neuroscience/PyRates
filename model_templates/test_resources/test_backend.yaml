@@ -10,19 +10,15 @@ op0:
     - "d/dt * a = b*0.5"
     - "d/dt * b = a + 2.0"
   variables:
-    a:
-      default: output
-    b:
-      default: variable
+    a: output
+    b: variable
 
 op1:
   base: OperatorTemplate
   equations: "d/dt * a = u - a"
   variables:
-    a:
-      default: output
-    u:
-      default: input
+    a: output
+    u: input
 
 op2:
   base: OperatorTemplate
@@ -30,10 +26,8 @@ op2:
     - "d/dt * a = b - a"
     - "b = sigmoid(a)"
   variables:
-    a:
-      default: output
-    b:
-      default: variable
+    a: output
+    b: variable
 
 op3:
   base: OperatorTemplate
@@ -41,55 +35,43 @@ op3:
     - "d/dt * a = -10.0 * a + b^2 + u"
     - "d/dt * b = 0.1 * a"
   variables:
-    a:
-      default: variable
-    b:
-      default: variable
-    u:
-      default: input
+    a: variable
+    b: variable
+    u: input
 
 op4:
   base: OperatorTemplate
   equations: "d/dt * u = 2.0"
   variables:
-    u:
-      default: output
+    u: output
 
 op5:
   base: OperatorTemplate
   equations: "d/dt * a = x - a"
   variables:
-    a:
-      default: output
-    x:
-      default: input
+    a: output
+    x: input
 
 op6:
   base: OperatorTemplate
   equations: "d/dt * u = 4. + tanh(0.5)"
   variables:
-    u:
-      default: output
+    u: output
 
 op7:
   base: OperatorTemplate
   equations: "d/dt * a = u + inp - a"
   variables:
-    a:
-      default: output
-    u:
-      default: input
-    inp:
-      default: input
+    a: output
+    u: input
+    inp: input
 
 op8:
   base: OperatorTemplate
   equations: "d/dt * a = 2.0 + u"
   variables:
-    a:
-      default: output
-    u:
-      default: input
+    a: output
+    u: input
 
 op9:
   base: OperatorTemplate
@@ -97,22 +79,16 @@ op9:
     - "d/dt * a = (a*(1.0 - a) + I_syn + I_ext)/tau"
     - "b = tanh(a)"
   variables:
-    b:
-      default: output
-    a:
-      default: variable
-    I_syn:
-      default: input
-    I_ext:
-      default: input
-    tau:
-      default: 10.0
+    b: output
+    a: variable
+    I_syn: input
+    I_ext: input
+    tau: 10.0
 
 op10:
   base: op9
   variables:
-    tau:
-      default: 1.0
+    tau: 1.0
 
 # population templates
 ######################

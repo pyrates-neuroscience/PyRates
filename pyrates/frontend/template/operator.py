@@ -34,6 +34,7 @@ from typing import Union
 # pyrates internal _imports
 from pyrates.ir.circuit import PyRatesException
 from pyrates.frontend.template.abc import AbstractBaseTemplate
+from pyrates.backend.parser import replace as eq_replace
 
 # meta infos
 from pyrates.ir.operator import OperatorIR
@@ -137,7 +138,7 @@ class OperatorTemplate(AbstractBaseTemplate):
             for vname, vtype, dtype, shape, value in _separate_variables(self.variables):
 
                 # check whether an invalid variable name was passed
-                check_vname(vname, vtype)
+                vtype = check_vname(vname, vtype)
 
                 # if no new value is given for a variable, get the default
                 if vname not in values:
@@ -169,14 +170,13 @@ class OperatorTemplate(AbstractBaseTemplate):
             return instance, values
 
 
-def check_vname(v: str, dtype: str):
+def check_vname(v: str, vtype: str):
 
     disallowed_names = ['y', 'dy', 'source_idx', 'target_idx', 'I', 'i', 'pi']
     disallowed_name_parts = ['_buffer', '_delays', '_maxdelay', '_idx']
 
-    if v == 't' and dtype != 'state_var':
-        raise ValueError('The variable name `t` is reserved for the global integration time and always has to be '
-                         'defined as a state variable.')
+    if v == 't' and vtype != 'state_var':
+        vtype = 'state_var'
 
     if v in disallowed_names:
         raise ValueError(f'The variable name {v} is reserved for internal variables created by PyRates. Please choose '
@@ -186,6 +186,8 @@ def check_vname(v: str, dtype: str):
         if dpart in v:
             raise ValueError(f'The variable name {v} contains the sub-string {dpart} which is reserved for internal '
                              f'variables created by PyRates. Please choose another variable name.')
+
+    return vtype
 
 
 def _update_variables(variables: dict, updates: dict):
@@ -211,17 +213,18 @@ def _update_equation(equation: str,  # original equation
     # replace existing terms by new ones
     if replace:
         for old, new in replace.items():
-            equation = intern(equation.replace(old, new))
+            equation = eq_replace(equation, old, new)
+            #equation = intern(equation.replace(old, new))
             # this might fail, if multiple replacements refer or contain the same variables
             # is it possible to call str.replace with tuples?
 
     # remove terms
     if remove:
         if isinstance(remove, str):
-            equation = intern(equation.replace(remove, ""))
+            equation = intern(eq_replace(equation, remove, ""))
         else:
             for old in remove:
-                equation = intern(equation.replace(old, ""))
+                equation = intern(eq_replace(equation, old, ""))
 
     # append terms at the end of the equation string
     if append:
@@ -305,5 +308,5 @@ def _separate_variables(variables: dict):
     for vname, vinfo in variables.items():
 
         # identify variable type and data type
-        default_vals = _parse_defaults(vinfo)
+        default_vals = vinfo.copy() if type(vinfo) is dict else _parse_defaults(vinfo)
         yield vname, default_vals['vtype'], default_vals['dtype'], default_vals['shape'], default_vals['value']

@@ -1,0 +1,62 @@
+%YAML 1.2
+---
+
+# operator templates
+####################
+
+# phase evolution operator
+phase_op:
+  base: OperatorTemplate
+  equations:
+    - "d/dt * theta = omega + K*net_in + ext_in"
+  variables:
+    theta: output
+    omega: 10.0
+    K: 1.0
+    net_in: input
+    ext_in: input
+
+# sinusoidal phase coupling operator
+sin_op:
+  base: OperatorTemplate
+  equations:
+    - "s = sin(theta_s-theta_t)"
+  variables:
+    theta_s: input
+    theta_t: input
+    s: output
+
+# node templates
+################
+
+phase_pop:
+  base: NodeTemplate
+  operators:
+    - phase_op
+
+# edge templates
+################
+
+sin_edge:
+  base: EdgeTemplate
+  operators:
+    - sin_op
+
+# circuit templates
+###################
+
+kmo:
+  base: CircuitTemplate
+  nodes:
+    p: phase_pop
+
+kmo_2coupled:
+  base: CircuitTemplate
+  nodes:
+    p1: phase_pop
+    p2: phase_pop
+  edges:
+    - [ p1/phase_op/theta, p2/phase_op/net_in, sin_edge, { weight: -4.0, sin_edge/sin_op/theta_s: source,
+                                                           sin_edge/sin_op/theta_t: p2/phase_op/theta } ]
+    - [ p2/phase_op/theta, p1/phase_op/net_in, sin_edge, { weight: -4.0, sin_edge/sin_op/theta_s: source,
+                                                           sin_edge/sin_op/theta_t: p1/phase_op/theta } ]

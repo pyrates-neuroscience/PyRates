@@ -1212,10 +1212,10 @@ def create_input_node(var: str, inp: np.ndarray, continuous: bool, T: float, vec
         y_new = np.interp(0.0, time, inp)
         eqs = [f"{lhs} = interp(t, time, {var}_input)"]
         var_dict = {
-            var_name: {'default': 'output', 'value': float(y_new), 'shape': lhs_shape, 'dtype': 'float'},
-            f"{var}_input": {'default': 'constant', 'value': inp, 'shape': inp.shape, 'dtype': 'float'},
-            't': {'default': 'variable', 'value': 0.0, 'dtype': 'float', 'shape': ()},
-            'time': {'default': 'input', 'value': time, 'shape': time.shape, 'dtype': 'float'}
+            var_name: {'vtype': 'output', 'value': float(y_new), 'shape': lhs_shape, 'dtype': 'float'},
+            f"{var}_input": {'vtype': 'constant', 'value': inp, 'shape': inp.shape, 'dtype': 'float'},
+            't': {'vtype': 'variable', 'value': 0.0, 'dtype': 'float', 'shape': ()},
+            'time': {'vtype': 'input', 'value': time, 'shape': time.shape, 'dtype': 'float'}
         }
 
     else:
@@ -1223,9 +1223,9 @@ def create_input_node(var: str, inp: np.ndarray, continuous: bool, T: float, vec
         # case II: simply index the input variable with fixed time steps
         eqs = [f"{lhs} = index({var}_input,t)"]
         var_dict = {
-            var_name: {'default': 'output', 'value': 0.0, 'shape': lhs_shape, 'dtype': 'float'},
-            f"{var}_input": {'default': 'constant', 'value': inp, 'shape': inp.shape, 'dtype': 'float'},
-            't': {'default': 'variable', 'value': 0, 'dtype': 'int32', 'shape': ()}
+            var_name: {'vtype': 'output', 'value': 0.0, 'shape': lhs_shape, 'dtype': 'float'},
+            f"{var}_input": {'vtype': 'constant', 'value': inp, 'shape': inp.shape, 'dtype': 'float'},
+            't': {'vtype': 'variable', 'value': 0, 'dtype': 'int32', 'shape': ()}
         }
 
     # create input operator

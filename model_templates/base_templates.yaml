@@ -7,23 +7,23 @@
 # leaky integrator operator
 li_op:
   base: OperatorTemplate
-  equations: "r' = (r0 - r)/tau + m"
+  equations: "r' = (r0 - r)/tau + m_in"
   variables:
     r: output(0.0)
     r0: 0.0
     tau: 1.0
-    m: input(0.0)
+    m_in: input(0.0)
 
 # sigmoid transformation
 sigmoid_op:
   base: OperatorTemplate
-  equations: "m = m_max / (1 + exp(s*(r_thr-r_in)))"
+  equations: "m = m_max / (1 + exp(s*(r_thr-r)))"
   variables:
     m: output(0.0)
     m_max: 1.0
     s: 1.0
     r_thr: 0.0
-    r_in: input(0.0)
+    r: input(0.0)
 
 # mono-exponential kernel convolution
 monoexp_op:
@@ -78,8 +78,8 @@ sigmoid_node:
 nonlinear_li_node:
   base: NodeTemplate
   operators:
-    - sigmoid_op
     - li_op
+    - sigmoid_op
 
 # edge templates
 ################

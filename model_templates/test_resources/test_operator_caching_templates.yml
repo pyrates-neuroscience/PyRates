@@ -7,36 +7,28 @@ TestOpSin:
     - "var = ext + c"
     - "d/dt * out_var = sin(ext)"
   variables:
-    var:
-      default: output
-    ext:
-      default: input
-    c:
-      default: 0
+    var: output
+    ext: input
+    c: 0
 
 TestOpCos:
   base: TestOp1
   variables:
-    c:
-      default: -PI/2
+    c: -PI/2
 
 TestOpLin0:
   base: OperatorTemplate
   equations:
     - "d/dt * out_var = in_var * c"
   variables:
-    out_var:
-      default: output
-    in_var:
-      default: input
-    c:
-      default: 0
+    out_var: output
+    in_var: input
+    c: 0
 
 TestOpLin1:
   base: TestOpLin0
   variables:
-    c:
-      default: 1
+    c: 1
 
 
 TestNodeLin0:
@@ -75,7 +67,3 @@ TestCircuit2:
   edges:
     - [node1/TestOpLin0/out_var, node2/TestOpLin0/in_var, TestEdge1, {weight: 1}]
     - [node2/TestOpLin0/out_var, node1/TestOpLin0/in_var, TestEdge2, {weight: 1}]
-
-
-
-

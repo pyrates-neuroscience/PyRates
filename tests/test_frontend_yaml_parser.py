@@ -69,9 +69,8 @@ def test_import_operator_templates(operator):
 def test_full_jansen_rit_circuit_template_load():
     """Test a simple circuit template, including all nodes, edges and operators to be loaded."""
 
-    path = "model_templates.jansen_rit.circuit.JansenRitCircuit"
+    path = "model_templates.neural_mass_models.jansenrit.JRC"
     from pyrates.frontend.template.circuit import CircuitTemplate
-    from pyrates.frontend.template.edge import EdgeTemplate
     from pyrates.frontend.template.node import NodeTemplate
     from pyrates.frontend.template.operator import OperatorTemplate
     from pyrates.frontend.template import template_cache, clear_cache
@@ -83,9 +82,9 @@ def test_full_jansen_rit_circuit_template_load():
     assert template is template_cache[path]
 
     # test, whether node templates have been loaded successfully
-    nodes = {"JR_PC": "model_templates.jansen_rit.population.templates.JansenRitPC",
-             "JR_IIN": "model_templates.jansen_rit.population.templates.JansenRitIN",
-             "JR_EIN": "model_templates.jansen_rit.population.templates.JansenRitIN"}
+    nodes = {"pc": "model_templates.neural_mass_models.jansenrit.PC",
+             "ein": "model_templates.neural_mass_models.jansenrit.IN",
+             "iin": "model_templates.neural_mass_models.jansenrit.IN"}
 
     for key, value in nodes.items():
         assert isinstance(template.nodes[key], NodeTemplate)
@@ -95,17 +94,10 @@ def test_full_jansen_rit_circuit_template_load():
             assert op.path in template_cache
             assert isinstance(op, OperatorTemplate)
 
-    # test, whether coupling operator has been loaded correctly
-    coupling_path = "model_templates.jansen_rit.edges.LinearCouplingOperator"
-    edge_temp = template.edges[0][2]
-    assert isinstance(edge_temp, EdgeTemplate)
-    assert list(edge_temp.operators)[0] is template_cache[coupling_path]
-    assert repr(template) == f"<CircuitTemplate '{path}'>"
-
 
 def test_circuit_instantiation():
     """Test, if apply() functions all work properly"""
-    path = "model_templates.jansen_rit.circuit.JansenRitCircuit"
+    path = "model_templates.neural_mass_models.jansenrit.JRC"
     from pyrates.frontend import template, clear_frontend_caches
     clear_frontend_caches()
 
@@ -113,10 +105,6 @@ def test_circuit_instantiation():
 
     circuit.apply()
     ir = circuit.intermediate_representation
-
-    # test whether edge operator has been added as a network node
-    assert 'm_in' in ir.nodes
-    assert ir.get_var('c').shape == (4,)
 
     # TODO: rework the below tests.
     # test whether edge operator is properly connected with network
@@ -163,15 +151,15 @@ def test_multi_circuit_instantiation():
 def test_equation_alteration():
     """Test, if properties of a template that mean to alter a certain parent equation are treated correctly"""
 
-    path = "model_templates.jansen_rit.population.templates.InstantaneousCPO"
-    # this template removes the component "L_m * " from the base equation "L_m * V = k * I"
+    path = "model_templates.neural_mass_models.jansenrit.rpo_e_in"
+    # template replaces the component "m_in" with "(m_in + u)" in the equation "X' = h*m_in/tau - 2*X/tau - Z/tau**2"
     from pyrates.frontend.template.operator import OperatorTemplate
 
     template = OperatorTemplate.from_yaml(path)
 
     operator, _ = template.apply()
 
-    assert operator.equations == ("V = k * I_0",)
+    assert operator.equations[1] == "X' = h*(m_in + u)/tau - 2*X/tau - Z/tau**2"
 
 
 # ToDo: implement to_dict methods on template classes

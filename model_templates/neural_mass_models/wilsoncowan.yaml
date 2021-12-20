@@ -1,0 +1,64 @@
+%YAML 1.2
+---
+
+aliases:
+  - &wc_op model_templates.base_templates.li_op
+  - &sigmoid model_templates.base_templates.sigmoid_op
+  - &stp_edge model_templates.neural_mass_models.synaptic_plasticity.tsodyks_edge
+
+# operator templates
+####################
+
+exc_op:
+  base: *wc_op
+  equations:
+    replace:
+      m_in: m_in + u
+  variables:
+    u: input(0.0)
+    r0: 0.5
+
+inh_op:
+  base: *wc_op
+  variables:
+    tau: 2.0
+
+# node templates
+################
+
+exc_pop:
+  base: NodeTemplate
+  operators:
+    - exc_op
+    - *sigmoid
+
+inh_pop:
+  base: NodeTemplate
+  operators:
+    - inh_op
+    - *sigmoid
+
+# circuit templates
+###################
+
+WC:
+  base: CircuitTemplate
+  nodes:
+    e: exc_pop
+    i: inh_pop
+  edges:
+    - [e/sigmoid_op/m, e/exc_op/m_in, null, {weight: 5.0}]
+    - [e/sigmoid_op/m, i/inh_op/m_in, null, {weight: 10.0}]
+    - [i/sigmoid_op/m, e/exc_op/m_in, null, {weight: -5.0}]
+    - [i/sigmoid_op/m, i/inh_op/m_in, null, {weight: -5.0}]
+
+WC_stp:
+  base: CircuitTemplate
+  nodes:
+    e: exc_pop
+    i: inh_pop
+  edges:
+    - [ e/sigmoid_op/m, e/exc_op/m_in, *stp_edge, { weight: 5.0 } ]
+    - [ e/sigmoid_op/m, i/inh_op/m_in, *stp_edge, { weight: 10.0 } ]
+    - [ i/sigmoid_op/m, e/exc_op/m_in, *stp_edge, { weight: -5.0 } ]
+    - [ i/sigmoid_op/m, i/inh_op/m_in, *stp_edge, { weight: -5.0 } ]

@@ -19,7 +19,7 @@ __status__ = "Development"
 
 # define backends for which to run the tests
 backends = ['default', 'torch', 'tensorflow', 'fortran']
-vectorization = [True, True, True, False]
+vectorization = [False, True, True, False]
 
 # define test accuracy
 accuracy = 1e-4
@@ -72,13 +72,13 @@ def test_3_1_jansenrit():
         ###############################################################################
 
         # single operator JRC
-        r1 = simulate("model_templates.jansen_rit.simple_jansenrit.JRC_simple", simulation_time=T,
-                      outputs={'EIN': 'JRC/JRC_op/PSP_ein'}, backend=b, step_size=dt, solver='scipy',
+        r1 = simulate("model_templates.neural_mass_models.jansenrit.JRC2", simulation_time=T,
+                      outputs={'EIN': 'jrc/jrc_op/PSP_ein'}, backend=b, step_size=dt, solver='scipy',
                       sampling_step_size=dts, clear=True, file_name='jrc1', vectorize=v)
 
         # multi-node JRC
-        r2 = simulate("model_templates.jansen_rit.simple_jansenrit.JRC", simulation_time=T,
-                      outputs={'EIN': 'EIN/RPO_e/PSP'}, backend=b, step_size=dt, solver='scipy',
+        r2 = simulate("model_templates.neural_mass_models.jansenrit.JRC", simulation_time=T,
+                      outputs={'EIN': 'ein/rpo_e/Z'}, backend=b, step_size=dt, solver='scipy',
                       sampling_step_size=dts, clear=True, file_name='jrc2', vectorize=v)
 
         assert np.mean(r1.values.flatten() - r2.values.flatten()) == pytest.approx(0., rel=accuracy, abs=accuracy)
@@ -99,20 +99,28 @@ def test_3_2_montbrio():
 
     for b in backends:
 
-        # assess correct behavior of the model around the bi-stable regime
-        ##################################################################
+        # compare qif population dynamics with and without plasticity
+        #############################################################
 
-        # perform simulation
-        r1 = simulate("model_templates.montbrio.simple_montbrio.QIF_exc", simulation_time=T, sampling_step_size=dts,
-                      inputs={"p/Op_e/inp": inp}, outputs={"r": "p/Op_e/r"}, method='RK23', backend=b, solver='scipy',
-                      step_size=dt, clear=True, file_name='m1', vectorize=False)
+        # basic qif population
+        r1 = simulate("model_templates.neural_mass_models.qif.qif", simulation_time=T, sampling_step_size=dts,
+                      inputs={"p/qif_op/I_ext": inp}, outputs={"r": "p/qif_op/r"}, method='RK45', backend=b,
+                      solver='scipy', step_size=dt, clear=True, file_name='m1', vectorize=False)
+
+        # qif population with spike-frequency adaptation
+        r2 = simulate("model_templates.neural_mass_models.qif.qif_sfa", simulation_time=T, sampling_step_size=dts,
+                      inputs={"p/qif_sfa_op/I_ext": inp}, outputs={"r": "p/qif_sfa_op/r"}, method='RK45', backend=b,
+                      solver='scipy', step_size=dt, clear=True, file_name='m2', vectorize=False)
+
+        # qif population with synaptic depression
+        r3 = simulate("model_templates.neural_mass_models.qif.qif_sd", simulation_time=T, sampling_step_size=dts,
+                      inputs={"p/qif_op/I_ext": inp}, outputs={"r": "p/qif_op/r"}, method='RK45', backend=b,
+                      solver='scipy', step_size=dt, clear=True, file_name='m3', vectorize=False)
 
         # test firing rate relationships at pre-defined times
-        times = [25.0, 49.0, 79.0]
-        indices = [np.argmin(np.abs(t - r1.index)) for t in times]
-        assert r1.iloc[indices[0], 0] < r1.iloc[indices[1], 0]
-        assert r1.iloc[indices[0], 0] < r1.iloc[indices[2], 0]
-        assert r1.iloc[indices[1], 0] > r1.iloc[indices[2], 0]
+        time = 49.0
+        idx = np.argmin(np.abs(time - r1.index))
+        assert r1.iloc[idx, 0] > r3.iloc[idx, 0] > r2.iloc[idx, 0]
 
 
 def test_3_3_wilson_cowan():
@@ -124,51 +132,32 @@ def test_3_3_wilson_cowan():
 
     for b, v in zip(backends, vectorization):
 
-        T = 80.0
-        dt = 1e-3
-        dts = 1e-2
-
-        in_start = int(np.round(30.0 / dt))
-        in_dur = int(np.round(20.0 / dt))
-        inp = np.zeros((int(np.round(T / dt)),))
-        inp[in_start:in_start + in_dur] = 5.0
-        inp = np.round(inp, decimals=4)
-
-        # perform simulation
-        r1 = simulate("model_templates.wilson_cowan.simple_wilsoncowan.WC_simple", simulation_time=T,
-                      sampling_step_size=dts, inputs={"E/Op_rate/I_ext": inp}, outputs={"R_e": "E/Op_rate/r"},
-                      backend=b, solver='scipy', step_size=dt, clear=True, file_name='wc1', method='RK23',
-                      vectorize=v)
-
-        # test firing rate relationships at pre-defined times
-        times = [29.0, 49.0, 79.0]
-        indices = [np.argmin(np.abs(t - r1.index)) for t in times]
-        assert r1.iloc[indices[0], 0] < r1.iloc[indices[1], 0]
-        assert r1.iloc[indices[0], 0] - r1.iloc[indices[2], 0] == pytest.approx(0., rel=accuracy, abs=accuracy)
-
-        # repeat for model with short-term plasticity
-        #############################################
-
-        T = 320.0
+        T = 120.0
         dt = 5e-3
         dts = 1e-2
 
-        in_start = int(np.round(130.0 / dt))
-        in_dur = int(np.round(20.0 / dt))
+        in_start = int(np.round(50.0 / dt))
+        in_dur = int(np.round(30.0 / dt))
         inp = np.zeros((int(np.round(T / dt)),))
-        inp[in_start:in_start + in_dur] = 1.0
+        inp[in_start:in_start + in_dur] = 0.2
 
-        # perform simulation
-        r2 = simulate("model_templates.wilson_cowan.simple_wilsoncowan.WC_stp", simulation_time=T,
-                      sampling_step_size=dts, inputs={"E/E_op/I_ext": inp}, outputs={"V_e": "E/E_op/v"},
-                      backend=b, solver='scipy', step_size=dt, clear=True, method='RK23', atol=1e-6, rtol=1e-6,
-                      file_name='wc2', vectorize=v)
+        # standard wilson-cowan model
+        r1 = simulate("model_templates.neural_mass_models.wilsoncowan.WC", simulation_time=T,
+                      sampling_step_size=dts, inputs={"e/exc_op/u": inp}, outputs={"R_e": "e/exc_op/r"},
+                      backend=b, solver='scipy', step_size=dt, clear=True, file_name='wc1', method='RK45',
+                      vectorize=v)
+
+        # wilson-cowan model with synaptic short-term plasticity
+        # TODO: ensure that the STP version depicts the same results for both the vectorized and non-vectorized network
+        r2 = simulate("model_templates.neural_mass_models.wilsoncowan.WC_stp", simulation_time=T,
+                      sampling_step_size=dts, inputs={"e/exc_op/u": inp}, outputs={"R_e": "e/exc_op/r"},
+                      backend=b, solver='scipy', step_size=dt, clear=True, method='RK45', file_name='wc2', vectorize=v)
 
         # test firing rate relationships at pre-defined times
-        times = [129.0, 149.0, 319.0]
+        times = [75.0, 119.0]
         indices = [np.argmin(np.abs(t - r2.index)) for t in times]
-        assert r2.iloc[indices[0], 0] < r2.iloc[indices[1], 0]
-        assert r2.iloc[indices[0], 0] - r2.iloc[indices[2], 0] == pytest.approx(0., rel=accuracy, abs=accuracy)
+        for idx in indices:
+            assert r2.iloc[idx, 0] > r1.iloc[idx, 0]
 
 
 def test_3_4_kuramoto():
@@ -190,9 +179,9 @@ def test_3_4_kuramoto():
         ###################################################
 
         # perform simulation
-        r1 = simulate("model_templates.kuramoto.simple_kuramoto.KM_single", simulation_time=T, sampling_step_size=dts,
-                      outputs={"theta": "p1/Op_base/theta"}, backend=b, solver='scipy', step_size=dt, clear=True,
-                      method='RK23', file_name='km1', vectorize=False)
+        r1 = simulate("model_templates.coupled_oscillators.kuramoto.kmo", simulation_time=T, sampling_step_size=dts,
+                      outputs={"theta": "p/phase_op/theta"}, backend=b, solver='scipy', step_size=dt, clear=True,
+                      method='RK45', file_name='km1', vectorize=False)
 
         # test linear oscillator properties
         omega = 10.0
@@ -204,9 +193,10 @@ def test_3_4_kuramoto():
         ####################################################
 
         # perform simulation
-        r2 = simulate("model_templates.kuramoto.simple_kuramoto.KMN", simulation_time=T, sampling_step_size=dts,
-                      outputs={"theta1": "p1/Op_base/theta", "theta2": "p2/Op_base/theta"}, backend=b, solver='scipy',
-                      inputs={"p1/Op_base/ext_in": inp}, step_size=dt, clear=True, file_name='km2', vectorize=v)
+        r2 = simulate("model_templates.coupled_oscillators.kuramoto.kmo_2coupled", simulation_time=T, sampling_step_size=dts,
+                      outputs={"theta1": "p1/phase_op/theta", "theta2": "p2/phase_op/theta"}, backend=b, solver='scipy',
+                      inputs={"p1/phase_op/ext_in": inp}, step_size=dt, clear=True, file_name='km2', vectorize=v,
+                      method='RK45')
 
         # test whether the oscillators expressed de-phasing
         init = int(in_dur*dt/dts)
