@@ -19,7 +19,7 @@ __status__ = "Development"
 
 # define backends for which to run the tests
 backends = ['default', 'torch', 'tensorflow', 'fortran']
-vectorization = [False, True, True, False]
+vectorization = [True, True, True, False]
 
 # define test accuracy
 accuracy = 1e-4
@@ -52,6 +52,7 @@ def nmrse(x: np.ndarray,
     diff = x - y
 
     return np.sqrt(np.sum(diff ** 2, axis=0)) / (max_val - min_val)
+
 
 #########
 # Tests #
@@ -148,7 +149,6 @@ def test_3_3_wilson_cowan():
                       vectorize=v)
 
         # wilson-cowan model with synaptic short-term plasticity
-        # TODO: ensure that the STP version depicts the same results for both the vectorized and non-vectorized network
         r2 = simulate("model_templates.neural_mass_models.wilsoncowan.WC_stp", simulation_time=T,
                       sampling_step_size=dts, inputs={"e/exc_op/u": inp}, outputs={"R_e": "e/exc_op/r"},
                       backend=b, solver='scipy', step_size=dt, clear=True, method='RK45', file_name='wc2', vectorize=v)

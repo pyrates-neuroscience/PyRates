@@ -128,3 +128,12 @@ JRC2:
   base: CircuitTemplate
   nodes:
     jrc: jrc_pop
+
+JRC_2delaycoupled:
+  base: CircuitTemplate
+  circuits:
+    jrc1: JRC
+    jrc2: JRC
+  edges:
+    - [jrc1/pc/pro/m, jrc2/pc/rpo_e_in/m_in, null, {weight: 20.0, delay: 0.004, spread: 0.001}]
+    - [jrc2/pc/pro/m, jrc1/pc/rpo_e_in/m_in, null, {weight: 40.0, delay: 0.004, spread: 0.001}]

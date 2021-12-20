@@ -439,14 +439,14 @@ def test_2_6_vectorization():
     for i, b in enumerate(backends):
 
         # simulation without vectorization of the network equations
-        r1 = simulate("model_templates.jansen_rit.simple_jansenrit.JRC_delaycoupled", vectorize=False,
-                      inputs={"JRC2/JRC_op/u": inp}, outputs={"r": "JRC1/JRC_op/PSP_ein"}, backend=b,
+        r1 = simulate("model_templates.neural_mass_models.jansenrit.JRC_2delaycoupled", vectorize=False,
+                      inputs={"jrc2/pc/rpo_e_in/u": inp}, outputs={"r": "jrc1/ein/rpo_e/Z"}, backend=b,
                       solver='euler', step_size=dt, clear=True, simulation_time=T, sampling_step_size=dts,
                       file_name=f'vec{i + 1}')
 
         # simulation with vectorized network equations
-        r2 = simulate("model_templates.jansen_rit.simple_jansenrit.JRC_delaycoupled", vectorize=True,
-                      inputs={"JRC2/JRC_op/u": inp}, outputs={"r": "JRC1/JRC_op/PSP_ein"}, backend=b,
+        r2 = simulate("model_templates.neural_mass_models.jansenrit.JRC_2delaycoupled", vectorize=True,
+                      inputs={"jrc2/pc/rpo_e_in/u": inp}, outputs={"r": "jrc1/ein/rpo_e/Z"}, backend=b,
                       solver='euler', step_size=dt, clear=True, simulation_time=T, sampling_step_size=dts,
                       file_name=f'novec{i + 1}')
 

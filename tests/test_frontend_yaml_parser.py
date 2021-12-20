@@ -43,11 +43,12 @@ def setup_module():
     print("===========================")
 
 
-@pytest.mark.parametrize("operator", ["model_templates.jansen_rit.axon.axon.PotentialToRateOperator",
-                                      "model_templates.jansen_rit.axon.templates.SigmoidPRO",
-                                      "model_templates.jansen_rit.axon.templates.JansenRitPRO",
-                                      "model_templates.jansen_rit.population.population.CurrentToPotentialOperator",
-                                      "model_templates.jansen_rit.synapse.synapse.RateToCurrentOperator"
+@pytest.mark.parametrize("operator", ["model_templates.base_templates.li_op",
+                                      "model_templates.base_templates.alpha_op",
+                                      "model_templates.base_templates.sigmoid_op",
+                                      "model_templates.neural_mass_models.jansenrit.rpo_e_in",
+                                      "model_templates.neural_mass_models.qif.qif_sfa_op",
+                                      "model_templates.coupled_oscillators.kuramoto.sin_op"
                                       ])
 def test_import_operator_templates(operator):
     """test basic (vanilla) YAML parsing using ruamel.yaml (for YAML 1.2 support)"""

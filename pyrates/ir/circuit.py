@@ -325,12 +325,23 @@ class NetworkGraph(AbstractBaseIR):
         return means, stds, nodes, add_delay
 
     def _collect_from_edges(self, edges: list, keys: list):
-        data = {}
+        data = dict()
         for source, target, idx in edges:
             edge = self.edges[(source, target, idx)]
-            data[source] = {}
+            if source not in data:
+                data[source] = dict()
             for key in keys:
-                data[source][key] = edge[key]
+                val = deepcopy(edge[key])
+                try:
+                    data[source][key].extend(val)
+                except AttributeError:
+                    field = data[source][key]
+                    if type(field) is str or field is None:
+                        pass
+                    else:
+                        data[source][key] = [field, val]
+                except KeyError:
+                    data[source][key] = val
         return data
 
     def _add_edge_buffer(self, node: str, op: str, var: str, edges: list, delays: list, nodes: list,
