@@ -85,7 +85,7 @@ def test_3_1_jansenrit():
         assert np.mean(r1.values.flatten() - r2.values.flatten()) == pytest.approx(0., rel=accuracy, abs=accuracy)
 
 
-def test_3_2_montbrio():
+def test_3_2_qif():
     """Testing accuracy of mean-field representation of QIF population.
     """
 
@@ -121,7 +121,7 @@ def test_3_2_montbrio():
         # test firing rate relationships at pre-defined times
         time = 49.0
         idx = np.argmin(np.abs(time - r1.index))
-        assert r1.iloc[idx, 0] > r3.iloc[idx, 0] > r2.iloc[idx, 0]
+        assert r1.iloc[idx, 0] > r2.iloc[idx, 0] > r3.iloc[idx, 0]
 
 
 def test_3_3_wilson_cowan():

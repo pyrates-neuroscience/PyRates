@@ -22,18 +22,17 @@ While the mean-field derivation is mathematically only valid for all-to-all coup
 it has been shown that there is a close correspondence between the mean-field model and neural populations with
 sparse coupling and population sizes of a few thousand neurons [2]_. In the same work, it has been demonstrated how to
 extend the model by adding synaptic dynamics or additional adaptation currents to the single cell network, that can be
-carried through the mean-field derivation performed in [1]_. For example, a QIF population with spike-frequency
-adaptation would be given by the following 4D system:
+carried through the mean-field derivation performed in [1]_. For example, a QIF population with
+spike-frequency adaptation would be given by the following 3D system:
 
 .. math::
 
     \\tau \\dot r &= \\frac{\\Delta}{\\pi\\tau} + 2 r v, \n
     \\tau \\dot v &= v^2 +\\bar\\eta + I(t) + J r \\tau - A - (\\pi r \\tau)^2, \n
-    \\tau_A \\dot A &= B, \n
-    \\tau_A \\dot B &= \\alpha r - 2 B - A,
+    \\tau_a \\dot a &= \\alpha r - \\frac{a}{\\tau_a},
 
-where the evolution equations for :math:`A` and :math:`B` express a convolution of :math:`r` with an alpha kernel, with
-adaptation strength :math:`\\alpha` and time constant :math:`\\tau_A`.
+where the evolution equation for :math:`a` expresses a convolution of :math:`r` with a mono-exponential kernel, with
+adaptation strength :math:`\\alpha` and time constant :math:`\\tau_a`.
 
 In the sections below, we will demonstrate for each model how to load the model template into pyrates, perform
 simulations with it and visualize the results.
@@ -65,14 +64,29 @@ References
 # to a YAML-based model definition or a :code:`CircuitTemplate` instance can be provided. The function will then compile
 # the model and solve the initial value problem of the above defined differential equations for a time interval from
 # 0 to the given simulation time. This solution will be calculated numerically by a differential equation solver in
-# the backend, starting with a defined step-size. Here, we use the default backend and solver.
-# Check out the arguments of the code:`CircuitTemplate.run()` method for a detailed explanation of the arguments that
-# you can use to adjust this numerical procedure.
+# the backend, starting with a defined step-size. Here, we use the default backend and solver. Furthermore,
+# we provide a step-function extrinsic input that excites all QIF neurons in a time window from :code:`start` to
+# :code:`stop`. This input is defined on a time vector with fixed time steps of size :code:`step_size`.
+# Check out the arguments of the code:`CircuitTemplate.run()` method for a detailed explanation of the
+# arguments that you can use to adjust this numerical procedure.
 
 from pyrates import simulate
+import numpy as np
 
-results = simulate("model_templates.montbrio.simple_montbrio.QIF_exc", step_size=1e-3, simulation_time=40.0,
-                   outputs={'r': 'p/Op_e/r'}, clear=True)
+# define simulation time and input start and stop
+T = 100.0
+step_size = 5e-4
+start = 20.0
+stop = 80.0
+
+# extrinsic input definition
+steps = int(np.round(T/step_size))
+I_ext = np.zeros((steps,))
+I_ext[int(start/step_size):int(stop/step_size)] = 3.0
+
+# perform simulation
+results = simulate("model_templates.neural_mass_models.qif.qif", step_size=step_size, simulation_time=T,
+                   outputs={'r': 'p/qif_op/r'}, inputs={'p/qif_op/I_ext': I_ext}, clear=True)
 
 # %%
 # Step 2: Visualization of the solution
@@ -81,7 +95,9 @@ results = simulate("model_templates.montbrio.simple_montbrio.QIF_exc", step_size
 # The output of the :code:`simulate()` function is a :code:`pandas.Dataframe`, which allows for direct plotting of the
 # timeseries it contains.
 # This timeseries represents the numerical solution of the initial value problem solved in step 1 with respect to the
-# state variable :math:`r` of the model.
+# state variable :math:`r` of the model. You can observe that the model expresses hysteresis and converges to a
+# different steady-state after the input is turned off, than the steady-state it started from when the input was turned
+# on. This behavior has been described in detail in [1]_.
 
 import matplotlib.pyplot as plt
 fig, ax = plt.subplots()
@@ -96,8 +112,9 @@ ax.set_ylabel('r')
 # Now, lets have a look at the QIF model with spike-frequency adaptation. We will follow the same steps as outlined
 # above.
 
-results2 = simulate("model_templates.montbrio.simple_montbrio.QIF_sfa", simulation_time=40.0, step_size=1e-3,
-                    outputs={'r': 'p/Op_sfa/r'}, clear=True)
+results2 = simulate("model_templates.neural_mass_models.qif.qif_sfa", simulation_time=T, step_size=step_size,
+                    outputs={'r': 'p/qif_sfa_op/r'}, inputs={'p/qif_sfa_op/I_ext': I_ext}, clear=True)
+
 fig2, ax2 = plt.subplots()
 ax2.plot(results2)
 ax2.set_xlabel('time')

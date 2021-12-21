@@ -98,7 +98,7 @@ from pyrates.frontend import CircuitTemplate
 # To check out the different model templates provided by PyRates, have a look at the :code:`PyRates.model_templates`
 # module.
 
-jrc = CircuitTemplate.from_yaml("model_templates.jansen_rit.simple_jansenrit.JRC_simple")
+jrc = CircuitTemplate.from_yaml("model_templates.neural_mass_models.jansenrit.JRC")
 
 # %%
 # Step 3: Numerical simulation of a the model behavior in time
@@ -118,9 +118,9 @@ jrc = CircuitTemplate.from_yaml("model_templates.jansen_rit.simple_jansenrit.JRC
 results = jrc.run(simulation_time=2.0,
                   step_size=1e-4,
                   sampling_step_size=1e-3,
-                  outputs={'V_pce': 'JRC/JRC_op/PSP_pc_e',
-                           'V_pci': 'JRC/JRC_op/PSP_pc_i'},
-                  backend='numpy',
+                  outputs={'V_pce': 'pc/rpo_e_in/Z',
+                           'V_pci': 'pc/rpo_i/Z'},
+                  backend='default',
                   solver='scipy')
 
 # %%
@@ -136,10 +136,10 @@ import matplotlib.pyplot as plt
 plt.plot(results)
 
 # %%
-# To visualize the average membrane potential at the PC somata, simply plot the difference between :math:`V_{pce}` and
-# :math:`V_{pci}`:
+# To visualize the average membrane potential at the PC somata, simply plot the sum of the excitatory and inhibitory
+# post-synaptic potentials :math:`V_{pce}` and :math:`V_{pci}`:
 
-v_pc = results['V_pce'] - results['V_pci']
+v_pc = results['V_pce'] + results['V_pci']
 plt.plot(v_pc)
 plt.legend(['V_pce', 'V_pci', 'V_pce - V_pci'])
 plt.ylabel('V')

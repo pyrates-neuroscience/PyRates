@@ -12,14 +12,14 @@ aliases:
 qif_op:
   base: OperatorTemplate
   equations:
-    - "r' = (Delta/(2.0*pi) + 2.0*r*v) / tau"
+    - "r' = (Delta/(pi*tau) + 2.0*r*v) / tau"
     - "v' = (v^2 + eta + I_ext + tau*r_in - (pi*tau*r)^2) / tau"
   variables:
     r: output(0.0)
     v: variable(0.0)
     Delta: 1.0
     tau: 1.0
-    eta: -2.0
+    eta: -5.0
     I_ext: input(0.0)
     r_in: input(0.0)
 
@@ -75,7 +75,7 @@ qif:
   nodes:
     p: qif_pop
   edges:
-    - [p/qif_op/r, p/qif_op/r_in, null, {weight: 2.0}]
+    - [p/qif_op/r, p/qif_op/r_in, null, {weight: 15.0}]
 
 # single QIF population with SFA
 qif_sfa:
@@ -83,7 +83,7 @@ qif_sfa:
   nodes:
     p: qif_sfa_pop
   edges:
-    - [p/qif_sfa_op/r, p/qif_sfa_op/r_in, null, {weight: 2.0}]
+    - [p/qif_sfa_op/r, p/qif_sfa_op/r_in, null, {weight: 15.0}]
 
 # single QIF population with gap junction coupling
 qif_gap:
@@ -91,7 +91,7 @@ qif_gap:
   nodes:
     p: qif_gap_pop
   edges:
-    - [p/qif_op/r, p/qif_op/r_in, null, {weight: 2.0}]
+    - [p/qif_op/r, p/qif_op/r_in, null, {weight: 15.0}]
 
 # qif population with alpha-kernel synapse
 qif_alpha_syn:
@@ -99,7 +99,7 @@ qif_alpha_syn:
   nodes:
     p: qif_pop
   edges:
-    - [p/qif_op/r, p/qif_op/r_in, alpha_edge, {weight: 2.0}]
+    - [p/qif_op/r, p/qif_op/r_in, alpha_edge, {weight: 15.0}]
 
 # qif population with synaptic depression
 qif_sd:
@@ -107,7 +107,7 @@ qif_sd:
   nodes:
     p: qif_pop
   edges:
-    - [p/qif_op/r, p/qif_op/r_in, *depression_edge, {weight: 2.0}]
+    - [p/qif_op/r, p/qif_op/r_in, *depression_edge, {weight: 15.0}]
 
 # qif population with synaptic plasticity
 qif_tsodyks:
@@ -115,4 +115,4 @@ qif_tsodyks:
   nodes:
     p: qif_pop
   edges:
-    - [p/qif_op/r, p/qif_op/r_in, *tsodyks_edge, {weight: 2.0}]
+    - [p/qif_op/r, p/qif_op/r_in, *tsodyks_edge, {weight: 15.0}]
