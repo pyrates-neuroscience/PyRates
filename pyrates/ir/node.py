@@ -56,7 +56,7 @@ def cache_func(label: str, operators: dict, values: dict = None, template: str =
     op_graph = OperatorGraph(operators)
     h = hash(op_graph)
 
-    changed_labels = {}
+    changed_labels = dict()
     vectorize = kwargs.pop('vectorize', True)
     try:
 
@@ -73,12 +73,11 @@ def cache_func(label: str, operators: dict, values: dict = None, template: str =
             for cached_name, cached_op in op_cache[h]:
                 if op_hash == hash(cached_op["operator"]):
                     changed_labels[name] = cached_name
-                    try:
-                        for old_name, new_name in changed_labels.items():
+                    for old_name, new_name in changed_labels.items():
+                        try:
                             values[new_name] = values.pop(old_name)
-                    except AttributeError:
-                        pass
-                    break
+                        except (AttributeError, KeyError):
+                            pass
 
         # extend cached node
         node.extend(NodeIR(label, operators=op_graph, values=values, template=template), **kwargs)

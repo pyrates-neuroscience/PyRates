@@ -65,11 +65,11 @@ from pyrates.frontend import OperatorTemplate
 pro = OperatorTemplate(
     name='PRO', path=None,
     equations=["m_out = 2.*m_max / (1 + exp(r*(V_th - V)))"],
-    variables={'m_out': {'default': 'output'},
-               'V': {'default': 'input'},
-               'V_thr': {'default': 6e-3},
-               'm_max': {'default': 2.5},
-               'r': {'default': 560.0}},
+    variables={'m_out': 'output',
+               'V': 'input',
+               'V_thr': 6e-3,
+               'm_max': 2.5,
+               'r': 560.0},
     description="sigmoidal potential-to-rate operator")
 
 # %%
@@ -100,11 +100,11 @@ rpo_e = OperatorTemplate(
     name='RPO_e', path=None,
     equations=['d/dt * V = I',
                'd/dt * I = H/tau * m_in - 2 * I/tau - V/tau^2'],
-    variables={'V': {'default': 'output'},
-               'I': {'default': 'variable'},
-               'm_in': {'default': 'input'},
-               'tau': {'default': 0.01},
-               'H': {'default': 0.00325}},
+    variables={'V': 'output',
+               'I': 'variable',
+               'm_in': 'input',
+               'tau': 0.01,
+               'H': 0.00325},
     description="excitatory rate-to-potential operator")
 
 # %%
@@ -171,7 +171,8 @@ iin = NodeTemplate(name="IIN", path=None, operators=[pro, rpo_e])
 
 from copy import deepcopy
 rpo_i = deepcopy(rpo_e).update_template(
-    name='RPO_i', path=None, variables={'H': {'default': -0.022}, 'tau': {'default': 0.02}})
+    name='RPO_i', path=None, variables={'H': -0.022, 'tau': 0.02}
+)
 pc = NodeTemplate(name="PC", path=None, operators=[pro, rpo_e, rpo_i])
 
 # %%

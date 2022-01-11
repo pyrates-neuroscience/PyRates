@@ -2,26 +2,35 @@
 ---
 
 aliases:
-  - &wc_op model_templates.base_templates.li_op
-  - &sigmoid model_templates.base_templates.sigmoid_op
   - &stp_edge model_templates.neural_mass_models.synaptic_plasticity.tsodyks_edge
 
 # operator templates
 ####################
 
-exc_op:
-  base: *wc_op
-  equations:
-    replace:
-      m_in: m_in + u
+se_op:
+  base: OperatorTemplate
+  equations: "m = sigmoid(s*(r_in+r_ext-theta)) - sigmoid(-s*theta)"
   variables:
-    u: input(0.0)
-    r0: 0.5
+    m: output(0.0)
+    s: 1.0
+    theta: 2.0
+    r_in: input(0.0)
+    r_ext: input(0.0)
 
-inh_op:
-  base: *wc_op
+si_op:
+  base: se_op
   variables:
-    tau: 2.0
+    theta: 2.5
+    s: 2.0
+
+rate_op:
+  base: OperatorTemplate
+  equations: "r' = (-r + (1.0-k*r)*m)/tau"
+  variables:
+    r: output(0.0)
+    k: 1.0
+    tau: 10.0
+    m: input
 
 # node templates
 ################
@@ -29,14 +38,14 @@ inh_op:
 exc_pop:
   base: NodeTemplate
   operators:
-    - exc_op
-    - *sigmoid
+    - rate_op
+    - se_op
 
 inh_pop:
   base: NodeTemplate
   operators:
-    - inh_op
-    - *sigmoid
+    - rate_op
+    - si_op
 
 # circuit templates
 ###################
@@ -47,10 +56,10 @@ WC:
     e: exc_pop
     i: inh_pop
   edges:
-    - [e/sigmoid_op/m, e/exc_op/m_in, null, {weight: 5.0}]
-    - [e/sigmoid_op/m, i/inh_op/m_in, null, {weight: 10.0}]
-    - [i/sigmoid_op/m, e/exc_op/m_in, null, {weight: -5.0}]
-    - [i/sigmoid_op/m, i/inh_op/m_in, null, {weight: -5.0}]
+    - [e/rate_op/r, e/se_op/r_in, null, {weight: 15.0}]
+    - [e/rate_op/r, i/si_op/r_in, null, {weight: 15.0}]
+    - [i/rate_op/r, e/se_op/r_in, null, {weight: -15.0}]
+    - [i/rate_op/r, i/si_op/r_in, null, {weight: -4.0}]
 
 WC_stp:
   base: CircuitTemplate
@@ -58,7 +67,7 @@ WC_stp:
     e: exc_pop
     i: inh_pop
   edges:
-    - [ e/sigmoid_op/m, e/exc_op/m_in, *stp_edge, { weight: 5.0 } ]
-    - [ e/sigmoid_op/m, i/inh_op/m_in, *stp_edge, { weight: 10.0 } ]
-    - [ i/sigmoid_op/m, e/exc_op/m_in, *stp_edge, { weight: -5.0 } ]
-    - [ i/sigmoid_op/m, i/inh_op/m_in, *stp_edge, { weight: -5.0 } ]
+    - [ e/rate_op/r, e/se_op/r_in, *stp_edge, { weight: 5.0 } ]
+    - [ e/rate_op/r, i/si_op/r_in, *stp_edge, { weight: 10.0 } ]
+    - [ i/rate_op/r, e/se_op/r_in, *stp_edge, { weight: -5.0 } ]
+    - [ i/rate_op/r, i/si_op/r_in, *stp_edge, { weight: -5.0 } ]

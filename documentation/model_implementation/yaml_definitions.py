@@ -91,16 +91,11 @@ References
 #           base: OperatorTemplate
 #           equations: "m_out = m_max / (1. + exp(r*(V_thr - V)))"
 #           variables:
-#               m_out:
-#                   default: output
-#               V:
-#                   default: input
-#               m_max:
-#                   default: 5.
-#               r:
-#                   default: 560.
-#               V_thr:
-#                   default: 6e-3
+#               m_out: output
+#               V: input(0.0)
+#               m_max: 5.0
+#               r: 560.0
+#               V_thr: 6e-3
 #
 # As can be seen, this operator takes a membrane potential :math:`V` as input, and returns a firing rate
 # :math:`m_{out}` as output. Its typical, sigmoidal shape can be seen in :ref:`fig1` C.
@@ -130,15 +125,17 @@ References
 #   - contains the type and value definitions for each variable that appears in :code:`equations`
 #   - each variable has to be scalar
 #   - each variable definition starts with the name of the variable (i.e. the variable key)
-#   - using the keyword :code:`default`, the default value and type of the scalar variable are defined
-#   - possible keywords that can follow :code:`default` are
+#   - possible values of a variable definition are:
 #
 #       * :code:`variable` -> for state variables which can change over time. The initial value can be specified in
-#         brackets, e.g. :code:`default: variable(0.1)`
+#         brackets, e.g. :code:`variable(0.1)`
 #       * :code:`input` -> the variable will be provided with a value from a previous operator or external,
 #         user-defined input
 #       * :code:`output` -> the value of this variable can be connected to another operator
 #       * a scalar value, e.g. :code:`default: 1.0` -> indicates that this variable is a constant with value 1.0
+#   - be aware that there is a difference between the variable definition :code:`a: 1` and :code:`1.0`, i.e. PyRates
+#     distinguishes between integers and float variables and requires matching variable types in mathematical
+#     operations.
 #
 
 # %%
@@ -164,16 +161,11 @@ References
 #           equations: ['d/dt * V = V_t',
 #                       'd/dt * V_t = H/tau * m_in - 2 * V_t/tau - V/tau^2']
 #           variables:
-#               V:
-#                   default: output
-#               I:
-#                   default: variable
-#               m_in:
-#                   default: input
-#               tau:
-#                   default: 0.01
-#               H:
-#                   default: 0.00325
+#               V: output
+#               I: variable
+#               m_in: input
+#               tau: 0.01
+#               H: 0.00325
 #
 # This is an example of an operator with multiple equations, which are provided as a list of strings. The operator takes
 # a firing rate :math:`m_{in}` as input and returns a membrane potential :math:`V` as an output. The unit response of
@@ -189,10 +181,8 @@ References
 #       RPO_i:
 #           base: RPO_e
 #           variables:
-#               tau:
-#                   default: 0.02
-#               H:
-#                   default: -0.022
+#               tau: 0.02
+#               H: -0.022
 #
 # Note, that we only re-defined the constants that needed to be changed, whereas everything else will be inherited from
 # :code:`RPO_e`.
@@ -333,6 +323,7 @@ References
 #               - [PC/PRO/m_out, EIN/RPO_e/m_in, null, {weight: 135.}]
 #               - [EIN/PRO/m_out, PC/RPO_e/m_in, null, {weight: 108.}]
 #               - [IIN/PRO/m_out, PC/RPO_i/m_in, null, {weight: 33.75}]
+#
 
 # %%
 # Circuit template structure
@@ -367,3 +358,4 @@ References
 # This concludes the YAML-based definition of the Jansen-Rit model in PyRates.
 # To learn how to use this model definition to perform numerical simulations, check out the other examples in this
 # gallery.
+#
