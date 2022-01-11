@@ -3,7 +3,7 @@ matplotlib
 networkx
 pandas
 tensorflow>=2.0
-pyparsing
+pyparsing<=2.4.6
 ruamel.yaml
 scipy
 seaborn
