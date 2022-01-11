@@ -7,6 +7,8 @@ INSTALL_REQUIREMENTS = ['numpy',
                         'pandas',
                         'pyparsing',
                         'ruamel.yaml',
+                        'sympy',
+                        'scipy'
                         ]
 
 CLASSIFIERS = ["Programming Language :: Python :: 3",
@@ -21,11 +23,7 @@ CLASSIFIERS = ["Programming Language :: Python :: 3",
                "Topic :: Scientific/Engineering",
                ]
 
-EXTRAS = {"tf": ["tensorflow>=2.0"],
-          "plot": ["seaborn", "pydot"],
-          "proc": ["mne", "scipy"],
-          "cluster": ["paramiko", "h5py"],
-          "numba": ["numba"],
+EXTRAS = {"backends": ["tensorflow>=2.0", "torch"],
           "dev": ["pytest", "bump2version"]}
 
 EXTRAS["all"] = [item for sublist in EXTRAS.values() for item in sublist]

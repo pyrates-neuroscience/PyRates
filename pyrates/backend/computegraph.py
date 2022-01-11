@@ -224,9 +224,6 @@ class ComputeGraph(MultiDiGraph):
         elif backend == 'fortran':
             from pyrates.backend.fortran import FortranBackend
             backend = FortranBackend
-        elif backend == 'PyAuto' or backend == 'pyauto':
-            from pyrates.backend.fortran import PyAutoBackend
-            backend = PyAutoBackend
         elif backend == 'julia':
             from pyrates.backend.julia import JuliaBackend
             backend = JuliaBackend

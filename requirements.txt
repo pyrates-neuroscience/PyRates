@@ -6,9 +6,6 @@ tensorflow>=2.0
 pyparsing<=2.4.6
 ruamel.yaml
 scipy
-seaborn
-mne
-pydot
 pytest
-paramiko
-numba
+sympy
+torch
