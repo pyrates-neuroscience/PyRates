@@ -131,27 +131,26 @@ def test_3_3_wilson_cowan():
     # assess correct response of model to input
     ###########################################
 
+    T = 120.0
+    dt = 5e-4
+    dts = 1e-2
+
+    in_start = int(np.round(50.0 / dt))
+    in_dur = int(np.round(30.0 / dt))
+    inp = np.zeros((int(np.round(T / dt)),))
+    inp[in_start:in_start + in_dur] = 1.0
+
     for b, v in zip(backends, vectorization):
-
-        T = 120.0
-        dt = 5e-3
-        dts = 1e-2
-
-        in_start = int(np.round(50.0 / dt))
-        in_dur = int(np.round(30.0 / dt))
-        inp = np.zeros((int(np.round(T / dt)),))
-        inp[in_start:in_start + in_dur] = 0.2
 
         # standard wilson-cowan model
         r1 = simulate("model_templates.neural_mass_models.wilsoncowan.WC", simulation_time=T,
-                      sampling_step_size=dts, inputs={"e/exc_op/u": inp}, outputs={"R_e": "e/exc_op/r"},
-                      backend=b, solver='scipy', step_size=dt, clear=True, file_name='wc1', method='RK45',
-                      vectorize=v)
+                      sampling_step_size=dts, inputs={"e/se_op/r_ext": inp}, outputs={"R_e": "e/rate_op/r"},
+                      backend=b, solver='scipy', step_size=dt, clear=True, file_name='wc1', vectorize=v)
 
         # wilson-cowan model with synaptic short-term plasticity
         r2 = simulate("model_templates.neural_mass_models.wilsoncowan.WC_stp", simulation_time=T,
-                      sampling_step_size=dts, inputs={"e/exc_op/u": inp}, outputs={"R_e": "e/exc_op/r"},
-                      backend=b, solver='scipy', step_size=dt, clear=True, method='RK45', file_name='wc2', vectorize=v)
+                      sampling_step_size=dts, inputs={"e/se_op/r_ext": inp}, outputs={"R_e": "e/rate_op/r"},
+                      backend=b, solver='scipy', step_size=dt, clear=True, file_name='wc2', vectorize=v)
 
         # test firing rate relationships at pre-defined times
         times = [75.0, 119.0]
