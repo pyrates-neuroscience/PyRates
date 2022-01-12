@@ -27,7 +27,7 @@ EXTRAS = {"backends": ["tensorflow>=2.0", "torch"],
           "dev": ["pytest", "bump2version"]}
 
 EXTRAS["all"] = [item for sublist in EXTRAS.values() for item in sublist]
-EXTRAS["tests"] = [item for key, sublist in EXTRAS.items() for item in sublist if key in ("tf", "proc", "dev")]
+EXTRAS["tests"] = [item for key, sublist in EXTRAS.items() for item in sublist if key in ("backends", "dev")]
 
 with open("VERSION", "r", encoding="utf8") as fh:
     VERSION = fh.read().strip()
