@@ -221,8 +221,8 @@ class CircuitTemplate(AbstractBaseTemplate):
 
     def run(self, simulation_time: float, step_size: float, inputs: Optional[dict] = None,
             outputs: Optional[Union[dict, list]] = None, sampling_step_size: Optional[float] = None,
-            solver: str = 'euler', backend: str = None,  vectorize: bool = True, verbose: bool = True,
-            clear: bool = True, **kwargs) -> pd.DataFrame:
+            cutoff: Optional[float] = 0.0, solver: str = 'euler', backend: str = None,  vectorize: bool = True,
+            verbose: bool = True, clear: bool = True, **kwargs) -> pd.DataFrame:
         """Method for calculating numerical solutions to the initial value problem for the dynamical system defined by
         this `CircuitTemplate` instance.
 
@@ -245,6 +245,8 @@ class CircuitTemplate(AbstractBaseTemplate):
             `*circuit/node/op/var` notation.
         sampling_step_size
             Step-size at which the return values should be sampled.
+        cutoff
+            Initial simulation time that should be ignored for the return values.
         solver
             Numerical solver method that should be used to solve the initial value problem. Possible choices are:
                 - 'euler': standard forward Euler method
@@ -357,7 +359,7 @@ class CircuitTemplate(AbstractBaseTemplate):
         if clear:
             net.clear()
 
-        return results
+        return results.loc[cutoff:, :]
 
     def get_run_func(self, func_name: str, step_size: float, inputs: Optional[dict] = None, backend: str = None,
                      vectorize: bool = True, verbose: bool = True, clear: bool = False, **kwargs
