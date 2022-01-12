@@ -18,8 +18,8 @@ __status__ = "Development"
 ###########
 
 # define backends for which to run the tests
-backends = ['default', 'torch', 'tensorflow', 'fortran']
-vectorization = [True, True, True, False]
+backends = ['default', 'torch', 'tensorflow']
+vectorization = [False, True, True, False]
 
 # define test accuracy
 accuracy = 1e-4
