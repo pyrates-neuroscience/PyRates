@@ -153,14 +153,14 @@ def test_equation_alteration():
     """Test, if properties of a template that mean to alter a certain parent equation are treated correctly"""
 
     path = "model_templates.neural_mass_models.jansenrit.rpo_e_in"
-    # template replaces the component "m_in" with "(m_in + u)" in the equation "X' = h*m_in/tau - 2*X/tau - Z/tau**2"
+    # template replaces the component "m_in" with "(m_in + u)" in the equation "X' = h*m_in/tau - 2*X/tau - V/tau**2"
     from pyrates.frontend.template.operator import OperatorTemplate
 
     template = OperatorTemplate.from_yaml(path)
 
     operator, _ = template.apply()
 
-    assert operator.equations[1] == "X' = h*(m_in + u)/tau - 2*X/tau - Z/tau**2"
+    assert operator.equations[1] == "X' = h*(m_in + u)/tau - 2*X/tau - V/tau**2"
 
 
 # ToDo: implement to_dict methods on template classes

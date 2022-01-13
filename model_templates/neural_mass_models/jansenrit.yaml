@@ -40,41 +40,41 @@ pro:
   base: model_templates.base_templates.sigmoid_op
   equations:
     replace:
-      r: Z
-      r_thr: Z_thr
+      r: V
+      r_thr: V_thr
   variables:
     m_max: 5.0
     s: 560.0
-    Z_thr: 6e-3
-    Z: input(0.0)
+    V_thr: 6e-3
+    V: input(0.0)
 
 # full jansen-rit operator
 jrc_op:
   base: OperatorTemplate
   equations:
-    - 'd/dt * PSP_ein = PSP_t_ein'
-    - 'd/dt * PSP_t_ein =  h_e*c/tau_e * m_out - (1./tau_e)^2. * PSP_ein - (2./tau_e) * PSP_t_ein'
-    - 'd/dt * PSP_iin = PSP_t_iin'
-    - 'd/dt * PSP_t_iin =  h_e*c/(ei_ratio*tau_e) * m_out - (1./tau_e)^2. * PSP_iin - (2./tau_e) * PSP_t_iin'
-    - 'd/dt * PSP_pc_e = PSP_t_pc_e'
-    - 'd/dt * PSP_t_pc_e =  h_e/tau_e * (c*0.8*m_max*sigmoid(r*(PSP_ein-V_thr)) + c*m_in/io_ratio + u) - (1./tau_e)^2. * PSP_pc_e - (2./tau_e) * PSP_t_pc_e'
-    - 'd/dt * PSP_pc_i = PSP_t_pc_i'
-    - 'd/dt * PSP_t_pc_i =  h_i*c/(ei_ratio*tau_i) * m_max*sigmoid(r*(PSP_iin-V_thr)) - (1./tau_i)^2. * PSP_pc_i - (2./tau_i) * PSP_t_pc_i'
-    - 'm_out = m_max*sigmoid(r*(PSP_pc_e - PSP_pc_i - V_thr))'
+    - 'd/dt * V_ein = X_ein'
+    - 'd/dt * X_ein =  h_e*c/tau_e * m - V_ein/tau_e^2 - 2.*X_ein/tau_e'
+    - 'd/dt * V_iin = X_iin'
+    - 'd/dt * X_iin =  h_e*c/(ei_ratio*tau_e) * m - V_iin/tau_e^2 - 2.*X_iin/tau_e'
+    - 'd/dt * V_e = X_e'
+    - 'd/dt * X_e =  h_e/tau_e * (c*0.8*m_max*sigmoid(r*(V_ein-V_thr)) + c*m_in/io_ratio + u) - V_e/tau_e^2 - 2.*X_e/tau_e'
+    - 'd/dt * V_i = X_i'
+    - 'd/dt * X_i =  h_i*c/(ei_ratio*tau_i) * m_max*sigmoid(r*(V_iin-V_thr)) - V_i/tau_i^2 - 2.*X_i/tau_i'
+    - 'm = m_max*sigmoid(r*(V_e - V_i - V_thr))'
   variables:
-    m_out: output
+    m: output
     h_e: 3.25e-3
     tau_e: 10e-3
     h_i: 22e-3
     tau_i: 20e-3
-    PSP_ein: variable
-    PSP_t_ein: variable
-    PSP_iin: variable
-    PSP_t_iin: variable
-    PSP_pc_e: variable
-    PSP_t_pc_e: variable
-    PSP_pc_i: variable
-    PSP_t_pc_i: variable
+    V_ein: variable
+    X_ein: variable
+    V_iin: variable
+    X_iin: variable
+    V_e: variable
+    X_e: variable
+    V_i: variable
+    X_i: variable
     m_in: input
     m_max: 5.
     r: 560.

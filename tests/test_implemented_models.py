@@ -74,12 +74,12 @@ def test_3_1_jansenrit():
 
         # single operator JRC
         r1 = simulate("model_templates.neural_mass_models.jansenrit.JRC2", simulation_time=T,
-                      outputs={'EIN': 'jrc/jrc_op/PSP_ein'}, backend=b, step_size=dt, solver='scipy',
+                      outputs={'EIN': 'jrc/jrc_op/V_ein'}, backend=b, step_size=dt, solver='scipy',
                       sampling_step_size=dts, clear=True, file_name='jrc1', vectorize=v)
 
         # multi-node JRC
         r2 = simulate("model_templates.neural_mass_models.jansenrit.JRC", simulation_time=T,
-                      outputs={'EIN': 'ein/rpo_e/Z'}, backend=b, step_size=dt, solver='scipy',
+                      outputs={'EIN': 'ein/rpo_e/V'}, backend=b, step_size=dt, solver='scipy',
                       sampling_step_size=dts, clear=True, file_name='jrc2', vectorize=v)
 
         assert np.mean(r1.values.flatten() - r2.values.flatten()) == pytest.approx(0., rel=accuracy, abs=accuracy)

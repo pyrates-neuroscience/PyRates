@@ -222,7 +222,7 @@ class CircuitTemplate(AbstractBaseTemplate):
     def run(self, simulation_time: float, step_size: float, inputs: Optional[dict] = None,
             outputs: Optional[Union[dict, list]] = None, sampling_step_size: Optional[float] = None,
             cutoff: Optional[float] = 0.0, solver: str = 'euler', backend: str = None,  vectorize: bool = True,
-            verbose: bool = True, clear: bool = True, **kwargs) -> pd.DataFrame:
+            verbose: bool = True, clear: bool = True, in_place: Optional[bool] = True, **kwargs) -> pd.DataFrame:
         """Method for calculating numerical solutions to the initial value problem for the dynamical system defined by
         this `CircuitTemplate` instance.
 
@@ -274,6 +274,9 @@ class CircuitTemplate(AbstractBaseTemplate):
         clear
             If true, all cached variables will be freed and all temporary files will be deleted after the `run`
             procedure.
+        in_place
+            If false, a deep copy of the template instance will be made before translating it into the backend.
+            This allows to call `run` multiple times on the same `CircuitTemplate` instance.
         kwargs
             Additional keyword arguments.
 
@@ -288,7 +291,7 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         # add extrinsic inputs to network
         adaptive_steps = is_integration_adaptive(solver, **kwargs)
-        net = self
+        net = self if in_place else deepcopy(self)
         if inputs:
             for target, in_array in inputs.items():
                 net = net._add_input(target, in_array, adaptive_steps, simulation_time, vectorize)

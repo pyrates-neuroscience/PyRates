@@ -28,9 +28,9 @@ sigmoid_op:
 # mono-exponential kernel convolution
 monoexp_op:
   base: OperatorTemplate
-  equations: "Z' = -Z/tau + r_in"
+  equations: "V' = -V/tau + r_in"
   variables:
-    Z: output(0.0)
+    V: output(0.0)
     tau: 1.0
     r_in: input(0.0)
 
@@ -38,10 +38,10 @@ monoexp_op:
 biexp_op:
   base: OperatorTemplate
   equations:
-    - "Z' = X"
-    - "X' = (r_in - X*(tau_r+tau_d) - Z)/(tau_r*tau_d)"
+    - "V' = X"
+    - "X' = (r_in - X*(tau_r+tau_d) - V)/(tau_r*tau_d)"
   variables:
-    Z: output(0.0)
+    V: output(0.0)
     X: variable(0.0)
     tau_r: 1.0
     tau_d: 10.0
@@ -51,10 +51,10 @@ biexp_op:
 alpha_op:
   base: OperatorTemplate
   equations:
-    - "Z' = X"
-    - "X' = r_in - 2*X/tau - Z/tau**2"
+    - "V' = X"
+    - "X' = r_in - 2*X/tau - V/tau**2"
   variables:
-    Z: output(0.0)
+    V: output(0.0)
     X: variable(0.0)
     tau: 1.0
     r_in: input(0.0)
