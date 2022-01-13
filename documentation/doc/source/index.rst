@@ -7,23 +7,28 @@
 PyRates Documentation
 =====================
 
-Documentation of `PyRates <https://github.com/pyrates-neuroscience/PyRates>`_, an open-source Python toolbox for neurodynamical systems modeling.
+Documentation of `PyRates <https://github.com/pyrates-neuroscience/PyRates>`_, an open-source Python toolbox for dynamical systems modeling.
 
 Basic features:
 ---------------
 
-- Different backends: `Numpy` for fast simulations of small- to medium-sized networks. `Tensorflow` for efficient parallelization on GPUs/CPUs, `Fortran` for parameter continuations.
-- Each model is internally represented by a `networkx` graph of nodes and edges, with the former representing the model units (i.e. single cells, cell populations, ...) and the latter the information transfer between them. In principle, this allows to implement any kind of dynamic neural system that can be expressed as a graph via PyRates.
-- Solutions of initial value problems via different numerical solvers (e.g. full interface to `scipy.integrate.solve_ivp`)
-- Parameter continuations and bifurcation analysis via PyAuto, an interface to `auto-07p`
-- Storage of solutions in `pandas.DataFrame`
-- Efficient parameter sweeps on single and multiple machines via the `grid_search` module
-- Model optimization via genetic algorithms
-- Visualization of results via `seaborn`
-- Post-processing of simulation results via `scipy` and `MNE Python`
-- The user has full control over the mathematical equations that nodes and edges are defined by.
-- Model configuration and simulation can be done within a few lines of code.
-- Various templates for rate-based population models are provided that can be used for neural network simulations imediatly.
+- Frontend:
+   - implement models via a frontend of your choice: *YAML* or *Python*
+   - create basic mathematical building blocks (i.e. differential equations and algebraic equations) and use them to define a networks of nodes connected by edges
+   - create hierarchical networks by connecting networks via edges
+- Backend:
+   - choose from a number of different backends
+   - `NumPy` backend for dynamical systems modeling on CPUs via *Python*
+   - `Tensorflow` and `PyTorch` backends for parameter optimization via gradient descent and dynamical systems modeling on GPUs
+   - `Julia` backend for dynamical system modeling in *Julia*, via tools such as `DifferentialEquations.jl`
+   - `Fortran` backend for dynamical systems modeling via *Fortran 90* and interfacing the parameter continuation software *Auto-07p*
+- Other features:
+   - perform quick numerical simulations via a single function call
+   - choose between different numerical solvers
+   - perform parameter sweeps over multiple parameters at once
+   - generate backend-specific run functions that evaluate the vector field of your dynamical system
+   - Implement dynamic edge equations that include scalar dealys or delay distributions (delay distributions are automatically translated into :math:`\gamma`-kernel convolutions)
+   - choose from various pre-implemented dynamical systems that can be directly used for simulations or integrated into custom models
 
 Installation:
 -------------
@@ -42,7 +47,7 @@ You can install optional (non-default) packages by specifying one or more option
    pip install pyrates[tf,plot]
 
 
-Available options are `tf`, `plot`, `proc`, `cluster`, `numba` and `all`.
+Available options are `backends`, `dev`, and `all`.
 The latter includes all optional packages.
 
 Alternatively, it is possible to clone this repository and run one of the following lines
@@ -84,20 +89,17 @@ for all the source code, open issues etc. and send us a pull request, if you wou
 Examples Gallery
 ================
 
-.. include::
-   auto_intros/index.rst
+For a comprehensive overview over the PyRates basics, have a look at the jupyter notebook `Tutorial_PyRates_Basics.ipynb` that can be found in `documentation`.
+More specific use examples can be found in the galleries below.
 
 .. include::
-   auto_interfaces/index.rst
+   auto_introductions/index.rst
 
 .. include::
-   auto_sweeps/index.rst
+   auto_implementations/index.rst
 
 .. include::
-   auto_opt/index.rst
-
-.. include::
-   auto_conts/index.rst
+   auto_analysis/index.rst
 
 API
 ===

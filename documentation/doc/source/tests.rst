@@ -52,14 +52,6 @@ Backend Simulations Tests
     :undoc-members:
     :show-inheritance:
 
-Intermediate Representation Tests
----------------------------------
-
-.. automodule:: tests.test_IR
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
 Frontend YAML Parser Tests
 --------------------------
 
@@ -68,48 +60,8 @@ Frontend YAML Parser Tests
     :undoc-members:
     :show-inheritance:
 
-Frontend Graph Parser Tests
----------------------------
-
-.. automodule:: tests.test_frontend_graph_parser
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-File I/O Tests
---------------
-
-.. automodule:: tests.test_file_io
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-Frontend-to-Backend Tests
--------------------------
-
-.. automodule:: tests.test_front_to_back
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
 Pre-defined Models Tests
 ------------------------
-
-.. automodule:: tests.test_implemented_models
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-Cluster Compute Tests
----------------------
-
-.. automodule:: tests.test_cluster_compute
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-Operator Caching Tests
-----------------------
 
 .. automodule:: tests.test_implemented_models
     :members:

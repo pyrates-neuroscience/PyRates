@@ -21,14 +21,14 @@ sys.path.append(os.path.abspath('sphinxext'))
 # -- Project information -----------------------------------------------------
 
 project = u'pyrates'
-copyright = u'2020, Richard Gast and Daniel Rose'
+copyright = u'2022, Richard Gast and Daniel Rose'
 author = u'Richard Gast and Daniel Rose'
 
 # The short X.Y version
-version = u'0.9'
+version = u'0.10'
 
 # The full version, including alpha/beta/rc tags
-release = u'0.9.6'  # automatically managed with bumpversion, see .bumpversion.cfg
+release = u'0.10.0'  # automatically managed with bumpversion, see .bumpversion.cfg
 
 
 # -- General configuration ---------------------------------------------------
@@ -57,20 +57,14 @@ extensions = [
 # configuration of sphinx gallery
 sphinx_gallery_conf = {
     'examples_dirs': [
-        '../../model_introduction',
-        '../../pyrates_interfaces',
-        '../../parameter_sweeps',
-        '../../parameter_optimization',
-        #'../../visualization',
-        '../../parameter_continuation'
+        '../../model_introductions',
+        '../../model_implementation',
+        '../../model_analysis',
     ],   # path to your example scripts
     'gallery_dirs': [
-        'auto_intros',
-        'auto_interfaces',
-        'auto_sweeps',
-        'auto_opt',
-        #'auto_vis',
-        'auto_conts'
+        'auto_introductions',
+        'auto_implementations',
+        'auto_analysis',
     ]  # path to where to save gallery generated output
 
 }
@@ -209,7 +203,7 @@ man_pages = [
 
 texinfo_documents = [
     (master_doc, 'pyrates', u'PyRates Documentation',
-     author, 'pyrates', 'Neurodynamic Systems Tool.',
+     author, 'pyrates', 'Dynamical Systems Modeling Tool.',
      'Miscellaneous'),
 ]
 
