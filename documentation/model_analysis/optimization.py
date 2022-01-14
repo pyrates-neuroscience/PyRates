@@ -44,7 +44,7 @@ References
 # %%
 # First, let's import the :code:`DifferentialEvolutionAlgorithm` class from PyRates
 
-from pyrates.utility.genetic_algorithm import DifferentialEvolutionAlgorithm
+from pyrates.utility_old.genetic_algorithm import DifferentialEvolutionAlgorithm
 import numpy as np
 
 # %%

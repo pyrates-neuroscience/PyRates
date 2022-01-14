@@ -25,7 +25,7 @@ def save(_obj: object, filename: str, filetype: str, template_name: Optional[str
 
     if filetype == "pickle":
         # make sure the directory exists
-        from pyrates.utility.filestorage import create_directory
+        from pyrates.utility import create_directory
         create_directory(filename)
 
         from pyrates.frontend.fileio import pickle
@@ -43,7 +43,7 @@ def save(_obj: object, filename: str, filetype: str, template_name: Optional[str
                                      f"`CircuitTemplate`. Please choose a different target filetype than 'yaml'.")
 
         # make sure the directory exists
-        from pyrates.utility.filestorage import create_directory
+        from pyrates.utility import create_directory
         create_directory(filename)
 
         from pyrates.frontend.fileio import yaml

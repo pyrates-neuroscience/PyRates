@@ -70,7 +70,7 @@ References
 # Check out the arguments of the code:`CircuitTemplate.run()` method for a detailed explanation of the
 # arguments that you can use to adjust this numerical procedure.
 
-from pyrates import simulate
+from pyrates import integrate
 import numpy as np
 
 # define simulation time and input start and stop
@@ -85,8 +85,8 @@ I_ext = np.zeros((steps,))
 I_ext[int(start/step_size):int(stop/step_size)] = 3.0
 
 # perform simulation
-results = simulate("model_templates.neural_mass_models.qif.qif", step_size=step_size, simulation_time=T,
-                   outputs={'r': 'p/qif_op/r'}, inputs={'p/qif_op/I_ext': I_ext}, clear=True)
+results = integrate("model_templates.neural_mass_models.qif.qif", step_size=step_size, simulation_time=T,
+                    outputs={'r': 'p/qif_op/r'}, inputs={'p/qif_op/I_ext': I_ext}, clear=True)
 
 # %%
 # Step 2: Visualization of the solution
@@ -112,8 +112,8 @@ ax.set_ylabel('r')
 # Now, lets have a look at the QIF model with spike-frequency adaptation. We will follow the same steps as outlined
 # above.
 
-results2 = simulate("model_templates.neural_mass_models.qif.qif_sfa", simulation_time=T, step_size=step_size,
-                    outputs={'r': 'p/qif_sfa_op/r'}, inputs={'p/qif_sfa_op/I_ext': I_ext}, clear=True)
+results2 = integrate("model_templates.neural_mass_models.qif.qif_sfa", simulation_time=T, step_size=step_size,
+                     outputs={'r': 'p/qif_sfa_op/r'}, inputs={'p/qif_sfa_op/I_ext': I_ext}, clear=True)
 
 fig2, ax2 = plt.subplots()
 ax2.plot(results2)

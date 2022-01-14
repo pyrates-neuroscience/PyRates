@@ -1,5 +1,5 @@
 # pyrates _imports
-from pyrates.utility.grid_search import grid_search
+from pyrates.utility_old.grid_search import grid_search
 
 # additional _imports
 import numpy as np

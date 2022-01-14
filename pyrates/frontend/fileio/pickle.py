@@ -4,7 +4,7 @@
 def dump(data, filename, **kwargs):
     import pickle
 
-    from pyrates.utility.filestorage import create_directory
+    from pyrates.utility import create_directory
     create_directory(filename)
 
     pickle.dump(data, open(filename, 'wb'), protocol=pickle.HIGHEST_PROTOCOL, **kwargs)

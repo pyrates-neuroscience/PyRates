@@ -35,5 +35,5 @@ __status__ = "Development"
 __version__ = "0.9.6"
 
 
-from pyrates.frontend import simulate, circuit_from_yaml, circuit_from_pickle
+from pyrates.utility import integrate, circuit_from_yaml, circuit_from_pickle, grid_search, clear_frontend_caches
 from pyrates.frontend.fileio import save

@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 # pyrates internal _imports
-from pyrates import simulate
+from pyrates import integrate
 
 # meta infos
 __author__ = "Richard Gast"
@@ -73,14 +73,14 @@ def test_3_1_jansenrit():
         ###############################################################################
 
         # single operator JRC
-        r1 = simulate("model_templates.neural_mass_models.jansenrit.JRC2", simulation_time=T,
-                      outputs={'EIN': 'jrc/jrc_op/V_ein'}, backend=b, step_size=dt, solver='scipy',
-                      sampling_step_size=dts, clear=True, file_name='jrc1', vectorize=v)
+        r1 = integrate("model_templates.neural_mass_models.jansenrit.JRC2", simulation_time=T,
+                       outputs={'EIN': 'jrc/jrc_op/V_ein'}, backend=b, step_size=dt, solver='scipy',
+                       sampling_step_size=dts, clear=True, file_name='jrc1', vectorize=v)
 
         # multi-node JRC
-        r2 = simulate("model_templates.neural_mass_models.jansenrit.JRC", simulation_time=T,
-                      outputs={'EIN': 'ein/rpo_e/V'}, backend=b, step_size=dt, solver='scipy',
-                      sampling_step_size=dts, clear=True, file_name='jrc2', vectorize=v)
+        r2 = integrate("model_templates.neural_mass_models.jansenrit.JRC", simulation_time=T,
+                       outputs={'EIN': 'ein/rpo_e/V'}, backend=b, step_size=dt, solver='scipy',
+                       sampling_step_size=dts, clear=True, file_name='jrc2', vectorize=v)
 
         assert np.mean(r1.values.flatten() - r2.values.flatten()) == pytest.approx(0., rel=accuracy, abs=accuracy)
 
@@ -104,19 +104,19 @@ def test_3_2_qif():
         #############################################################
 
         # basic qif population
-        r1 = simulate("model_templates.neural_mass_models.qif.qif", simulation_time=T, sampling_step_size=dts,
-                      inputs={"p/qif_op/I_ext": inp}, outputs={"r": "p/qif_op/r"}, method='RK45', backend=b,
-                      solver='scipy', step_size=dt, clear=True, file_name='m1', vectorize=False)
+        r1 = integrate("model_templates.neural_mass_models.qif.qif", simulation_time=T, sampling_step_size=dts,
+                       inputs={"p/qif_op/I_ext": inp}, outputs={"r": "p/qif_op/r"}, method='RK45', backend=b,
+                       solver='scipy', step_size=dt, clear=True, file_name='m1', vectorize=False)
 
         # qif population with spike-frequency adaptation
-        r2 = simulate("model_templates.neural_mass_models.qif.qif_sfa", simulation_time=T, sampling_step_size=dts,
-                      inputs={"p/qif_sfa_op/I_ext": inp}, outputs={"r": "p/qif_sfa_op/r"}, method='RK45', backend=b,
-                      solver='scipy', step_size=dt, clear=True, file_name='m2', vectorize=False)
+        r2 = integrate("model_templates.neural_mass_models.qif.qif_sfa", simulation_time=T, sampling_step_size=dts,
+                       inputs={"p/qif_sfa_op/I_ext": inp}, outputs={"r": "p/qif_sfa_op/r"}, method='RK45', backend=b,
+                       solver='scipy', step_size=dt, clear=True, file_name='m2', vectorize=False)
 
         # qif population with synaptic depression
-        r3 = simulate("model_templates.neural_mass_models.qif.qif_sd", simulation_time=T, sampling_step_size=dts,
-                      inputs={"p/qif_op/I_ext": inp}, outputs={"r": "p/qif_op/r"}, method='RK45', backend=b,
-                      solver='scipy', step_size=dt, clear=True, file_name='m3', vectorize=False)
+        r3 = integrate("model_templates.neural_mass_models.qif.qif_sd", simulation_time=T, sampling_step_size=dts,
+                       inputs={"p/qif_op/I_ext": inp}, outputs={"r": "p/qif_op/r"}, method='RK45', backend=b,
+                       solver='scipy', step_size=dt, clear=True, file_name='m3', vectorize=False)
 
         # test firing rate relationships at pre-defined times
         time = 49.0
@@ -143,14 +143,14 @@ def test_3_3_wilson_cowan():
     for b, v in zip(backends, vectorization):
 
         # standard wilson-cowan model
-        r1 = simulate("model_templates.neural_mass_models.wilsoncowan.WC", simulation_time=T,
-                      sampling_step_size=dts, inputs={"e/se_op/r_ext": inp}, outputs={"R_e": "e/rate_op/r"},
-                      backend=b, solver='scipy', step_size=dt, clear=True, file_name='wc1', vectorize=v)
+        r1 = integrate("model_templates.neural_mass_models.wilsoncowan.WC", simulation_time=T,
+                       sampling_step_size=dts, inputs={"e/se_op/r_ext": inp}, outputs={"R_e": "e/rate_op/r"},
+                       backend=b, solver='scipy', step_size=dt, clear=True, file_name='wc1', vectorize=v)
 
         # wilson-cowan model with synaptic short-term plasticity
-        r2 = simulate("model_templates.neural_mass_models.wilsoncowan.WC_stp", simulation_time=T,
-                      sampling_step_size=dts, inputs={"e/se_op/r_ext": inp}, outputs={"R_e": "e/rate_op/r"},
-                      backend=b, solver='scipy', step_size=dt, clear=True, file_name='wc2', vectorize=v)
+        r2 = integrate("model_templates.neural_mass_models.wilsoncowan.WC_stp", simulation_time=T,
+                       sampling_step_size=dts, inputs={"e/se_op/r_ext": inp}, outputs={"R_e": "e/rate_op/r"},
+                       backend=b, solver='scipy', step_size=dt, clear=True, file_name='wc2', vectorize=v)
 
         # test firing rate relationships at pre-defined times
         times = [75.0, 119.0]
@@ -178,9 +178,9 @@ def test_3_4_kuramoto():
         ###################################################
 
         # perform simulation
-        r1 = simulate("model_templates.coupled_oscillators.kuramoto.kmo", simulation_time=T, sampling_step_size=dts,
-                      outputs={"theta": "p/phase_op/theta"}, backend=b, solver='scipy', step_size=dt, clear=True,
-                      method='RK45', file_name='km1', vectorize=False)
+        r1 = integrate("model_templates.coupled_oscillators.kuramoto.kmo", simulation_time=T, sampling_step_size=dts,
+                       outputs={"theta": "p/phase_op/theta"}, backend=b, solver='scipy', step_size=dt, clear=True,
+                       method='RK45', file_name='km1', vectorize=False)
 
         # test linear oscillator properties
         omega = 10.0
@@ -192,10 +192,10 @@ def test_3_4_kuramoto():
         ####################################################
 
         # perform simulation
-        r2 = simulate("model_templates.coupled_oscillators.kuramoto.kmo_2coupled", simulation_time=T, sampling_step_size=dts,
-                      outputs={"theta1": "p1/phase_op/theta", "theta2": "p2/phase_op/theta"}, backend=b, solver='scipy',
-                      inputs={"p1/phase_op/ext_in": inp}, step_size=dt, clear=True, file_name='km2', vectorize=v,
-                      method='RK45')
+        r2 = integrate("model_templates.coupled_oscillators.kuramoto.kmo_2coupled", simulation_time=T, sampling_step_size=dts,
+                       outputs={"theta1": "p1/phase_op/theta", "theta2": "p2/phase_op/theta"}, backend=b, solver='scipy',
+                       inputs={"p1/phase_op/ext_in": inp}, step_size=dt, clear=True, file_name='km2', vectorize=v,
+                       method='RK45')
 
         # test whether the oscillators expressed de-phasing
         init = int(in_dur*dt/dts)

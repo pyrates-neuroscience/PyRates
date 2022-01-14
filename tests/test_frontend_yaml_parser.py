@@ -99,7 +99,8 @@ def test_full_jansen_rit_circuit_template_load():
 def test_circuit_instantiation():
     """Test, if apply() functions all work properly"""
     path = "model_templates.neural_mass_models.jansenrit.JRC"
-    from pyrates.frontend import template, clear_frontend_caches
+    from pyrates import clear_frontend_caches
+    from pyrates.frontend import template
     clear_frontend_caches()
 
     circuit = template.from_yaml(path)
@@ -167,7 +168,8 @@ def test_equation_alteration():
 @pytest.mark.skip
 def test_yaml_dump():
     """Test the functionality to dump an object to YAML"""
-    from pyrates.frontend import fileio, clear_frontend_caches
+    from pyrates.frontend import fileio
+    from pyrates import clear_frontend_caches
 
     with pytest.raises(AttributeError):
         fileio.save("no_to_dict()", "random_art", "yaml")

@@ -23,7 +23,7 @@ References
 # %%
 # First, let's import the :code:`grid_search()` function from PyRates
 
-from pyrates.utility.grid_search import grid_search
+from pyrates.utility_old.grid_search import grid_search
 
 # %%
 # The parameter C

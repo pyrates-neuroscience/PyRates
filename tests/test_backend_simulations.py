@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 # pyrates internal _imports
-from pyrates import simulate
+from pyrates import integrate
 
 # meta infos
 __author__ = "Richard Gast, Daniel Rose"
@@ -78,8 +78,8 @@ def test_2_1_operator():
         #########################################################################################
 
         # simulate operator behavior
-        results = simulate("model_templates.test_resources.test_backend.net0", simulation_time=sim_time, step_size=dt,
-                           outputs={'a': 'pop0/op0/a'}, vectorize=False, backend=b, clear=True, file_name='net0')
+        results = integrate("model_templates.test_resources.test_backend.net0", simulation_time=sim_time, step_size=dt,
+                            outputs={'a': 'pop0/op0/a'}, vectorize=False, backend=b, clear=True, file_name='net0')
 
         # generate target values
         update0_1 = lambda x: x * 0.5
@@ -96,9 +96,9 @@ def test_2_1_operator():
         ######################################################################################################
 
         # simulate operator behavior
-        results = simulate("model_templates.test_resources.test_backend.net1", simulation_time=sim_time, step_size=dt,
-                           inputs={'pop0/op1/u': inp}, outputs={'a': 'pop0/op1/a'}, vectorize=False, backend=b,
-                           clear=True, file_name='net1')
+        results = integrate("model_templates.test_resources.test_backend.net1", simulation_time=sim_time, step_size=dt,
+                            inputs={'pop0/op1/u': inp}, outputs={'a': 'pop0/op1/a'}, vectorize=False, backend=b,
+                            clear=True, file_name='net1')
 
         # calculate operator behavior from hand
         update1 = lambda x, y: x + dt * (y - x)
@@ -112,9 +112,9 @@ def test_2_1_operator():
         # test correct numerical evaluation of operator with two coupled equations (1 ODE, 1 non-DE eq.)
         ################################################################################################
 
-        results = simulate("model_templates.test_resources.test_backend.net2", simulation_time=sim_time,
-                           outputs={'a': 'pop0/op2/a'}, step_size=dt, vectorize=False, backend=b,
-                           clear=True, file_name='net_2')
+        results = integrate("model_templates.test_resources.test_backend.net2", simulation_time=sim_time,
+                            outputs={'a': 'pop0/op2/a'}, step_size=dt, vectorize=False, backend=b,
+                            clear=True, file_name='net_2')
 
         # calculate operator behavior from hand
         update2 = lambda x: 1. / (1. + np.exp(-x))
@@ -129,9 +129,9 @@ def test_2_1_operator():
         # test correct numerical evaluation of operator with a two coupled DEs
         ######################################################################
 
-        results = simulate("model_templates.test_resources.test_backend.net3", simulation_time=sim_time,
-                           outputs={'b': 'pop0/op3/b'}, inputs={'pop0/op3/u': inp}, out_dir="/tmp/log",
-                           step_size=dt, vectorize=True, backend=b, clear=True, file_name='net_3')
+        results = integrate("model_templates.test_resources.test_backend.net3", simulation_time=sim_time,
+                            outputs={'b': 'pop0/op3/b'}, inputs={'pop0/op3/u': inp}, out_dir="/tmp/log",
+                            step_size=dt, vectorize=True, backend=b, clear=True, file_name='net_3')
 
         # calculate operator behavior from hand
         update3_0 = lambda a, b, u: a + dt * (-10. * a + b ** 2 + u)
@@ -163,9 +163,9 @@ def test_2_2_node():
         #######################################################################################
 
         # simulate node behavior
-        results = simulate("model_templates.test_resources.test_backend.net4", simulation_time=sim_time,
-                           outputs={'a': 'pop0/op1/a'}, step_size=dt, vectorize=True, backend=b, clear=True,
-                           file_name='net4')
+        results = integrate("model_templates.test_resources.test_backend.net4", simulation_time=sim_time,
+                            outputs={'a': 'pop0/op1/a'}, step_size=dt, vectorize=True, backend=b, clear=True,
+                            file_name='net4')
 
         # calculate node behavior from hand
         update0 = lambda x: x + dt * 2.
@@ -182,9 +182,9 @@ def test_2_2_node():
         ########################################################################
 
         # simulate node behavior
-        results = simulate("model_templates.test_resources.test_backend.net5", simulation_time=sim_time,
-                           outputs={'a': 'pop0/op5/a'}, step_size=dt, vectorize=True, backend=b, clear=True,
-                           file_name='net5')
+        results = integrate("model_templates.test_resources.test_backend.net5", simulation_time=sim_time,
+                            outputs={'a': 'pop0/op5/a'}, step_size=dt, vectorize=True, backend=b, clear=True,
+                            file_name='net5')
 
         # calculate node behavior from hand
         targets = np.zeros((sim_steps, 2), dtype=np.float32)
@@ -198,9 +198,9 @@ def test_2_2_node():
         # test correct numerical evaluation of node with 2 independent operators projecting to the same target operator
         ###############################################################################################################
 
-        results = simulate("model_templates.test_resources.test_backend.net6", simulation_time=sim_time,
-                           outputs={'a': 'pop0/op1/a'}, step_size=dt, vectorize=True, backend=b, clear=True,
-                           file_name='net6')
+        results = integrate("model_templates.test_resources.test_backend.net6", simulation_time=sim_time,
+                            outputs={'a': 'pop0/op1/a'}, step_size=dt, vectorize=True, backend=b, clear=True,
+                            file_name='net6')
 
         # calculate node behavior from hand
         targets = np.zeros((sim_steps, 3), dtype=np.float32)
@@ -216,9 +216,9 @@ def test_2_2_node():
         # test correct numerical evaluation of node with 1 source operator projecting to 2 independent targets
         ######################################################################################################
 
-        results = simulate("model_templates.test_resources.test_backend.net7", simulation_time=sim_time,
-                           outputs={'a': 'pop0/op1/a', 'b': 'pop0/op3/b'}, step_size=dt, vectorize=True,
-                           backend=b, clear=True, file_name='net7')
+        results = integrate("model_templates.test_resources.test_backend.net7", simulation_time=sim_time,
+                            outputs={'a': 'pop0/op1/a', 'b': 'pop0/op3/b'}, step_size=dt, vectorize=True,
+                            backend=b, clear=True, file_name='net7')
 
         # calculate node behavior from hand
         targets = np.zeros((sim_steps, 4), dtype=np.float32)
@@ -267,9 +267,9 @@ def test_2_3_edge():
             targets[i + 1, 3] = update2(targets[i, 3], targets[i, 0] * 0.5)
 
         # simulate edge behavior
-        results = simulate("model_templates.test_resources.test_backend.net8", simulation_time=sim_time,
-                           outputs={'a': 'pop1/op1/a', 'b': 'pop2/op1/a'}, step_size=dt, vectorize=False,
-                           backend=b, clear=True, file_name='net8')
+        results = integrate("model_templates.test_resources.test_backend.net8", simulation_time=sim_time,
+                            outputs={'a': 'pop1/op1/a', 'b': 'pop2/op1/a'}, step_size=dt, vectorize=False,
+                            backend=b, clear=True, file_name='net8')
 
         diff = np.mean(np.abs(results['a'].values[:] - targets[:, 2])) + \
                np.mean(np.abs(results['b'].values[:] - targets[:, 3]))
@@ -278,9 +278,9 @@ def test_2_3_edge():
         # test correct numerical evaluation of graph with 2 bidirectionaly coupled nodes
         ################################################################################
 
-        results = simulate("model_templates.test_resources.test_backend.net9", simulation_time=sim_time,
-                           outputs={'a': 'pop0/op1/a', 'b': 'pop1/op7/a'}, inputs={'pop1/op7/inp': inp},
-                           step_size=dt, vectorize=False, backend=b, clear=True, file_name='net9')
+        results = integrate("model_templates.test_resources.test_backend.net9", simulation_time=sim_time,
+                            outputs={'a': 'pop0/op1/a', 'b': 'pop1/op7/a'}, inputs={'pop1/op7/inp': inp},
+                            step_size=dt, vectorize=False, backend=b, clear=True, file_name='net9')
 
         # calculate edge behavior from hand
         update3 = lambda x, y, z: x + dt * (y + z - x)
@@ -296,9 +296,9 @@ def test_2_3_edge():
         # test correct numerical evaluation of graph with 2 bidirectionally delay-coupled nodes
         #######################################################################################
 
-        results = simulate("model_templates.test_resources.test_backend.net10", simulation_time=sim_time,
-                           outputs={'a': 'pop0/op8/a', 'b': 'pop1/op8/a'}, step_size=dt, vectorize=False,
-                           backend=b, clear=True, file_name='net10')
+        results = integrate("model_templates.test_resources.test_backend.net10", simulation_time=sim_time,
+                            outputs={'a': 'pop0/op8/a', 'b': 'pop1/op8/a'}, step_size=dt, vectorize=False,
+                            backend=b, clear=True, file_name='net10')
 
         # calculate edge behavior from hand
         delay0 = int(0.5 / dt)
@@ -318,10 +318,10 @@ def test_2_3_edge():
         # test correct numerical evaluation of graph with delay distributions
         #####################################################################
 
-        results = simulate("model_templates.test_resources.test_backend.net13", simulation_time=sim_time,
-                           outputs={'a1': 'p1/op9/a', 'a2': 'p2/op10/a'}, inputs={'p1/op9/I_ext': inp},
-                           vectorize=False, step_size=dt, backend=b, solver='euler', clear=True,
-                           file_name='net11')
+        results = integrate("model_templates.test_resources.test_backend.net13", simulation_time=sim_time,
+                            outputs={'a1': 'p1/op9/a', 'a2': 'p2/op10/a'}, inputs={'p1/op9/I_ext': inp},
+                            vectorize=False, step_size=dt, backend=b, solver='euler', clear=True,
+                            file_name='net11')
         final_results_comparison.append(results.values)
 
     if len(final_results_comparison) > 1:
@@ -350,16 +350,16 @@ def test_2_4_solver():
     for b in backends:
 
         # standard euler solver (trusted)
-        r = simulate("model_templates.test_resources.test_backend.net13", simulation_time=sim_time,
-                     outputs={'a1': 'p1/op9/a', 'a2': 'p2/op10/a'}, inputs={'p1/op9/I_ext': inp},
-                     vectorize=False, step_size=dt, backend=b, solver='euler', clear=True, file_name='euler_solver',
-                     sampling_step_size=dts)
+        r = integrate("model_templates.test_resources.test_backend.net13", simulation_time=sim_time,
+                      outputs={'a1': 'p1/op9/a', 'a2': 'p2/op10/a'}, inputs={'p1/op9/I_ext': inp},
+                      vectorize=False, step_size=dt, backend=b, solver='euler', clear=True, file_name='euler_solver',
+                      sampling_step_size=dts)
 
         # scipy solver (tested)
-        r2 = simulate("model_templates.test_resources.test_backend.net13", simulation_time=sim_time,
-                      outputs={'a1': 'p1/op9/a', 'a2': 'p2/op10/a'}, inputs={'p1/op9/I_ext': inp}, method='RK23',
-                      vectorize=False, step_size=dt, backend=b, solver='scipy', clear=True, file_name='scipy_solver',
-                      sampling_step_size=dts)
+        r2 = integrate("model_templates.test_resources.test_backend.net13", simulation_time=sim_time,
+                       outputs={'a1': 'p1/op9/a', 'a2': 'p2/op10/a'}, inputs={'p1/op9/I_ext': inp}, method='RK23',
+                       vectorize=False, step_size=dt, backend=b, solver='scipy', clear=True, file_name='scipy_solver',
+                       sampling_step_size=dts)
 
         assert np.mean(r.loc[:, 'a2'].values - r2.loc[:, 'a2'].values) == pytest.approx(0., rel=accuracy, abs=accuracy)
 
@@ -385,17 +385,17 @@ def test_2_5_inputs_outputs():
         ##########################################################
 
         # perform simulation
-        r1 = simulate("model_templates.test_resources.test_backend.net13", simulation_time=sim_time,
-                      outputs={'a1': 'p1/op9/a'}, inputs={'p1/op9/I_ext': inp}, vectorize=True, step_size=dt,
-                      backend=b, solver='euler', clear=True, file_name='inout_1', sampling_step_size=dts)
+        r1 = integrate("model_templates.test_resources.test_backend.net13", simulation_time=sim_time,
+                       outputs={'a1': 'p1/op9/a'}, inputs={'p1/op9/I_ext': inp}, vectorize=True, step_size=dt,
+                       backend=b, solver='euler', clear=True, file_name='inout_1', sampling_step_size=dts)
 
         # define input and output for both populations simultaneously
         #############################################################
 
         # perform simulation
-        r2 = simulate("model_templates.test_resources.test_backend.net13", simulation_time=sim_time,
-                      outputs=['all/op9/a'], inputs={'all/op9/I_ext': inp}, vectorize=True, step_size=dt, backend=b,
-                      solver='euler', clear=True, file_name='inout_2', sampling_step_size=dts)
+        r2 = integrate("model_templates.test_resources.test_backend.net13", simulation_time=sim_time,
+                       outputs=['all/op9/a'], inputs={'all/op9/I_ext': inp}, vectorize=True, step_size=dt, backend=b,
+                       solver='euler', clear=True, file_name='inout_2', sampling_step_size=dts)
 
         assert np.mean(r1.values.flatten() - r2.values.flatten()) == pytest.approx(0., rel=accuracy, abs=accuracy)
 
@@ -406,18 +406,18 @@ def test_2_5_inputs_outputs():
         inp2 = np.zeros((sim_steps, 1)) + 0.1
 
         # perform simulation
-        r1 = simulate("model_templates.test_resources.test_backend.net14", simulation_time=sim_time, vectorize=True,
-                      step_size=dt, backend=b, solver='euler', clear=True, sampling_step_size=dts,
-                      outputs={'a1': 'c1/p1/op9/a', 'a2': 'c1/p2/op10/a', 'a3': 'c2/p1/op9/a', 'a4': 'c2/p2/op10/a'},
-                      inputs={'c1/p1/op9/I_ext': inp, 'c1/p2/op10/I_ext': inp2, 'c2/p1/op9/I_ext': inp,
+        r1 = integrate("model_templates.test_resources.test_backend.net14", simulation_time=sim_time, vectorize=True,
+                       step_size=dt, backend=b, solver='euler', clear=True, sampling_step_size=dts,
+                       outputs={'a1': 'c1/p1/op9/a', 'a2': 'c1/p2/op10/a', 'a3': 'c2/p1/op9/a', 'a4': 'c2/p2/op10/a'},
+                       inputs={'c1/p1/op9/I_ext': inp, 'c1/p2/op10/I_ext': inp2, 'c2/p1/op9/I_ext': inp,
                               'c2/p2/op10/I_ext': inp2}, file_name='inout_3')
 
         # perform simulation
-        r2 = simulate("model_templates.test_resources.test_backend.net14", simulation_time=sim_time,
-                      outputs={'a1': 'all/all/op9/a', 'a2': 'all/all/op10/a'},
-                      inputs={'all/all/op9/I_ext': inp, 'all/all/op10/I_ext': inp2},
-                      vectorize=True, step_size=dt, backend=b, solver='euler', clear=True, file_name='inout_4',
-                      sampling_step_size=dts)
+        r2 = integrate("model_templates.test_resources.test_backend.net14", simulation_time=sim_time,
+                       outputs={'a1': 'all/all/op9/a', 'a2': 'all/all/op10/a'},
+                       inputs={'all/all/op9/I_ext': inp, 'all/all/op10/I_ext': inp2},
+                       vectorize=True, step_size=dt, backend=b, solver='euler', clear=True, file_name='inout_4',
+                       sampling_step_size=dts)
 
         assert np.mean(r1.values.flatten() - r2.values.flatten()) == pytest.approx(0., rel=accuracy, abs=accuracy)
 
@@ -439,16 +439,16 @@ def test_2_6_vectorization():
     for i, b in enumerate(backends):
 
         # simulation without vectorization of the network equations
-        r1 = simulate("model_templates.neural_mass_models.jansenrit.JRC_2delaycoupled", vectorize=False,
-                      inputs={"jrc2/pc/rpo_e_in/u": inp}, outputs={"r": "jrc1/ein/rpo_e/V"}, backend=b,
-                      solver='euler', step_size=dt, clear=True, simulation_time=T, sampling_step_size=dts,
-                      file_name=f'vec{i + 1}')
+        r1 = integrate("model_templates.neural_mass_models.jansenrit.JRC_2delaycoupled", vectorize=False,
+                       inputs={"jrc2/pc/rpo_e_in/u": inp}, outputs={"r": "jrc1/ein/rpo_e/V"}, backend=b,
+                       solver='euler', step_size=dt, clear=True, simulation_time=T, sampling_step_size=dts,
+                       file_name=f'vec{i + 1}')
 
         # simulation with vectorized network equations
-        r2 = simulate("model_templates.neural_mass_models.jansenrit.JRC_2delaycoupled", vectorize=True,
-                      inputs={"jrc2/pc/rpo_e_in/u": inp}, outputs={"r": "jrc1/ein/rpo_e/V"}, backend=b,
-                      solver='euler', step_size=dt, clear=True, simulation_time=T, sampling_step_size=dts,
-                      file_name=f'novec{i + 1}')
+        r2 = integrate("model_templates.neural_mass_models.jansenrit.JRC_2delaycoupled", vectorize=True,
+                       inputs={"jrc2/pc/rpo_e_in/u": inp}, outputs={"r": "jrc1/ein/rpo_e/V"}, backend=b,
+                       solver='euler', step_size=dt, clear=True, simulation_time=T, sampling_step_size=dts,
+                       file_name=f'novec{i + 1}')
 
         assert np.mean(r1.values - r2.values) == pytest.approx(0.0, rel=accuracy, abs=accuracy)
 
@@ -465,16 +465,16 @@ def test_2_7_backends():
     dts = 1e-3
     T = 10.
 
-    r0 = simulate("model_templates.neural_mass_models.qif.qif_sfa", simulation_time=T, sampling_step_size=dts,
-                  inputs=None, outputs={"r": "p/qif_sfa_op/r"}, solver='euler', step_size=dt, clear=True,
-                  file_name='m0', vectorize=False)
+    r0 = integrate("model_templates.neural_mass_models.qif.qif_sfa", simulation_time=T, sampling_step_size=dts,
+                   inputs=None, outputs={"r": "p/qif_sfa_op/r"}, solver='euler', step_size=dt, clear=True,
+                   file_name='m0', vectorize=False)
 
     for i, b in enumerate(backends):
 
         if b != 'default':
 
-            r = simulate("model_templates.neural_mass_models.qif.qif_sfa",
-                         inputs=None, outputs={"r": "p/qif_sfa_op/r"}, backend=b, solver='euler', step_size=dt,
-                         clear=True, simulation_time=T, sampling_step_size=dts, file_name=f'm{i+1}', vectorize=False)
+            r = integrate("model_templates.neural_mass_models.qif.qif_sfa",
+                          inputs=None, outputs={"r": "p/qif_sfa_op/r"}, backend=b, solver='euler', step_size=dt,
+                          clear=True, simulation_time=T, sampling_step_size=dts, file_name=f'm{i+1}', vectorize=False)
 
             assert np.mean(r0.values - r.values) == pytest.approx(0.0, rel=accuracy, abs=accuracy)

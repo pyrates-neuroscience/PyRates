@@ -47,7 +47,7 @@ Nonlinear Phenomena 50(1): 15-30.
 # Check out the arguments of the code:`CircuitTemplate.run()` method for a detailed explanation of the
 # arguments that you can use to adjust this numerical procedure.
 
-from pyrates import simulate
+from pyrates import integrate
 import numpy as np
 
 # define simulation time and input start and stop
@@ -62,9 +62,9 @@ I_ext = np.zeros((steps,))
 I_ext[int(start/step_size):int(stop/step_size)] = 1.0
 
 # perform simulation
-results = simulate("model_templates.coupled_oscillators.kuramoto.kmo_2coupled", step_size=step_size, simulation_time=T,
-                   outputs={'theta_1': 'p1/phase_op/theta', 'theta_2': 'p2/phase_op/theta'},
-                   inputs={'p1/phase_op/ext_in': I_ext}, clear=True)
+results = integrate("model_templates.coupled_oscillators.kuramoto.kmo_2coupled", step_size=step_size, simulation_time=T,
+                    outputs={'theta_1': 'p1/phase_op/theta', 'theta_2': 'p2/phase_op/theta'},
+                    inputs={'p1/phase_op/ext_in': I_ext}, clear=True)
 
 # plot resulting phases
 import matplotlib.pyplot as plt
