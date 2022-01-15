@@ -116,7 +116,7 @@ def eval_param(value, T, dt, kwargs):
     return loss(data)
 
 
-#
+# %%
 # Performing the model optimization
 # ---------------------------------
 #
@@ -133,7 +133,6 @@ results = differential_evolution(eval_param, bounds=[boundaries], args=(T, dt, k
                                  maxiter=100, popsize=10, tol=1e-4)
 
 # %%
-#
 # The return value of the :code:`differential_evolution` function contains the winning parameter set and its loss
 # function value. Let's check out, whether this model parameter indeed produces the behavior we optimized for:
 
