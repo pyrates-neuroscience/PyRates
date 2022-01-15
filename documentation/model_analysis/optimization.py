@@ -14,19 +14,19 @@ all synaptic strengths in the Jansen-Rit neural mass model and has a critical in
 
 The general idea behind evolutionary model optimization strategies is to optimize a set of model parameters with
 respect to some objective function that defines the fitness of a certain model parametrization. Initially, a number of
-different model parameterizations are sampled from a defined parameter space. Then, the iterative optimization starts.
+different model parametrizations are sampled from a defined parameter space. Then, the iterative optimization starts.
 At each iteration of the optimization algorithm, the following two steps are performed:
 
-    1. The objective function is evaluated for each parameterization, resulting in a fitness value for each model
-       parameterization
-    2. The fitness values are used to sample new model parameterizations, mutate the old parameterizations, or create
-       new parameterizations via combinations of the old parameterizations
+    1. The objective function is evaluated for each parametrization, resulting in a fitness value for each model
+       parametrization
+    2. The fitness values are used to sample new model parametrizations, mutate the old parametrizations, or create
+       new parametrizations via combinations of the old parametrizations
 
 These iterations are then repeated until a fitness criterion is reached. The exact functional relationships that are
-used to translate fitness values and old parameterizations into new parameterizations depend on the type of evolutionary
+used to translate fitness values and old parametrizations into new parametrizations depend on the type of evolutionary
 model optimization strategy that is used. For a summary of differential evolution, have a look at
-`this article <https://en.wikipedia.org/wiki/Differential_evolution>`_. In PyRates, we simply provide an interface to
-the differential evolution optimization provided by SciPy [3]_.
+`this article <https://en.wikipedia.org/wiki/Differential_evolution>`_. Below, we show how PyRates can be used in
+combination with :code:`scipy.optimize.differential_evolution` to perform such parameter optimizations.
 
 References
 ^^^^^^^^^^
@@ -42,9 +42,11 @@ References
 """
 
 # %%
-# First, let's import the :code:`DifferentialEvolutionAlgorithm` class from PyRates
+# First, let's import the :code:`differential_evolution` function from scipy together with other essential packages
 
-from pyrates.utility_old.genetic_algorithm import DifferentialEvolutionAlgorithm
+from scipy.optimize import differential_evolution
+from pyrates.frontend import CircuitTemplate
+import matplotlib.pyplot as plt
 import numpy as np
 
 # %%
@@ -54,19 +56,19 @@ import numpy as np
 # (1) To optimize our parameter :math:`C`, we will have to define the parameter boundaries within which the optimization
 # should be performed:
 
-params = {'C': {'min': 30.0, 'max': 300.0}}
+boundaries = (30.0, 300.0)
 
 # %%
 # (2) Furthermore, we need to define the model and the model parameter that the :math:`C` refers to:
 
-model_template = "model_templates.jansen_rit.simple_jansenrit.JRC_simple"
-param_map = {'C': {'vars': ['JRC_op/c'], 'nodes': ['JRC']}}
+model_template = "model_templates.neural_mass_models.jansenrit.JRC2"
+model_param = 'jrc/jrc_op/c'
 
 # %%
 # (3) Finally, we have to define the objective function that should be optimized. This objective function always needs
 # to calculate a scalar fitness, based on model output. Thus, we first define the model output:
 
-output = {'V_pce': 'JRC/JRC_op/PSP_pc_e', 'V_pci': 'JRC/JRC_op/PSP_pc_i'}
+output = {'V_pce': 'jrc/jrc_op/V_e', 'V_pci': 'jrc/jrc_op/V_i'}
 
 # %%
 # ...and then the objective function:
@@ -78,7 +80,7 @@ def loss(data, min_amp=6e-3, max_amp=10e-3):
     """
 
     # calculate the membrane potential of the PC population
-    data = data.loc[2.0:, 'V_pce'] - data.loc[2.0:, 'V_pci']
+    data = data.loc[:, 'V_pce'] - data.loc[:, 'V_pci']
 
     # calculate the difference between the membrane potential range
     # of the model and the target membrane potential range
@@ -95,56 +97,60 @@ def loss(data, min_amp=6e-3, max_amp=10e-3):
 # pyramidal cell population of the Jansen-Rit model [1]_. Depending on the :code:`min_amp` and :code:`max_amp`
 # arguments of that function, the differential evolution algorithm should optimize the parameter :math:`C` of our model
 # such that the minimum and maximum membrane potential fluctuations of the PC population are as close to those values
-# as possible. Therefore, this function should suffice to find model parameterizations that express oscillatory behavior
+# as possible. Therefore, this function should suffice to find model parametrizations that express oscillatory behavior
 # with different oscillation amplitudes or non-oscillatory behavior.
+#
+# As a final preparation, we need to define a function that takes a single value of :math:`C` as an argument, calculates
+# the model activity, and returns the loss for that particular parametrization:
+
+def eval_param(value, T, dt, kwargs):
+
+    # load template and update parameter value
+    jrc = CircuitTemplate.from_yaml(model_template)
+    jrc.update_var({model_param: value})
+
+    # perform simulation
+    data = jrc.run(outputs=output, simulation_time=T, step_size=dt, clear=True, verbose=False, **kwargs)
+
+    # calculate and return loss
+    return loss(data)
+
+
 #
 # Performing the model optimization
 # ---------------------------------
 #
-# Now, we have prepared everything to start the optimization. This will be done via an instance of
-# :code:`pyrates.utility.genetic_algorithm.DifferentialEvolutionAlgorithm`:
+# Now that we have prepared everything to start the optimization, we can use
+# :code:`scipy.optimize.differential_evolution` to optimize our parameter of interest:
 
-diff_eq = DifferentialEvolutionAlgorithm()
+# simulation settings
+T = 5.0
+dt = 1e-4
+kwargs = {'sampling_step_size': 1e-3, 'solver': 'scipy', 'backend': 'default', 'cutoff': 2.0}
 
-# %%
-# To start the optimization, simply use its :code:`run()` method:
-
-winner = diff_eq.run(initial_gene_pool=params,
-                     gene_map=param_map,
-                     template=model_template,
-                     run_kwargs={'step_size': 1e-4, 'simulation_time': 3., 'sampling_step_size': 1e-3,
-                                 'solver': 'scipy', 'method': 'RK23',
-                                 'outputs': {'V_pce': 'JRC/JRC_op/PSP_pc_e', 'V_pci': 'JRC/JRC_op/PSP_pc_i'}},
-                     loss_func=loss, loss_kwargs={'min_amp': 6e-3, 'max_amp': 9e-3},
-                     workers=-1, strategy='best2exp', mutation=(0.5, 1.9), recombination=0.8, atol=1e-5, tol=1e-3,
-                     polish=False)
+# perform optimization
+results = differential_evolution(eval_param, bounds=[boundaries], args=(T, dt, kwargs), strategy='randtobest1bin',
+                                 maxiter=100, popsize=10, tol=1e-4)
 
 # %%
-# This function provides an interface to :code:`scipy.optimize.differential_evolution`, for which a detailed
-# documentation can be found
-# `here <https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.differential_evolution.html>`_. All
-# arguments that :code:`scipy.optimize.differential_evolution` takes can also be provided as keyword arguments to the
-# :code:`run()` method. By providing a :code:`template`, :code:`compile_kwargs` and :code:`run_kwargs`, the
-# :code:`run()` method knows that it should use the provided model template, load it into the backend via
-# :code:`CircuitIR.compile(**compile_kwargs)` and then simulate its behavior via :code:`CircuitIR.run(**run_kwargs)`.
-# The resulting timeseries is then forwarded to the :code:`loss_func` together with the keyword arguments in
-# :code:`loss_kwargs`.
 #
-# The return value of the :code:`run()` method contains the winning parameter set and its loss function value.
-# Let's check out, whether this model parameter indeed produces the behavior we optimized for:
+# The return value of the :code:`differential_evolution` function contains the winning parameter set and its loss
+# function value. Let's check out, whether this model parameter indeed produces the behavior we optimized for:
 
-from pyrates.frontend import CircuitTemplate
-from matplotlib.pyplot import show
+# check out final value of C
+c = results.x
+print(f'C = {c}')
 
+# calculate dynamics of the JRC for C
 jrc = CircuitTemplate.from_yaml(model_template)
-jrc = jrc.update_var(node_vars={'JRC/JRC_op/c': winner.at[0, 'c']})
-results = jrc.run(simulation_time=3.0, sampling_step_size=1e-2, solver='scipy', backend='numpy', step_size=1e-4,
-                  outputs={'V_pce': 'JRC/JRC_op/PSP_pc_e', 'V_pci': 'JRC/JRC_op/PSP_pc_i'})
+jrc = jrc.update_var(node_vars={model_param: c})
+kwargs.pop('cutoff')
+results = jrc.run(simulation_time=T, step_size=dt, outputs=output, clear=True, **kwargs)
 
-results = results['V_pce'] - results['V_pci']
-results.plot()
-jrc.clear()
-show()
+# visualization of the JRC dynamics
+data = results['V_pce'] - results['V_pci']
+plt.plot(data)
+plt.show()
 
 # %%
 # As can be seen, the model shows oscillatory behavior with minimum and maximum membrane potential amplitudes that
