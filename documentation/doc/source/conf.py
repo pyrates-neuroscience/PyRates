@@ -62,9 +62,9 @@ sphinx_gallery_conf = {
         '../../model_analysis',
     ],   # path to your example scripts
     'gallery_dirs': [
-        '../build/auto_introductions',
-        '../build/auto_implementations',
-        '../build/auto_analysis',
+        'auto_introductions',
+        'auto_implementations',
+        'auto_analysis',
     ]  # path to where to save gallery generated output
 
 }

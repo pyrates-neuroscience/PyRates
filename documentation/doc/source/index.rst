@@ -89,7 +89,7 @@ for all the source code, open issues etc. and send us a pull request, if you wou
 Examples Gallery
 ================
 
-For a comprehensive overview over the PyRates basics, have a look at the jupyter notebook `Tutorial_PyRates_Basics.ipynb` that can be found in `documentation`.
+For a comprehensive overview over the PyRates basics, have a look at the jupyter notebook :code:`documentation/Tutorial_PyRates_Basics.ipynb`.
 More specific use examples can be found in the galleries below.
 
 .. include::
