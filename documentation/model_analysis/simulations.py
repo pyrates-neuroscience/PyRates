@@ -108,14 +108,14 @@ plt.show()
 # Finally, it is also possible to write out function files that can be used in combination with various other tools that
 # provide numerical integration algorithms. As an example, we demonstrate below how to interface the
 # :code:`scipy.integrate.solve_ivp` method via a PyRates-generated function file for the evaluation of
-# :math:`\\mathbf{f}(\\mathbf{y}, t)`.
+# :math:`\mathbf{f}(\mathbf{y}, t)`.
 
 from scipy.integrate import solve_ivp
 clear_frontend_caches()
 
 # generate the vector-field evaluation function file
 func, args = qif.get_run_func(func_name='f', file_name='qif_eval', step_size=dt, inputs={'p/qif_op/I_ext': inp},
-                              backend='default', solver='scipy')
+                              backend='default', solver='scipy', clear=False, in_place=True)
 
 # read out function file
 f = open('qif_eval.py', 'r')
@@ -129,3 +129,7 @@ results = solve_ivp(func, (t0, T), y0, args=func_args)
 # visualization
 plt.plot(results['y'].T)
 plt.show()
+
+# remove files and cached models
+qif.clear()
+clear_frontend_caches()

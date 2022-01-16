@@ -37,10 +37,10 @@ with open("README.md", "r", encoding="utf8") as fh:
 
 setup(name='pyrates',
       version=VERSION,
-      description='Neural Network Modeling Framework',
+      description='Dynamical Systems Modeling Framework',
       long_description=DESCRIPTION,
       author=PYRATES_TEAM,
-      author_email='rgast@cbs.mpg.de',
+      author_email='richard.gast@northwestern.edu',
       license='GPL v3',
       packages=find_packages(),
       zip_safe=False,

@@ -33,8 +33,3 @@ bump2version release  # updates "0.0.1-dev1" to "0.0.1"
 The PyRates repository is currently configured such that a release on github.com is automatically pushed to PyPI. 
 For more information on creating a release on github.com, please look 
 [here](https://docs.github.com/en/github/administering-a-repository/managing-releases-in-a-repository).
-
-
-
-
-

@@ -361,11 +361,13 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         if clear:
             net.clear()
+        else:
+            self._ir = net._ir
 
         return results.loc[cutoff:, :]
 
     def get_run_func(self, func_name: str, step_size: float, inputs: Optional[dict] = None, backend: str = None,
-                     vectorize: bool = True, verbose: bool = True, clear: bool = False, **kwargs
+                     vectorize: bool = True, verbose: bool = True, clear: bool = False, in_place: bool = True, **kwargs
                      ) -> Tuple[Callable, tuple]:
         """Generate a function that evaluates the vector field of the dynamical system represented by this
         `CircuitTemplate` instance.
@@ -401,6 +403,7 @@ class CircuitTemplate(AbstractBaseTemplate):
         clear
             If true, all cached variables will be freed and all temporary files will be deleted after the `run`
             procedure. To inspect the vector field evaluation function, `clear` should be set to `False`.
+        in_place
         kwargs
             Additional keyword arguments.
 
@@ -413,7 +416,7 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         # add extrinsic inputs to network
         adaptive_steps = is_integration_adaptive(kwargs.pop('solver', 'euler'), **kwargs)
-        net = self
+        net = self if in_place else deepcopy(self)
         if inputs:
             for target, in_array in inputs.items():
                 net = net._add_input(target, in_array, adaptive_steps, in_array.shape[0] * step_size, vectorize)
@@ -431,6 +434,8 @@ class CircuitTemplate(AbstractBaseTemplate):
         # clear the network temporary files
         if clear:
             net.clear()
+        else:
+            self._ir = net._ir
 
         return func, args
 
