@@ -236,9 +236,13 @@ class FortranBackend(BaseBackend):
 
         # delete fortran-specific temporary files
         wdir = self._fdir if self._fdir else os.getcwd()
-        for f in [f for f in os.listdir(wdir)
-                  if "cpython" in f and self._fname in f and f[-3:] == ".so"]:
-            os.remove(f"{wdir}/{f}")
+        for f in [f for f in os.listdir(wdir)]:
+            if "cpython" in f and self._fname in f and f[-3:] == ".so":
+                os.remove(f"{wdir}/{f}")
+            elif f == 'c.ivp' or (f[:5] == 'fort.' and len(f) == 6):
+                os.remove(f"{wdir}/{f}")
+            elif f == f"{self._fname}.exe" or f == f"{self._fname}.mod" or f == f"{self._fname}.o":
+                os.remove(f"{wdir}/{f}")
 
         # call parent method
         super().clear()
@@ -449,7 +453,6 @@ class FortranBackend(BaseBackend):
                               **kwargs)
 
     def _get_dtype(self, dtype: Union[str, np.dtype]):
-        dtype = dtype
         if dtype == 'float':
             dtype = self._float_precision
         if 'float' in dtype:

@@ -9,18 +9,24 @@ differential_and_integral_equations>`_ in PyRates with automatic fold `bifurcati
 Furthermore, you will learn how to plot a simple bifurcation diagram. Throughout this example, we will use
 the quadratic integrate-and-fire population model [1]_, a detailed introduction of which is given in the model
 introductions example gallery. The dynamic equations of this model read the following:
+
 .. math::
     \\tau \\dot r = \\frac{\\Delta}{\\pi\\tau} + 2 r v, \n
     \\tau \\dot v = v^2 +\\bar\\eta + I(t) + J r \\tau - (\\pi r \\tau)^2,
+
 where :math:`r` is the average firing rate and :math:`v` is the average membrane potential of the QIF population.
 It is governed by 4 parameters:
+
     - :math:`\\tau` --> the population time constant
     - :math:`\\bar \\eta` --> the mean of a Lorenzian distribution over the neural excitability in the population
     - :math:`\\Delta` --> the half-width at half maximum of the Lorenzian distribution over the neural excitability
     - :math:`J` --> the strength of the recurrent coupling inside the population
-In this tutorial, we will demonstrate how to perform a simple 1D parameter continuation in :math:`\\bar \\eta` and plot
-the corresponding bifurcation diagram. This has also been done in [1]_, so you can compare the resulting plot with the
-results reported by Montbrió et al.
+
+In this tutorial, we will demonstrate how to (1) , (2) perform a simple 1D parameter continuation in
+:math:`\\bar \\eta`, and (3) plot the corresponding bifurcation diagram.
+The latter has also been done in [1]_, so you can compare the resulting plot with the results reported by Montbrió et
+al. For parts (2) and (3) of the tutorial, it is required that you have
+`PyAuto <https://github.com/pyrates-neuroscience/PyAuto>`_ installed in the Python environment you are using.
 
 References
 ----------
@@ -33,6 +39,7 @@ References
 
 import matplotlib.pyplot as plt
 from pyrates.frontend import CircuitTemplate
+from pyauto import PyAuto
 
 # %%
 # Part 1: Creating a PyAuto Instance
@@ -48,34 +55,51 @@ from pyrates.frontend import CircuitTemplate
 # As a first step, we have to load the model into PyRates. This is done the usual way. If you are not familiar with
 # this, check out the example galleries for model definitions.
 
-from pyrates.frontend import CircuitTemplate
-qif = CircuitTemplate.from_yaml("model_templates.montbrio.simple_montbrio.QIF_exc").apply(label='qif')
+qif = CircuitTemplate.from_yaml("model_templates.neural_mass_models.qif.qif")
 
 # %%
-# Step 2: Load the model into the backend
-# ---------------------------------------
+# Step 2: Generate the Fortran routines required by Auto-07p
+# ----------------------------------------------------------
 #
-# Here, we will parse the model equations into the PyRates backend. If you are not familiar with this, check out the
-# example galleries for model compilation and simulation. This step, however, differs slightly from the usual way.
-# We need to use the :code:`FortranBackend`, since :code:`auto07-p` requires a fortran file with the model equations
-# and initial values [2]_. Furthermore, we need to set the keyword argument :code:`auto_compat` of the :code:`compile()`
-# method to :code:`True`, to indicate to the :code:`FortranBackend` that it should compile the model equations in a way
-# that is compatible with auto-07p [2]_.
+# In the next step, we will translate our model into a Fortran file containing all subroutines required by
+# :code:`auto-07p`. In short, :code:`auto-07p` requires a fortran file with the model equations and initial values [2]_.
+# This will require using the Fortran backend of PyRates and turning the :code:`vectorize` option off:
 
-qif_compiled = qif.compile(backend='fortran', auto_compat=True)
+qif.get_run_func(func_name='qif_rhs', file_name='qif', step_size=1e-4, auto=True, backend='fortran', solver='pyauto',
+                 vectorize=False, float_precision='float64')
+
+# %%
+# Calling the :code:`CircuitTemplate.get_run_func` method with :code:`auto=True` creates two files, which we will
+# inspect below. The first file is a :code:`.f90` file containing all the Fortran subroutines required by
+# :code:`auto-07p`:
+
+f = open('qif.f90', 'r')
+print('')
+print(f.read())
+
+# %%
+# The second file is a textfile containing all the :code:`auto-07p` parameters that determine how it performs parameter
+# continuations and automated bifurcation detection:
+
+f = open('c.ivp', 'r')
+print('')
+print(f.read())
+
+# %%
+# The default parameters written out by PyRates allow to solve the initial value problem, i.e. perform simple numerical
+# simulations via :code:`auto-07p`. For a detailed explanation of these parameters, see the :code:`auto-07p`
+# `documentation<https://github.com/auto-07p/auto-07p>`_.
 
 # %%
 # Step 3: Generate a PyAuto instance
 # ----------------------------------
 #
-# Now that the model equations are compiled, we can generate an instance of :code:`pyrates.utility.pyauto.PyAuto`,
-# which is the PyRates interface to auto-07p. This is done via a simple step:
+# Now that the model equations are compiled, we can generate an instance of :code:`pyauto.PyAuto`, a Python
+# `tool<https://github.com/pyrates-neuroscience/PyAuto>`_ that provides and interface to :code:`auto-07p`.
 
-qif_auto = qif_compiled.to_pyauto(directory=None, auto_dir='~/PycharmProjects/auto-07p')
+qif_auto = PyAuto(working_dir=None, auto_dir='~/PycharmProjects/auto-07p')
 
 # %%
-# In the process of this step, PyRates will generate the fortran files that contain the model equations and initial
-# values of all variables and constants in the model. Those correspond to the variables and parameters introduced above.
 # Now, we can use all the tools provided by auto-07p to investigate how the model reacts to changes in its
 # parameterization.
 
@@ -104,8 +128,8 @@ qif_auto = qif_compiled.to_pyauto(directory=None, auto_dir='~/PycharmProjects/au
 # via PyAuto as follows:
 
 t_sols, t_cont = qif_auto.run(
-    e='rhs_func', c='ivp', name='time', DS=1e-3, DSMIN=1e-4,
-    DSMAX=1.0, NMX=10000, UZR={14: 1000.0}, STOP={'UZ1'})
+    e='qif', c='ivp', name='time', DS=1e-4, DSMIN=1e-10, EPSL=1e-08, EPSU=1e-08, EPSS=1e-06,
+    DSMAX=1e-2, NMX=1000, UZR={14: 4.0}, STOP={'UZ1'})
 
 # %%
 # In this function call, you see how the general interface of the :code:`PyAuto.run()` method works. In every first call
@@ -145,7 +169,7 @@ t_sols, t_cont = qif_auto.run(
 eta_sols, eta_cont = qif_auto.run(
     origin=t_cont, starting_point='UZ1', name='eta', bidirectional=True,
     ICP=4, RL0=-20.0, RL1=20.0, IPS=1, ILP=1, ISP=2, ISW=1, NTST=400,
-    NCOL=4, IAD=3, IPLT=0, NBC=0, NINT=0, NMX=2000, NPR=40, MXBF=5, IID=2,
+    NCOL=4, IAD=3, IPLT=0, NBC=0, NINT=0, NMX=2000, NPR=10, MXBF=5, IID=2,
     ITMX=40, ITNW=40, NWTN=12, JAC=0, EPSL=1e-06, EPSU=1e-06, EPSS=1e-04,
     DS=1e-4, DSMIN=1e-8, DSMAX=5e-2, IADS=1, THL={}, THU={}, UZR={}, STOP={}
 )
@@ -186,7 +210,7 @@ eta_sols, eta_cont = qif_auto.run(
 # bifurcation diagram via the following call:
 
 qif_auto.plot_continuation('PAR(4)', 'U(1)', cont='eta')
-show()
+plt.show()
 
 # %%
 # The curve in this plot represents the value of :math:`r` (y-axis) at the equilibrium solutions that exist for each
@@ -206,4 +230,4 @@ show()
 # As a last step, it is good practice to clean up all temporary files created by PyAuto and PyRates. This can be
 # achieved with the following simple call:
 
-qif_compiled.clear()
+qif.clear()

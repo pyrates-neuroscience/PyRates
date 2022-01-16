@@ -247,11 +247,11 @@ def _parse_defaults(expr: Union[str, int, float]) -> dict:
     if isinstance(expr, int):
         vtype = "constant"
         value = expr
-        dtype = "int32"
+        dtype = "int"
     elif isinstance(expr, float):
         vtype = "constant"
         value = expr
-        dtype = "float32"
+        dtype = "float"
         # restriction to 32bit float for consistency. May not be reasonable at all times.
     else:
         # set vtype

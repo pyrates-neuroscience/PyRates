@@ -352,7 +352,7 @@ class ExpressionParser:
         lhs, rhs, assign_type = split_equation(expr)
 
         if not assign_type:
-            self.vars['x'] = {'vtype': 'variable', 'value': 0.0, 'dtype': 'float32', 'shape': ()}
+            self.vars['x'] = {'vtype': 'variable', 'value': 0.0, 'dtype': 'float', 'shape': ()}
             return self._preprocess_expr_str(f"x = {expr}")
 
         # for the left-hand side, check whether it includes a differential operator
