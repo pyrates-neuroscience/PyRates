@@ -32,7 +32,7 @@ i.e. networks of nodes connected via edges.
 
 __author__ = "Richard Gast, Daniel Rose"
 __status__ = "Development"
-__version__ = "0.10.0-dev1"
+__version__ = "0.10.0"
 
 
 from pyrates.utility import integrate, circuit_from_yaml, circuit_from_pickle, grid_search, clear_frontend_caches
