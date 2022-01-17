@@ -36,4 +36,4 @@ __version__ = "0.10.0-dev1"
 
 
 from pyrates.utility import integrate, circuit_from_yaml, circuit_from_pickle, grid_search, clear_frontend_caches
-from pyrates.frontend.fileio import save
+from pyrates.frontend import CircuitTemplate, NodeTemplate, EdgeTemplate, OperatorTemplate, save

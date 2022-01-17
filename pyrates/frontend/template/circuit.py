@@ -87,7 +87,6 @@ class CircuitTemplate(AbstractBaseTemplate):
     edges
         List with edge tuples that contain: (1) a source node name, (2) a target node name, (3) an `EdgeTemplate`
         instance or `None`, and (4) a dictionary with edge attributes.
-
     """
 
     target_ir = CircuitIR
@@ -143,6 +142,28 @@ class CircuitTemplate(AbstractBaseTemplate):
                         nodes: dict = None, edges: List[tuple] = None):
         """Update all entries of the circuit template in their respective ways. See the documentation of
         `CircuitTemplate` for a detailed description of the method parameters.
+
+        Parameters
+        ----------
+        name
+            Name of the template.
+        path
+            Path to the YAML template definition.
+        description
+            Optional description of the template.
+        circuits
+            Updates to template circuits. Keys should be the circuit names and values the `CircuitTemplate` instances.
+        nodes
+            Updates to template nodes. Keys should be the node names and values the `NodeTemplate` instances.
+        edges
+            Updates to template edges. List with edge tuples that contain: (1) a source node name, (2) a target node
+            name, (3) an `EdgeTemplate` instance or `None`, and (4) a dictionary with edge attributes.
+
+        Returns
+        -------
+        CircuitTemplate
+            New, updated `CircuitTemplate` instance.
+
         """
 
         if nodes and circuits:
@@ -361,8 +382,7 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         if clear:
             net.clear()
-        else:
-            self._ir = net._ir
+        self._ir = net._ir
 
         return results.loc[cutoff:, :]
 
@@ -434,8 +454,7 @@ class CircuitTemplate(AbstractBaseTemplate):
         # clear the network temporary files
         if clear:
             net.clear()
-        else:
-            self._ir = net._ir
+        self._ir = net._ir
 
         return func, args
 
@@ -789,9 +808,9 @@ class CircuitTemplate(AbstractBaseTemplate):
         Parameters
         ----------
         source
-            Source node.
+            Source node of edge.
         target
-            Target node.
+            Target node of edge.
         idx
             Index of the desired edge among all edges from `source` to `target`.
 
@@ -808,7 +827,8 @@ class CircuitTemplate(AbstractBaseTemplate):
 
     def clear(self):
         """Removes all temporary files and directories that may have been created during simulations of that circuit.
-        Also deletes operator template caches, _imports and path variables from working memory."""
+        Also deletes operator template caches, _imports and path variables from working memory.
+        """
         self._ir.clear()
         self._ir = None
         clear_ir_caches()
@@ -817,10 +837,14 @@ class CircuitTemplate(AbstractBaseTemplate):
 
     @property
     def intermediate_representation(self):
+        """Instance of `pyrates.ir.CircuitIR` that this template is translated into when `run` or `get_run_func` are
+        called."""
         return self._ir
 
     @property
     def compute_graph(self):
+        """Instance of `pyrates.backend.computegraph.ComputeGraph` that contains a graph representation of all
+        network equations that this `CircuitTemplate` contains."""
         return self._ir.graph
 
     def _apply_nodes(self, node_keys: list, values: dict, vectorize: bool = True) -> dict:

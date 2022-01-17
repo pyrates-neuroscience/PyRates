@@ -1,6 +1,6 @@
 """
-1D Parameter Continuation and Fold Detection in a QIF Population
-================================================================
+Parameter continuation and bifurcation detection
+================================================
 
 In this tutorial, you will learn how to perform a 1D
 `numerical parameter continuation <http://www.scholarpedia.org/article/Numerical_analysis#Numerical_solution_of_
@@ -38,7 +38,7 @@ References
 """
 
 import matplotlib.pyplot as plt
-from pyrates.frontend import CircuitTemplate
+from pyrates import CircuitTemplate
 from pyauto import PyAuto
 
 # %%

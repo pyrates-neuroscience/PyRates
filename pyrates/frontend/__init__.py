@@ -35,5 +35,5 @@
 
 # template-based interface
 from pyrates.frontend import template
-from pyrates.frontend.fileio import yaml, pickle
+from pyrates.frontend.fileio import yaml, pickle, save
 from pyrates.frontend.template import CircuitTemplate, NodeTemplate, EdgeTemplate, OperatorTemplate
