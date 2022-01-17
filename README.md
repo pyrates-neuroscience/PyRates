@@ -9,24 +9,32 @@ PyRates
 
 <img src="https://github.com/pyrates-neuroscience/PyRates/blob/master/PyRates_logo_color.png" width="20%" heigth="20%" align="right">
 
-PyRates is a framework for neural modeling and simulations, developed by Richard Gast and Daniel Rose at the Max Planck Institute of Human Cognitive and Brain Sciences, Leipzig, Germany. 
+PyRates is a framework for dynamical systems modeling, developed by Richard Gast and Daniel Rose. 
 It is an open-source project that everyone is welcome to contribute to.
 
 Basic features
 ===============
 
-- Different backends: `Numpy` for fast simulations of small- to medium-sized networks. `Tensorflow` for efficient parallelization on GPUs/CPUs, `Fortran` for parameter continuations.
-- Each model is internally represented by a `networkx` graph of nodes and edges, with the former representing the model units (i.e. single cells, cell populations, ...) and the latter the information transfer between them. In principle, this allows to implement any kind of dynamic neural system that can be expressed as a graph via PyRates.
-- Solutions of initial value problems via different numerical solvers (e.g. full interface to `scipy.integrate.solve_ivp`)
-- Parameter continuations and bifurcation analysis via PyAuto, an interface to `auto-07p`
-- Storage of solutions in `pandas.DataFrame`
-- Efficient parameter sweeps on single and multiple machines via the `grid_search` module
-- Model optimization via genetic algorithms
-- Visualization of results via `seaborn`
-- Post-processing of simulation results via `scipy` and `MNE Python`
-- The user has full control over the mathematical equations that nodes and edges are defined by. 
-- Model configuration and simulation can be done within a few lines of code.  
-- Various templates for rate-based population models are provided that can be used for neural network simulations imediatly.
+Basic features:
+---------------
+
+- Frontend:
+   - implement models via a frontend of your choice: *YAML* or *Python*
+   - create basic mathematical building blocks (i.e. differential equations and algebraic equations) and use them to define a networks of nodes connected by edges
+   - create hierarchical networks by connecting networks via edges
+- Backend:
+   - choose from a number of different backends
+   - `NumPy` backend for dynamical systems modeling on CPUs via *Python*
+   - `Tensorflow` and `PyTorch` backends for parameter optimization via gradient descent and dynamical systems modeling on GPUs
+   - `Julia` backend for dynamical system modeling in *Julia*, via tools such as `DifferentialEquations.jl`
+   - `Fortran` backend for dynamical systems modeling via *Fortran 90* and interfacing the parameter continuation software *Auto-07p*
+- Other features:
+   - perform quick numerical simulations via a single function call
+   - choose between different numerical solvers
+   - perform parameter sweeps over multiple parameters at once
+   - generate backend-specific run functions that evaluate the vector field of your dynamical system
+   - Implement dynamic edge equations that include scalar dealys or delay distributions (delay distributions are automatically translated into :math:`\gamma`-kernel convolutions)
+   - choose from various pre-implemented dynamical systems that can be directly used for simulations or integrated into custom models
 
 Installation
 ============
@@ -64,7 +72,6 @@ pip install '.[<options>]'
 Singularity container
 ---------------------
 
-
 Finally, a singularity container of the most recent version of this software can be found [here](https://singularity.gwdg.de/containers/3).
 This container provides a stand-alone version of PyRates including all necessary Python tools to be run, independent of local operating systems. 
 To be able to use this container, you need to install [Singularity](https://singularity.lbl.gov/) on your local machine first.
@@ -85,4 +92,4 @@ If you use this framework, please cite:
 Contact
 =======
 
-If you have questions, problems or suggestions regarding PyRates, please contact [Richard Gast](https://www.cbs.mpg.de/person/59190/376039) or [Daniel Rose](https://www.cbs.mpg.de/person/51141/374227).
+If you have questions, problems or suggestions regarding PyRates, please contact [Richard Gast](https://www.cbs.mpg.de/person/59190/376039).
