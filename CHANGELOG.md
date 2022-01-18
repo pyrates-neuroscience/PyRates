@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.10
+
+### 0.10.0
+
+- reworked features:
+
+  - Restructured backend
+    - new backends (torch, Julia)
+    - sympy-based equation parsing
+    - improved compute graph
+    - improved generation of run functions from compute graphs
+  
+  - Improved frontend
+    - easier imports
+    - additional convenience functions for simulations
+    - less steps from model definition to simulation
+    - reduced syntax for model definitions
+  
+  - Removed utility package
+    - utility packages for parameter optimization, signal analysis and visualization have been removed from the pyrates main package
+    - most utility functionalities have been moved to separate repositories of the pyrates-neuroscience organization
+    - less package requirements
+  
+  - new model templates
+    - improved structure of the model templates
+    - New model templates and documentation examples
+    - new example galleries and jupyter notebooks with hands-on use examples
+
 ## 0.9
 
 ### 0.9.6
