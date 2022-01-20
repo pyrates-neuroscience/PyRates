@@ -40,6 +40,11 @@ References
 import matplotlib.pyplot as plt
 from pyrates import CircuitTemplate
 from pyauto import PyAuto
+import sys
+sys.path.append('../')
+
+path = sys.argv[-1]
+auto_dir = path if type(path) is str and ".py" not in path else "~/PycharmProjects/auto-07p"
 
 # %%
 # Part 1: Creating a PyAuto Instance
@@ -97,7 +102,7 @@ print(f.read())
 # Now that the model equations are compiled, we can generate an instance of :code:`pyauto.PyAuto`, a Python
 # `tool<https://github.com/pyrates-neuroscience/PyAuto>`_ that provides and interface to :code:`auto-07p`.
 
-qif_auto = PyAuto(working_dir=None, auto_dir='~/PycharmProjects/auto-07p')
+qif_auto = PyAuto(working_dir=None, auto_dir=auto_dir)
 
 # %%
 # Now, we can use all the tools provided by auto-07p to investigate how the model reacts to changes in its
