@@ -10,6 +10,7 @@ jobs:
       - image: cimg/python:3.6.15
     steps:
       - checkout
+      - run: pip install --upgrade pip
       - run: pip install .[tests] 
       - run: pytest tests/
   p37:
