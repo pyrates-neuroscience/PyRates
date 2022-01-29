@@ -49,10 +49,10 @@ pip install pyrates
 
 You can install optional (non-default) packages by specifying one or more options in brackets, e.g.:
 ```
-pip install pyrates[tf,plot]
+pip install pyrates[backends]
 ```
 
-Available options are `tf`, `plot`, `proc`, `cluster`, `numba` and `all`. 
+Available options are `backends`, `dev`, and `all` at the moment. 
 The latter includes all optional packages. 
 Furthermore, the option `tests` includes all packages necessary to run tests found in the github repository.
 
