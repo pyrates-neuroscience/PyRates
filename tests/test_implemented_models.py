@@ -18,8 +18,8 @@ __status__ = "Development"
 ###########
 
 # define backends for which to run the tests
-backends = ['default', 'torch', 'tensorflow']
-vectorization = [False, True, True, False]
+backends = ['torch', 'default', 'tensorflow']
+vectorization = [True, False, True]
 
 # define test accuracy
 accuracy = 1e-4
@@ -75,7 +75,8 @@ def test_3_1_jansenrit():
         # single operator JRC
         r1 = integrate("model_templates.neural_mass_models.jansenrit.JRC2", simulation_time=T,
                        outputs={'EIN': 'jrc/jrc_op/V_ein'}, backend=b, step_size=dt, solver='scipy',
-                       sampling_step_size=dts, clear=True, file_name='jrc1', vectorize=v)
+                       sampling_step_size=dts, clear=True, file_name='jrc1', vectorize=v,
+                       )
 
         # multi-node JRC
         r2 = integrate("model_templates.neural_mass_models.jansenrit.JRC", simulation_time=T,

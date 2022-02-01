@@ -69,6 +69,7 @@ class JuliaBackend(BaseBackend):
 
         # define fortran-specific imports
         self._imports.pop(0)
+        self._imports.append("using LinearAlgebra")
 
         # set up pyjulia
         from julia.api import Julia
@@ -85,6 +86,19 @@ class JuliaBackend(BaseBackend):
         if 'float' in dtype:
             return float(v)
         return int(v)
+
+    def add_var_update(self, lhs: ComputeVar, rhs: str, lhs_idx: Optional[str] = None, rhs_shape: Optional[tuple] = ()):
+
+        super().add_var_update(lhs=lhs, rhs=rhs, lhs_idx=lhs_idx, rhs_shape=rhs_shape)
+        if lhs_idx:
+            line = self.code.pop()
+            self.add_code_line(f"@. {line}")
+        elif rhs_shape and sum(rhs_shape) > 1:
+            line = self.code.pop()
+            lhs, rhs = line.split(' = ')
+            if "dot(" not in rhs:
+                rhs = f"@. {rhs}"
+            self.add_code_line(f"{lhs} = {rhs}")
 
     def create_index_str(self, idx: Union[str, int, tuple], separator: str = ',', apply: bool = True,
                          **kwargs) -> Tuple[str, dict]:

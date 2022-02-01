@@ -4,7 +4,7 @@ The Kuramoto Oscillator
 =======================
 
 Here, we will introduce the Kuramoto model, a generic phase oscillator model with a wide range of applications [1]_.
-In its simplest form, each Kuromoto oscillator is governed by a non-linear, 1st order ODE:
+In its simplest form, each Kuramoto oscillator is governed by a non-linear, 1st order ODE:
 
 .. math::
         \\dot \\theta_i &= \\omega + \\sum_j J_{ij} sin(\\theta_j - \\theta_i),

@@ -67,8 +67,8 @@ class TorchBackend(BaseBackend):
         # ensure that long is the standard integer type
         if 'int_precision' in kwargs:
             print(f"Warning: User-provided integer precision `{kwargs.pop('int_precision')}` will be ignored, since the"
-                  f"torch backend requires integer precision `long` for some indexing operations.")
-        kwargs['int_precision'] = 'long'
+                  f"torch backend requires integer precision `int64` for some indexing operations.")
+        kwargs['int_precision'] = 'int64'
 
         # call parent method
         super().__init__(ops=torch_ops, imports=imports, **kwargs)

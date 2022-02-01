@@ -1184,7 +1184,7 @@ class CircuitTemplate(AbstractBaseTemplate):
     @staticmethod
     def _validate_backend_args(backend: str, vectorize: bool, dt_adapt: bool, **kwargs) -> None:
 
-        if vectorize and backend in ['fortran', 'julia']:
+        if vectorize and backend in ['fortran']:
             raise PyRatesException(f'Vectorization of the network has been requested but is not implemented for your '
                                    f'choice of backend: {backend}. Please either choose another backend or set '
                                    f'`vectorize` to `False`.')
@@ -1259,7 +1259,7 @@ def create_input_node(var: str, inp: np.ndarray, continuous: bool, T: float, vec
         var_dict = {
             var_name: {'vtype': 'output', 'value': 0.0, 'shape': lhs_shape, 'dtype': 'float'},
             f"{var}_input": {'vtype': 'constant', 'value': inp, 'shape': inp.shape, 'dtype': 'float'},
-            't': {'vtype': 'variable', 'value': 0, 'dtype': 'int32', 'shape': ()}
+            't': {'vtype': 'variable', 'value': 0, 'dtype': 'int', 'shape': ()}
         }
 
     # create input operator

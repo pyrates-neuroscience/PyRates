@@ -202,7 +202,7 @@ def adapt_circuit(circuit: Union[CircuitTemplate, str], params: dict, param_map:
 
 
 def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union[dict, pd.DataFrame], param_map: dict,
-                step_size: float, simulation_time: float, inputs: dict, outputs: dict,
+                step_size: float, simulation_time: float, outputs: dict, inputs: Optional[dict] = None,
                 sampling_step_size: Optional[float] = None, permute_grid: bool = False, **kwargs) -> tuple:
     """Function that runs multiple parametrizations of the same circuit in parallel and returns a combined output.
 
@@ -218,10 +218,10 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
         Simulation step-size in s.
     simulation_time
         Simulation time in s.
-    inputs
-        Inputs as provided to the `run` method of `:class:ComputeGraph`.
     outputs
-        Outputs as provided to the `run` method of `:class:ComputeGraph`.
+        Output variables as provided to the `run` method of `:class:ComputeGraph`.
+    inputs
+        Extrinsic inputs as provided to the `run` method of `:class:ComputeGraph`.
     sampling_step_size
         Sampling step-size as provided to the `run` method of `:class:ComputeGraph`.
     permute_grid
@@ -253,7 +253,6 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
 
     # get parameter names and grid length
     param_keys = list(param_grid.keys())
-    N = param_grid.shape[0]
 
     # assign parameter updates to each circuit, combine them to unconnected network and remember their parameters
     circuit_names = []
@@ -269,9 +268,10 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
     param_grid.index = circuit_names
 
     # adjust input of simulation to combined network
-    for inp_key, inp in inputs.copy().items():
-        inputs[f"all/{inp_key}"] = inp
-        inputs.pop(inp_key)
+    if inputs:
+        for inp_key, inp in inputs.copy().items():
+            inputs[f"all/{inp_key}"] = inp
+            inputs.pop(inp_key)
 
     # adjust output of simulation to combined network
     outputs_new = {}
