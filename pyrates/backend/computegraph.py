@@ -86,6 +86,9 @@ class ComputeNode:
         return self
 
     def set_value(self, v: Union[float, np.ndarray]):
+        if self.name == 't':
+            print(self._value)
+            print(v)
         self._value = np.asarray(v, dtype=self.dtype)
         self.shape = tuple(v.shape)
 

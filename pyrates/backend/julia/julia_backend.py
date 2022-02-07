@@ -90,10 +90,7 @@ class JuliaBackend(BaseBackend):
     def add_var_update(self, lhs: ComputeVar, rhs: str, lhs_idx: Optional[str] = None, rhs_shape: Optional[tuple] = ()):
 
         super().add_var_update(lhs=lhs, rhs=rhs, lhs_idx=lhs_idx, rhs_shape=rhs_shape)
-        if lhs_idx:
-            line = self.code.pop()
-            self.add_code_line(f"@. {line}")
-        elif rhs_shape and sum(rhs_shape) > 1:
+        if rhs_shape and sum(rhs_shape) > 1:
             line = self.code.pop()
             lhs, rhs = line.split(' = ')
             if "dot(" not in rhs:
