@@ -324,7 +324,7 @@ class BaseBackend(CodeGen):
 
         # initial values
         t0 = func_args[0]
-        times = np.arange(t0, T, dts) if dts else np.arange(t0, T, dt)
+        times = np.arange(0.0, T, dts) if dts else np.arange(0.0, T, dt)
         y0 = func_args[1]
 
         # perform simulation

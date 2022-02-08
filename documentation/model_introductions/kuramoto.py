@@ -37,12 +37,12 @@ Nonlinear Phenomena 50(1): 15-30.
 # Step 1: Numerical simulation of a the model behavior in time
 # ------------------------------------------------------------
 #
-# Here, we use the :code:`simulate` function imported from PyRates. As a first argument to this function, either a path
+# Here, we use the :code:`integrate` function imported from PyRates. As a first argument to this function, either a path
 # to a YAML-based model definition or a :code:`CircuitTemplate` instance can be provided. The function will then compile
 # the model and solve the initial value problem of the above defined differential equations for a time interval from
 # 0 to the given simulation time. This solution will be calculated numerically by a differential equation solver in
 # the backend, starting with a defined step-size. Here, we use the default backend and solver. Furthermore,
-# we provide a step-function extrinsic input that excites all QIF neurons in a time window from :code:`start` to
+# we provide a step-function extrinsic input to one of the Kuramoto oscillators in a time window from :code:`start` to
 # :code:`stop`. This input is defined on a time vector with fixed time steps of size :code:`step_size`.
 # Check out the arguments of the code:`CircuitTemplate.run()` method for a detailed explanation of the
 # arguments that you can use to adjust this numerical procedure.

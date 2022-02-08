@@ -86,9 +86,6 @@ class ComputeNode:
         return self
 
     def set_value(self, v: Union[float, np.ndarray]):
-        if self.name == 't':
-            print(self._value)
-            print(v)
         self._value = np.asarray(v, dtype=self.dtype)
         self.shape = tuple(v.shape)
 
@@ -402,6 +399,14 @@ class ComputeGraph(MultiDiGraph):
         func = code_gen.generate_func(func_name=func_name, to_file=to_file, func_args=func_args[3:],
                                       state_vars=self.state_vars, **kwargs)
 
+
+        # OPTIONAL: write function arguments (state vectors and constants) to file
+        c_fn = kwargs.pop('constants_file_name', None)
+        if c_fn:
+            arg_dict = {arg: self.get_var(arg).value for arg in func_args}
+            fn = f'{self.backend._fdir}/{c_fn}' if self.backend._fdir else c_fn
+            np.savez(c_fn, **arg_dict)
+
         return func, tuple([self.get_var(arg, from_backend=True) for arg in func_args])
 
     def run(self, func: Callable, func_args: tuple, T: float, dt: float, dts: Optional[float] = None,
@@ -591,7 +596,7 @@ class ComputeGraph(MultiDiGraph):
 
         return expr_args, expr
 
-    def _expr_to_str(self, expr: Any, expr_str: str = None, apply: bool = True) -> tuple:
+    def _expr_to_str(self, expr: Any, expr_str: str = None, apply: bool = True, **kwargs) -> tuple:
 
         # preparations
         ###############
@@ -608,7 +613,7 @@ class ComputeGraph(MultiDiGraph):
 
             # transform expression arguments into strings
             for arg in expr.args:
-                expr_part, args, _, _ = self._expr_to_str(arg)
+                expr_part, args, _, _ = self._expr_to_str(arg, **kwargs)
                 expr_str = expr_str.replace(str(arg), expr_part)
                 index_args.extend(args)
 
@@ -618,29 +623,29 @@ class ComputeGraph(MultiDiGraph):
         if 'index_1d(' in expr_str:
 
             # replace `index` calls with brackets-based indexing
-            idx = self._get_var_idx(idx=(expr.args[1],), args=index_args, apply=apply)
+            idx = self._get_var_idx(idx=(expr.args[1],), args=index_args, apply=apply, **kwargs)
             func = 'index_1d'
 
         elif 'index_2d(' in expr_str:
 
             # replace `2d_index` calls with brackets-based indexing
-            idx = self._get_var_idx(idx=(expr.args[1], expr.args[2]), args=index_args, apply=apply)
+            idx = self._get_var_idx(idx=(expr.args[1], expr.args[2]), args=index_args, apply=apply, **kwargs)
             func = 'index_2d'
 
         elif 'index_range(' in expr_str:
 
             # replace `range_index` calls with brackets-based indexing
-            idx = self._get_var_idx(idx=((expr.args[1], expr.args[2]),), args=index_args, apply=apply)
+            idx = self._get_var_idx(idx=((expr.args[1], expr.args[2]),), args=index_args, apply=apply, **kwargs)
             func = 'index_range'
 
         elif 'index_axis(' in expr_str:
 
             # replace `axis_index` calls with brackets-based indexing
             if len(expr.args) < 2:
-                idx = self._get_var_idx(idx=(':',), args=index_args, apply=apply)
+                idx = self._get_var_idx(idx=(':',), args=index_args, apply=apply, **kwargs)
             else:
                 idx = self._get_var_idx(args=index_args, apply=apply,
-                                        idx=tuple([':' for _ in range(expr.args[2])] + [f"{expr.args[1]}"]))
+                                        idx=tuple([':' for _ in range(expr.args[2])] + [f"{expr.args[1]}"]), **kwargs)
             func = "index_axis"
 
         # either apply the above indexing calls or return them
@@ -752,7 +757,7 @@ class ComputeGraph(MultiDiGraph):
             inputs.extend([inp] if isinstance(self.get_var(inp), ComputeVar) else self._get_inputs(inp))
         return inputs
 
-    def _get_var_idx(self, idx: tuple, args: list, apply: bool = True):
+    def _get_var_idx(self, idx: tuple, args: list, apply: bool = True, **kwargs):
 
         # collect indexing variables where necessary
         new_idx = []
@@ -764,7 +769,7 @@ class ComputeGraph(MultiDiGraph):
                 new_idx.append(idx_tmp)
 
         # turn index into a backend-specific string
-        idx_str, new_vars = self.backend.create_index_str(tuple(new_idx), apply=apply)
+        idx_str, new_vars = self.backend.create_index_str(tuple(new_idx), apply=apply, **kwargs)
 
         # add new variables to graph and index arguments
         for key, v in new_vars.items():

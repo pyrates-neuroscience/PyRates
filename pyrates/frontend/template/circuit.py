@@ -522,7 +522,6 @@ class CircuitTemplate(AbstractBaseTemplate):
         edges = []
         for (source, target, template, _), values in edge_col.items():
 
-            # get edge template and instantiate it
             values = deepcopy(values)
 
             # update edge template default values with passed edge values,
@@ -795,6 +794,9 @@ class CircuitTemplate(AbstractBaseTemplate):
         for c_scope, c in self.circuits.items():
             edges_tmp = c.collect_edges()
             for svar, tvar, template, edge_dict in edges_tmp:
+                for key, val in edge_dict.copy().items():
+                    if type(val) is str and val != 'source':
+                        edge_dict[key] = f"{c_scope}/{val}"
                 edges.append((f"{c_scope}/{svar}", f"{c_scope}/{tvar}", template, edge_dict))
         if delay_info:
             for i, (svar, tvar, template, edge) in enumerate(edges):

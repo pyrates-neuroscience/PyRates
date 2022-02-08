@@ -1,0 +1,32 @@
+%YAML 1.2
+---
+
+# operator templates
+####################
+
+vdp_op:
+  base: OperatorTemplate
+  equations:
+    - "x' = z"
+    - "z' = mu*z*(1 - x^2) - x + inp"
+  variables:
+    x: output(0.0)
+    z: variable(1.0)
+    mu: 1.0
+    inp: input(0.0)
+
+# node templates
+################
+
+vdp_pop:
+  base: NodeTemplate
+  operators:
+    - vdp_op
+
+# circuit templates
+###################
+
+vdp:
+  base: CircuitTemplate
+  nodes:
+    p: vdp_pop

@@ -52,6 +52,23 @@ from pyrates.frontend import CircuitTemplate, NodeTemplate, OperatorTemplate, Ed
 ###########################
 
 
+def clear(model: CircuitTemplate, **kwargs):
+    """Function that clears all temporary files and caches that have been created via a PyRates model.
+
+    Parameters
+    ----------
+    model
+        Instance of a `CircuitTemplate`.
+    kwargs
+        Additional keyword arguments to be passed to `clear_frontend_caches`.
+    """
+    try:
+        model.clear()
+    except AttributeError:
+        pass
+    clear_frontend_caches(**kwargs)
+
+
 def clear_frontend_caches(clear_template_cache=True, clear_operator_cache=True):
     """Utility to clear caches in the frontend.
 

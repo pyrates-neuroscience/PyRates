@@ -17,13 +17,22 @@ phase_op:
     ext_in: input
 
 # sinusoidal phase coupling operator
-sin_op:
+coupling_op:
   base: OperatorTemplate
   equations:
     - "s = sin(theta_s-theta_t)"
   variables:
     theta_s: input
     theta_t: input
+    s: output
+
+# sinusoidal wrapper
+sin_op:
+  base: OperatorTemplate
+  equations:
+    - "s = sin(2*pi*theta)"
+  variables:
+    theta: input
     s: output
 
 # node templates
@@ -34,13 +43,19 @@ phase_pop:
   operators:
     - phase_op
 
+sin_pop:
+  base: NodeTemplate
+  operators:
+    - phase_op
+    - sin_op
+
 # edge templates
 ################
 
 sin_edge:
   base: EdgeTemplate
   operators:
-    - sin_op
+    - coupling_op
 
 # circuit templates
 ###################
@@ -56,7 +71,7 @@ kmo_2coupled:
     p1: phase_pop
     p2: phase_pop
   edges:
-    - [ p1/phase_op/theta, p2/phase_op/net_in, sin_edge, { weight: -4.0, sin_edge/sin_op/theta_s: source,
-                                                           sin_edge/sin_op/theta_t: p2/phase_op/theta } ]
-    - [ p2/phase_op/theta, p1/phase_op/net_in, sin_edge, { weight: -4.0, sin_edge/sin_op/theta_s: source,
-                                                           sin_edge/sin_op/theta_t: p1/phase_op/theta } ]
+    - [ p1/phase_op/theta, p2/phase_op/net_in, sin_edge, { weight: -4.0, sin_edge/coupling_op/theta_s: source,
+                                                           sin_edge/coupling_op/theta_t: p2/phase_op/theta } ]
+    - [ p2/phase_op/theta, p1/phase_op/net_in, sin_edge, { weight: -4.0, sin_edge/coupling_op/theta_s: source,
+                                                           sin_edge/coupling_op/theta_t: p1/phase_op/theta } ]

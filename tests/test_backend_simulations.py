@@ -18,7 +18,7 @@ __status__ = "Development"
 ###########
 
 # set backends to run the tests for
-backends = ['julia', 'default']
+backends = ['default']
 
 # set accuracy for all tests
 accuracy = 1e-4
@@ -442,15 +442,13 @@ def test_2_6_vectorization():
         r1 = integrate("model_templates.neural_mass_models.jansenrit.JRC_2delaycoupled", vectorize=False,
                        inputs={"jrc2/pc/rpo_e_in/u": inp}, outputs={"r": "jrc1/ein/rpo_e/V"}, backend=b,
                        solver='euler', step_size=dt, clear=True, simulation_time=T, sampling_step_size=dts,
-                       file_name=f'vec{i + 1}', julia_path='C:\Program Files\Julia\Julia-1.7.1\\bin\julia.exe',
-                       float_precision='float64')
+                       file_name=f'novec{i + 1}')
 
         # simulation with vectorized network equations
         r2 = integrate("model_templates.neural_mass_models.jansenrit.JRC_2delaycoupled", vectorize=True,
                        inputs={"jrc2/pc/rpo_e_in/u": inp}, outputs={"r": "jrc1/ein/rpo_e/V"}, backend=b,
                        solver='euler', step_size=dt, clear=True, simulation_time=T, sampling_step_size=dts,
-                       file_name=f'novec{i + 1}', julia_path='C:\Program Files\Julia\Julia-1.7.1\\bin\julia.exe',
-                       float_precision='float64')
+                       file_name=f'vec{i + 1}')
 
         assert np.mean(r1.values - r2.values) == pytest.approx(0.0, rel=accuracy, abs=accuracy)
 

@@ -90,10 +90,10 @@ class JuliaBackend(BaseBackend):
     def add_var_update(self, lhs: ComputeVar, rhs: str, lhs_idx: Optional[str] = None, rhs_shape: Optional[tuple] = ()):
 
         super().add_var_update(lhs=lhs, rhs=rhs, lhs_idx=lhs_idx, rhs_shape=rhs_shape)
-        if rhs_shape and sum(rhs_shape) > 1:
+        if rhs_shape or lhs_idx:
             line = self.code.pop()
             lhs, rhs = line.split(' = ')
-            if "dot(" not in rhs:
+            if rhs[:2] != "*(":
                 rhs = f"@. {rhs}"
             self.add_code_line(f"{lhs} = {rhs}")
 
@@ -186,6 +186,17 @@ class JuliaBackend(BaseBackend):
 
     def _add_func_call(self, name: str, args: Iterable):
         self.add_code_line(f"function {name}({','.join(args)})")
+
+    def _process_idx(self, idx: Union[Tuple[int, int], int, str, ComputeVar], **kwargs) -> str:
+
+        if type(idx) is str and ':' in idx:
+            idx0, idx1 = idx.split(':')
+            self._start_idx = 0
+            idx0 = int(self._process_idx(idx0))
+            idx1 = int(self._process_idx(idx1))
+            self._start_idx = 1
+            return self._process_idx((idx0, idx1))
+        return super()._process_idx(idx=idx, **kwargs)
 
     @staticmethod
     def expr_to_str(expr: str, args: tuple):
