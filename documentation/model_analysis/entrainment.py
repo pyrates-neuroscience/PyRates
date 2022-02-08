@@ -1,6 +1,6 @@
 """
-Entrainment
-===========
+Non-linear Oscillator Entrainment
+=================================
 
 In this tutorial, we will examine entrainment of a Van der Pol oscillator (VPO) that receives oscillatory input from a
 simple Kuramoto oscillator (KO). To this end, we will use the :code:`pyrates.integrate()` the

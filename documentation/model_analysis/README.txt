@@ -1,5 +1,5 @@
-Model Optimization
+Model Analysis
 ------------------
 
-The examples in this gallery provide tutorials for different algorithms that can be used to perform parameter
-optimization of models implemented in PyRates.
+The examples in this gallery provide tutorials for how PyRates can be used for various model analysis workflows
+that are typical for numerical investigations of dynamical systems.
