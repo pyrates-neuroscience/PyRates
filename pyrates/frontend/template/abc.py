@@ -51,7 +51,7 @@ class AbstractBaseTemplate:
         return f"<{self.__class__.__name__} '{self.path}'>"
 
     @classmethod
-    def from_yaml(cls, path):
+    def from_yaml(cls, path) -> None:
         """Short hand to load a template from yaml file. After importing the template, this method also checks whether
         the resulting template is actually an instance of the class that this method was called from. This is done to
         ensure any cls.from_yaml() produces only instances of that class and not other classes for consistency.
@@ -71,7 +71,7 @@ class AbstractBaseTemplate:
 
         Returns
         -------
-
+        None
         """
         from pyrates.frontend.template import from_yaml
         tpl = from_yaml(path)
@@ -80,6 +80,10 @@ class AbstractBaseTemplate:
             return tpl
         else:
             raise TypeError(f"The template associated with '{path}' is not of type {cls}.")
+
+    def to_yaml(self, path, **kwargs) -> None:
+        """Saves template to YAML file."""
+        raise NotImplementedError
 
     def update_template(self, *args, **kwargs):
         """Updates the template with a given list of arguments and returns a new instance of the template class."""

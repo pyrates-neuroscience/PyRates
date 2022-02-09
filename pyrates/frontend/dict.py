@@ -29,7 +29,7 @@
 """
 """
 from copy import deepcopy
-from pyrates.frontend import CircuitTemplate
+from pyrates.frontend import CircuitTemplate, NodeTemplate, EdgeTemplate, OperatorTemplate
 
 
 __author__ = "Daniel Rose, Richard Gast"
@@ -40,25 +40,44 @@ def from_circuit(circuit: CircuitTemplate):
     """Reformat graph structure into a dictionary that can be saved as YAML template. The current implementation assumes
     that nodes and edges are given by as templates."""
 
-    node_dict = {}
-    for node_key, node_data in circuit.nodes.items():
-        node = node_data["node"]
-        if node.template:
-            node_dict[node_key] = node.template
-        else:
-            # if no template is given, build and search deeper for node templates
-            pass
+    return_dict = dict()
 
-    edge_list = []
-    for source, target, edge_data in circuit.edges(data=True):
-        edge_data = deepcopy(edge_data)
-        edge = edge_data.pop("edge_ir")
-        source = f"{source}/{edge_data['source_var']}"
-        target = f"{target}/{edge_data['target_var']}"
-        edge_list.append((source, target, edge.template, dict(weight=edge_data["weight"],
-                                                              delay=edge_data["delay"])))
+    # collect circuits, nodes and edges
+    if circuit.circuits:
+        return_dict['circuits'] = {key: from_circuit(template) for key, template in circuit.circuits.items()}
+    else:
+        return_dict['nodes'] = {key: from_node(template) for key, template in circuit.nodes.items()}
+    return_dict['edges'] = [from_edge(edge) for edge in circuit.edges]
 
     # use Python template as base, since inheritance from YAML templates is ambiguous for circuits
-    base = "CircuitTemplate"
+    return_dict['base'] = "CircuitTemplate"
 
-    return dict(nodes=node_dict, edges=edge_list, base=base)
+    return return_dict
+
+
+def from_node(node: NodeTemplate):
+    """Reformat operator structure into a dictionary that can be saved as YAML template.
+    """
+    operators = {op.name: from_operator(op, updates) for op, updates in node.operators.items()}
+    base = "NodeTemplate"
+    return dict(operators=operators, base=base, name=node.name)
+
+
+def from_operator(op: OperatorTemplate, updates):
+    """Reformat operator template into a dictionary that can be saved as YAML template.
+    """
+    equations = deepcopy(op.equations)
+    variables = deepcopy(op.variables)
+    variables.update(updates)
+    base = "OperatorTemplate"
+    return dict(equations=equations, variables=variables, base=base)
+
+
+def from_edge(edge: EdgeTemplate):
+    """Reformat edge template into a list that can be saved as YAML template.
+    """
+    edge_new = list(edge)
+    if edge_new[2] is None:
+        return tuple(edge_new)
+    edge_new[2] = from_node(edge_new[2])
+    return tuple(edge_new)

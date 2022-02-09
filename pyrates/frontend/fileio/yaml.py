@@ -83,32 +83,28 @@ def dict_from_yaml(path: str):
     return template_dict
 
 
-# def from_circuit(circuit, path: str, name: str):
-#     """Interface to dump a CircuitIR instance to YAML."""
-#     from pyrates.frontend.dict import from_circuit as dict_from_circuit
-#     dict_repr = {name: dict_from_circuit(circuit)}
-#
-#     from ruamel.yaml import YAML
-#     yaml = YAML()
-#
-#     from pyrates.utility.filestorage import create_directory
-#     create_directory(path)
-#     from pathlib import Path
-#     path = Path(path)
-#     yaml.dump(dict_repr, path)
+def dump_to_yaml(circuit, path: str, **kwargs) -> None:
+    """Interface to dump a `CircuitTemplate` instance to YAML.
 
+    Parameters
+    ----------
+    circuit
+    path
 
-def dump(_dict: dict, filename: str, template_name: str, **kwargs):
-    """Dump a template definition dictionary to file."""
+    Returns
+    -------
+    None
+    """
+    from pyrates.frontend.dict import from_circuit as dict_from_circuit
 
-    if template_name is None:
-        raise TypeError(f"No `obj_name` defined. Please specify a name for the template.")
-
-    _dict = {template_name: _dict}
+    # TODO: Ensure that this method returns a dictionary that resembles the YAML Template structure expected by PyRates
+    dict_repr = {circuit.name: dict_from_circuit(circuit)}
 
     from ruamel.yaml import YAML
     yaml = YAML()
 
+    from pyrates.utility import create_directory
+    create_directory(path)
     from pathlib import Path
-    path = Path(filename)
-    yaml.dump(_dict, path, **kwargs)
+    path = Path(path)
+    yaml.dump(dict_repr, path, **kwargs)

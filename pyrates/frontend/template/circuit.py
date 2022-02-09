@@ -138,8 +138,32 @@ class CircuitTemplate(AbstractBaseTemplate):
         self._vectorization_labels = {}
         self._vectorization_indices = {}
 
+    def to_yaml(self, path, **kwargs) -> None:
+        """Short hand to save the `CircuitTemplate` to a yaml file. After that call, either a new YAML file has been
+        created including all template definitions required to reconstruct the `CircuitTemplate` instance, or additional
+        operators have been added to the already existing YAML file.
+
+        Parameters
+        ----------
+        path
+            (str) path to YAML template of the form `path.to.template_file.template_name` or
+            path/to/template_file/template_name.TemplateName. The dot notation refers to a path that can be found
+            using python's import functionality. That means it needs to be a module (a folder containing an
+            `__init__.py`) located in the Python path (e.g. the current working directory). The slash notation refers to
+            a file in an absolute or relative path from the current working directory. In either case the second-to-last
+            part refers to the filename without file extension and the last part refers to the template name.
+        kwargs
+            Additional keyword arguments passed to `pyrates.frontend.fileio.yaml.dump_to_yaml`
+        Returns
+        -------
+        None
+        """
+
+        from pyrates.frontend.template import to_yaml
+        to_yaml(self, path)
+
     def update_template(self, name: str = None, path: str = None, description: str = None, circuits: dict = None,
-                        nodes: dict = None, edges: List[tuple] = None):
+                        nodes: dict = None, edges: List[tuple] = None, in_place: bool = False):
         """Update all entries of the circuit template in their respective ways. See the documentation of
         `CircuitTemplate` for a detailed description of the method parameters.
 
@@ -158,6 +182,9 @@ class CircuitTemplate(AbstractBaseTemplate):
         edges
             Updates to template edges. List with edge tuples that contain: (1) a source node name, (2) a target node
             name, (3) an `EdgeTemplate` instance or `None`, and (4) a dictionary with edge attributes.
+        in_place
+            If true, all changes will be made to this particular CircuitTemplate instance and nothing is returned.
+            If False, a new instance with the updates will be returned while keeping the old instance as it was.
 
         Returns
         -------
@@ -197,8 +224,16 @@ class CircuitTemplate(AbstractBaseTemplate):
         else:
             edges = self.edges
 
-        return self.__class__(name=name, path=path, description=description, circuits=circuits, nodes=nodes, edges=edges
-                              )
+        # either create new instance with updates or store updates on current template instance
+        if not in_place:
+            return self.__class__(name=name, path=path, description=description, circuits=circuits, nodes=nodes,
+                                  edges=edges)
+        self.name = name
+        self.path = path
+        self.__doc__ = description
+        self.circuits = circuits
+        self.nodes = nodes
+        self.edges = edges
 
     def update_var(self, node_vars: dict = None, edge_vars: list = None):
         """Update the value of node or edge variables.
@@ -239,6 +274,79 @@ class CircuitTemplate(AbstractBaseTemplate):
             base_dict.update(edge_dict)
 
         return self
+
+    def add_edges_from_matrix(self, source_var: str, target_var: str, nodes: list, weight=None, delay=None,
+                    template=None, **attr) -> None:
+        """Adds all possible edges between the `source_var` and `target_var` of all passed `nodes`. `Weight` and `Delay`
+        need to be arrays containing scalars for each of those edges.
+
+        Parameters
+        ----------
+        source_var
+            Pointer to a variable on the source nodes ('op/var').
+        target_var
+            Pointer to a variable on the target nodes ('op/var').
+        nodes
+            List of node names that should be connected to each other
+        weight
+            Optional N x N matrix with edge weights (N = number of nodes). If not passed, all edges receive a weight of
+            1.0.
+        delay
+            Optional N x N matrix with edge delays (N = number of nodes). If not passed, all edges receive a delay of
+            0.0.
+        template
+            Can be link to edge template that should be used for each edge.
+        attr
+            Additional edge attributes. Can either be N x N matrices or other scalars/objects.
+
+        Returns
+        -------
+        None
+
+        """
+
+        # construct edge attribute dictionary from arguments
+        ####################################################
+
+        # weights and delays
+        if weight is None:
+            weight = 1.0
+        edge_attributes = {'weight': weight, 'delay': delay}
+
+        # add rest of the attributes
+        edge_attributes.update(attr)
+
+        # construct edges list
+        ######################
+
+        # find out which edge attributes have been passed as matrices
+        matrix_attributes = {}
+        for key, attr in edge_attributes.copy().items():
+            if hasattr(attr, 'shape') and len(attr.shape) >= 2:
+                matrix_attributes[key] = edge_attributes.pop(key)
+
+        # create edge list
+        edges = []
+        for i, source in enumerate(nodes):
+            for j, target in enumerate(nodes):
+
+                edge_attributes_tmp = {}
+
+                # extract edge attribute value from matrices
+                for key, attr in matrix_attributes.items():
+                    edge_attributes_tmp[key] = attr[i, j]
+
+                # add remaining attributes
+                edge_attributes_tmp.update(edge_attributes.copy())
+
+                # add edge to list
+                source_key, target_key = f"{source}/{source_var}", f"{target}/{target_var}"
+
+                if edge_attributes_tmp['weight'] and source_key in self and target_key in self:
+                    edges.append((source_key, target_key, template, edge_attributes_tmp))
+
+        # add edges to network
+        self.update_template(edges=edges, in_place=True)
 
     def run(self, simulation_time: float, step_size: float, inputs: Optional[dict] = None,
             outputs: Optional[Union[dict, list]] = None, sampling_step_size: Optional[float] = None,

@@ -35,5 +35,5 @@ __status__ = "Development"
 __version__ = "0.10.1"
 
 
-from pyrates.utility import integrate, circuit_from_yaml, circuit_from_pickle, grid_search, clear_frontend_caches, clear
+from pyrates.utility import integrate, grid_search, clear_frontend_caches, clear
 from pyrates.frontend import CircuitTemplate, NodeTemplate, EdgeTemplate, OperatorTemplate, save
