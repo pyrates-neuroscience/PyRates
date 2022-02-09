@@ -39,55 +39,23 @@ def get_parent_directory():
 
 
 @pytest.mark.skip
-def test_pickle_template():
-    path = "model_templates.neural_mass_models.jansenrit.JRC"
-    from pyrates.frontend.template import from_yaml, clear_cache
-    clear_cache()
-
-    template = from_yaml(path)
-
-    # include pickle protocol number in file name for version interoperability
-    from pickle import HIGHEST_PROTOCOL
-    ext = f"p{HIGHEST_PROTOCOL}"
-
-    # configure filenames
-    out_file = os.path.join(get_parent_directory(), "output", f"jansen_rit_template.{ext}")
-    test_file = os.path.join(get_parent_directory(), "resources", f"jansen_rit_template.{ext}")
-
-    from pyrates import save, circuit_from_pickle
-
-    save(template, out_file, filetype='pickle')
-    # to update the reference dump, uncomment the following
-    # save(template, test_file, filetype='pickle')
-
-    compare_files(out_file, test_file)
-
-    template = circuit_from_pickle(out_file)
-    assert template
-
-
-@pytest.mark.skip
 def test_yaml_template():
     path = "model_templates.jansen_rit.circuit.JansenRitCircuit"
-    from pyrates.frontend.template import clear_cache
-    from pyrates import save, circuit_from_yaml
-    clear_cache()
+    from pyrates import clear_frontend_caches
+    from pyrates import save, CircuitTemplate
+    clear_frontend_caches()
 
-    template = circuit_from_yaml(path)
-
-    # include pickle protocol number in file name for version interoperability
-    from pickle import HIGHEST_PROTOCOL
-    ext = f"p{HIGHEST_PROTOCOL}"
+    template = CircuitTemplate.from_yaml(path)
 
     # configure filenames
-    out_file = os.path.join(get_parent_directory(), "output", f"jansen_rit_template.{ext}")
-    test_file = os.path.join(get_parent_directory(), "resources", f"jansen_rit_template.{ext}")
+    out_file = os.path.join(get_parent_directory(), "output", "jansen_rit_template.yaml")
+    test_file = os.path.join(get_parent_directory(), "resources", "jansen_rit_template.yaml")
 
-    save(template, out_file, filetype='yaml', template_name='jrc1')
+    template.to_yaml(out_file)
     # to update the reference dump, uncomment the following
     # save(template, test_file, filetype='yaml', template_name='jrc1')
 
     compare_files(out_file, test_file)
 
-    template = circuit_from_yaml(out_file)
+    template = CircuitTemplate.from_yaml(out_file)
     assert template

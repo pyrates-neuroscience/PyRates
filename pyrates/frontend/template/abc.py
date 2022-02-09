@@ -51,8 +51,8 @@ class AbstractBaseTemplate:
         return f"<{self.__class__.__name__} '{self.path}'>"
 
     @classmethod
-    def from_yaml(cls, path) -> None:
-        """Short hand to load a template from yaml file. After importing the template, this method also checks whether
+    def from_yaml(cls, path):
+        """Load a template from yaml file. After importing the template, this method also checks whether
         the resulting template is actually an instance of the class that this method was called from. This is done to
         ensure any cls.from_yaml() produces only instances of that class and not other classes for consistency.
         Templates are cached by path. Depending on the 'base' key of the yaml template,
@@ -71,7 +71,7 @@ class AbstractBaseTemplate:
 
         Returns
         -------
-        None
+
         """
         from pyrates.frontend.template import from_yaml
         tpl = from_yaml(path)

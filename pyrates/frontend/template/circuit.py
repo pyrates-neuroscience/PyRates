@@ -276,7 +276,7 @@ class CircuitTemplate(AbstractBaseTemplate):
         return self
 
     def add_edges_from_matrix(self, source_var: str, target_var: str, nodes: list, weight=None, delay=None,
-                    template=None, **attr) -> None:
+                    template=None, edge_attr: dict = None) -> None:
         """Adds all possible edges between the `source_var` and `target_var` of all passed `nodes`. `Weight` and `Delay`
         need to be arrays containing scalars for each of those edges.
 
@@ -296,7 +296,7 @@ class CircuitTemplate(AbstractBaseTemplate):
             0.0.
         template
             Can be link to edge template that should be used for each edge.
-        attr
+        edge_attr
             Additional edge attributes. Can either be N x N matrices or other scalars/objects.
 
         Returns
@@ -314,7 +314,7 @@ class CircuitTemplate(AbstractBaseTemplate):
         edge_attributes = {'weight': weight, 'delay': delay}
 
         # add rest of the attributes
-        edge_attributes.update(attr)
+        edge_attributes.update(edge_attr)
 
         # construct edges list
         ######################
@@ -330,6 +330,11 @@ class CircuitTemplate(AbstractBaseTemplate):
         for i, source in enumerate(nodes):
             for j, target in enumerate(nodes):
 
+                if source not in self.nodes:
+                    raise ValueError(f'Node {source} is not defined on this CircuitTemplate instance.')
+                if target not in self.nodes:
+                    raise ValueError(f'Node {target} is not defined on this CircuitTemplate instance.')
+
                 edge_attributes_tmp = {}
 
                 # extract edge attribute value from matrices
@@ -342,7 +347,7 @@ class CircuitTemplate(AbstractBaseTemplate):
                 # add edge to list
                 source_key, target_key = f"{source}/{source_var}", f"{target}/{target_var}"
 
-                if edge_attributes_tmp['weight'] and source_key in self and target_key in self:
+                if edge_attributes_tmp['weight']:
                     edges.append((source_key, target_key, template, edge_attributes_tmp))
 
         # add edges to network
