@@ -36,8 +36,8 @@ import typing as tp
 from numbers import Number
 
 import numpy as np
-from pyparsing import Literal, CaselessLiteral, Word, Combine, Optional, \
-    ZeroOrMore, Forward, nums, alphas, ParserElement
+# from pyparsing import Literal, CaselessLiteral, Word, Combine, Optional, \
+#     ZeroOrMore, Forward, nums, alphas, ParserElement
 from sympy import Expr, Symbol, lambdify, sympify
 
 # pyrates internal _imports
@@ -52,7 +52,7 @@ __status__ = "development"
 ###############################################
 
 
-class Algebra(ParserElement):
+class Algebra:
 
     def __init__(self, **kwargs) -> None:
         """Instantiates expression parser.
@@ -65,90 +65,90 @@ class Algebra(ParserElement):
         # define algebra
         ################
 
-        if not self.algebra:
-
-            # general symbols
-            point = Literal(".")
-            comma = Literal(",")
-            colon = Literal(":")
-            e = CaselessLiteral("E")
-            pi = CaselessLiteral("PI")
-
-            # parentheses
-            par_l = Literal("(")
-            par_r = Literal(")").setParseAction(self._push_first)
-            idx_l = Literal("[")
-            idx_r = Literal("]")
-
-            # basic mathematical operations
-            plus = Literal("+")
-            minus = Literal("-")
-            mult = Literal("*")
-            div = Literal("/")
-            mod = Literal("%")
-            dot = Literal("@")
-            exp_1 = Literal("^")
-            exp_2 = Combine(mult + mult)
-            transp = Combine(point + Literal("T"))
-            inv = Combine(point + Literal("I"))
-
-            # numeric types
-            num_float = Combine(Word("-" + nums, nums) +
-                                Optional(point + Optional(Word(nums))) +
-                                Optional(e + Word("-" + nums, nums)))
-            num_int = Word("-" + nums, nums)
-
-            # variables and functions
-            name = Word(alphas, alphas + nums + "_$")
-            func_name = Combine(name + par_l, adjacent=True)
-
-            # math operation groups
-            op_add = plus | minus
-            op_mult = mult | div | dot | mod
-            op_exp = exp_1 | exp_2 | inv | transp
-
-            # logical operations
-            greater = Literal(">")
-            less = Literal("<")
-            equal = Combine(Literal("=") + Literal("="))
-            unequal = Combine(Literal("!") + Literal("="))
-            greater_equal = Combine(Literal(">") + Literal("="))
-            less_equal = Combine(Literal("<") + Literal("="))
-
-            # logical operations group
-            op_logical = greater_equal | less_equal | unequal | equal | less | greater
-
-            # pre-allocations
-            self.algebra = Forward()
-            exponential = Forward()
-            index_multiples = Forward()
-
-            # basic organization units
-            index_start = idx_l.setParseAction(self._push_first)
-            index_end = idx_r.setParseAction(self._push_first)
-            index_comb = colon.setParseAction(self._push_first)
-            arg_comb = comma.setParseAction(self._push_first)
-            arg_tuple = par_l + ZeroOrMore(self.algebra.suppress() + Optional(arg_comb)) + par_r
-            func_arg = arg_tuple | self.algebra.suppress()
-
-            # basic computation unit
-            atom = (func_name + Optional(func_arg.suppress()) + ZeroOrMore(arg_comb.suppress() + func_arg.suppress()) +
-                    par_r.suppress() | name | pi | e | num_float | num_int).setParseAction(self._push_neg_or_first) | \
-                   (par_l.setParseAction(self._push_last) + self.algebra.suppress() + par_r).setParseAction(self._push_neg)
-
-            # apply indexing to atoms
-            indexed = (Optional(minus) + atom).setParseAction(self._push_neg) + \
-                      ZeroOrMore((index_start + index_multiples + index_end))
-            index_base = (self.algebra.suppress() | index_comb)
-            index_full = index_base + ZeroOrMore((index_comb + index_base)) + ZeroOrMore(index_comb)
-            index_multiples << index_full + ZeroOrMore((arg_comb + index_full))
-
-            # hierarchical relationships between mathematical and logical operations
-            boolean = indexed + Optional((op_logical + indexed).setParseAction(self._push_first))
-            exponential << boolean + ZeroOrMore((op_exp + Optional(exponential)).setParseAction(self._push_first))
-            factor = exponential + ZeroOrMore((op_mult + exponential).setParseAction(self._push_first))
-            expr = factor + ZeroOrMore((op_add + factor).setParseAction(self._push_first))
-            self.algebra << expr
+        # if not self.algebra:
+        #
+        #     # general symbols
+        #     point = Literal(".")
+        #     comma = Literal(",")
+        #     colon = Literal(":")
+        #     e = CaselessLiteral("E")
+        #     pi = CaselessLiteral("PI")
+        #
+        #     # parentheses
+        #     par_l = Literal("(")
+        #     par_r = Literal(")").setParseAction(self._push_first)
+        #     idx_l = Literal("[")
+        #     idx_r = Literal("]")
+        #
+        #     # basic mathematical operations
+        #     plus = Literal("+")
+        #     minus = Literal("-")
+        #     mult = Literal("*")
+        #     div = Literal("/")
+        #     mod = Literal("%")
+        #     dot = Literal("@")
+        #     exp_1 = Literal("^")
+        #     exp_2 = Combine(mult + mult)
+        #     transp = Combine(point + Literal("T"))
+        #     inv = Combine(point + Literal("I"))
+        #
+        #     # numeric types
+        #     num_float = Combine(Word("-" + nums, nums) +
+        #                         Optional(point + Optional(Word(nums))) +
+        #                         Optional(e + Word("-" + nums, nums)))
+        #     num_int = Word("-" + nums, nums)
+        #
+        #     # variables and functions
+        #     name = Word(alphas, alphas + nums + "_$")
+        #     func_name = Combine(name + par_l, adjacent=True)
+        #
+        #     # math operation groups
+        #     op_add = plus | minus
+        #     op_mult = mult | div | dot | mod
+        #     op_exp = exp_1 | exp_2 | inv | transp
+        #
+        #     # logical operations
+        #     greater = Literal(">")
+        #     less = Literal("<")
+        #     equal = Combine(Literal("=") + Literal("="))
+        #     unequal = Combine(Literal("!") + Literal("="))
+        #     greater_equal = Combine(Literal(">") + Literal("="))
+        #     less_equal = Combine(Literal("<") + Literal("="))
+        #
+        #     # logical operations group
+        #     op_logical = greater_equal | less_equal | unequal | equal | less | greater
+        #
+        #     # pre-allocations
+        #     self.algebra = Forward()
+        #     exponential = Forward()
+        #     index_multiples = Forward()
+        #
+        #     # basic organization units
+        #     index_start = idx_l.setParseAction(self._push_first)
+        #     index_end = idx_r.setParseAction(self._push_first)
+        #     index_comb = colon.setParseAction(self._push_first)
+        #     arg_comb = comma.setParseAction(self._push_first)
+        #     arg_tuple = par_l + ZeroOrMore(self.algebra.suppress() + Optional(arg_comb)) + par_r
+        #     func_arg = arg_tuple | self.algebra.suppress()
+        #
+        #     # basic computation unit
+        #     atom = (func_name + Optional(func_arg.suppress()) + ZeroOrMore(arg_comb.suppress() + func_arg.suppress()) +
+        #             par_r.suppress() | name | pi | e | num_float | num_int).setParseAction(self._push_neg_or_first) | \
+        #            (par_l.setParseAction(self._push_last) + self.algebra.suppress() + par_r).setParseAction(self._push_neg)
+        #
+        #     # apply indexing to atoms
+        #     indexed = (Optional(minus) + atom).setParseAction(self._push_neg) + \
+        #               ZeroOrMore((index_start + index_multiples + index_end))
+        #     index_base = (self.algebra.suppress() | index_comb)
+        #     index_full = index_base + ZeroOrMore((index_comb + index_base)) + ZeroOrMore(index_comb)
+        #     index_multiples << index_full + ZeroOrMore((arg_comb + index_full))
+        #
+        #     # hierarchical relationships between mathematical and logical operations
+        #     boolean = indexed + Optional((op_logical + indexed).setParseAction(self._push_first))
+        #     exponential << boolean + ZeroOrMore((op_exp + Optional(exponential)).setParseAction(self._push_first))
+        #     factor = exponential + ZeroOrMore((op_mult + exponential).setParseAction(self._push_first))
+        #     expr = factor + ZeroOrMore((op_add + factor).setParseAction(self._push_first))
+        #     self.algebra << expr
 
     def _push_first(self, strg, loc, toks):
         """Push tokens in first-to-last order to expression stack.

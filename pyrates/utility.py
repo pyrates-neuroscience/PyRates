@@ -39,7 +39,6 @@ import numpy as np
 from copy import deepcopy
 import json
 from inspect import getsource
-#from networkx import node_link_data
 from pandas import DataFrame
 import pickle
 

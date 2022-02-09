@@ -2,10 +2,9 @@ from setuptools import setup, find_packages
 
 PYRATES_TEAM = "Richard Gast, Daniel Rose"
 
-INSTALL_REQUIREMENTS = ['numpy',
+INSTALL_REQUIREMENTS = ['numpy>=1.20',
                         'networkx',
                         'pandas',
-                        'pyparsing',
                         'ruamel.yaml',
                         'sympy',
                         'scipy'
