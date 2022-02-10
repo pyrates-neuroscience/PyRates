@@ -38,9 +38,8 @@ def get_parent_directory():
     return pathlib.Path(__file__).parent.absolute()
 
 
-@pytest.mark.skip
 def test_yaml_template():
-    path = "model_templates.jansen_rit.circuit.JansenRitCircuit"
+    path = "model_templates.neural_mass_models.jansenrit.JRC"
     from pyrates import clear_frontend_caches
     from pyrates import save, CircuitTemplate
     clear_frontend_caches()
@@ -57,5 +56,6 @@ def test_yaml_template():
 
     compare_files(out_file, test_file)
 
-    template = CircuitTemplate.from_yaml(out_file)
+    path = f"{out_file.split('.')[0]}/JRC"
+    template = CircuitTemplate.from_yaml(path)
     assert template

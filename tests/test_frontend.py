@@ -190,31 +190,3 @@ def test_equation_alteration():
     operator, _ = template.apply()
 
     assert operator.equations[1] == "X' = h*(m_in + u)/tau - 2*X/tau - V/tau**2"
-
-
-# ToDo: implement to_dict methods on template classes
-@pytest.mark.skip
-def test_yaml_dump():
-    """Test the functionality to dump an object to YAML"""
-    from pyrates.frontend import fileio
-    from pyrates import clear_frontend_caches, clear
-
-    with pytest.raises(AttributeError):
-        fileio.save("no_to_dict()", "random_art", "yaml")
-
-    from pyrates import CircuitTemplate
-    clear_frontend_caches()
-    circuit = CircuitTemplate.from_yaml("model_templates.neural_mass_models.jansenrit.JRC")
-
-    with pytest.raises(ValueError):
-        fileio.save(circuit, "output/yaml_dump.yaml", "yml")
-
-    with pytest.raises(TypeError):
-        fileio.save(circuit, "output/yaml_dump.yaml", "yaml")
-
-    fileio.save(circuit, "output/yaml_dump.yaml", "yaml", "DumpedCircuit")
-
-    # reload saved circuit
-    clear(circuit)
-    saved_circuit = CircuitTemplate.from_yaml("output/yaml_dump/DumpedCircuit")
-    assert saved_circuit
