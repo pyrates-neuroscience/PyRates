@@ -675,22 +675,6 @@ class NetworkGraph(AbstractBaseIR):
             else:
                 ssize = 1
 
-            # define new input variable if necessary
-            if multiple_inputs:
-                in_shape = (tsize,)
-                t_str = f'{tvar}_in{i}'
-                w_str = f'weight_in{i}'
-                s_str = f'{svar}_in{i}'
-                sidx_str = f'source_idx_in{i}'
-                tidx_str = f'target_idx_in{i}'
-                args[t_str] = {'value': np.zeros(in_shape), 'dtype': 'float', 'vtype': 'variable', 'shape': in_shape}
-            else:
-                t_str = tvar
-                w_str = 'weight'
-                s_str = svar
-                sidx_str = 'source_idx'
-                tidx_str = 'target_idx'
-
             # check whether the edge can be realized via a matrix productr
             if not tidx:
                 tidx = [0 for _ in range(len(sidx))]
@@ -699,6 +683,23 @@ class NetworkGraph(AbstractBaseIR):
                 dot_edge = len(weight) / (n * m) > matrix_sparseness
             else:
                 dot_edge = False
+
+            # define new input variable if necessary
+            if multiple_inputs:
+                in_shape = (tsize,)
+                t_str = f'{tvar}_in{i}'
+                w_str = f'weight_in{i}'
+                s_str = f'{svar}_in{i}'
+                sidx_str = f'source_idx_in{i}'
+                tidx_str = f'target_idx_in{i}'
+                args[t_str] = {'value': np.zeros(in_shape), 'dtype': 'float', 'vtype': 'variable',
+                               'shape': in_shape}
+            else:
+                t_str = tvar
+                w_str = 'weight'
+                s_str = svar
+                sidx_str = 'source_idx'
+                tidx_str = 'target_idx'
 
             # case I: realize edge projection via a matrix product
             if dot_edge:
@@ -720,6 +721,9 @@ class NetworkGraph(AbstractBaseIR):
                     ssize = len(sidx)
                     s_str_final = f"index({s_str},{sidx_str})"
                     args[sidx_str] = {'vtype': 'constant', 'value': sidx, 'dtype': 'int', 'shape': (ssize,)}
+                elif m == 1 and tsize > 1 and n == 1:
+                    s_str_final = f"index({s_str},{sidx[0]})"
+                    ssize = 0
                 else:
                     s_str_final = s_str
                     ssize = len(weight)
@@ -732,7 +736,7 @@ class NetworkGraph(AbstractBaseIR):
                     args[w_str] = {'vtype': 'constant', 'dtype': 'float', 'value': weight}
 
                 # define edge equation
-                if len(tidx) > 1:
+                if n > 1:
                     eq = f"index({t_str}, {tidx_str}) = {s_str_final}{weighting}"
                     args[tidx_str] = {'vtype': 'constant', 'dtype': 'int', 'value': tidx, 'shape': (len(tidx),)}
                 elif tsize > 1 or ssize < tsize:

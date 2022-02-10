@@ -76,6 +76,7 @@ class JuliaBackend(BaseBackend):
         jl = Julia(runtime=kwargs.pop('julia_path'), compiled_modules=False)
         from julia import Main
         self._jl = Main
+        self._no_vectorization = ["*(", "interp("]
 
     def get_var(self, v: ComputeVar):
         dtype = self._float_precision if v.is_float else self._int_precision
@@ -93,7 +94,7 @@ class JuliaBackend(BaseBackend):
         if rhs_shape or lhs_idx:
             line = self.code.pop()
             lhs, rhs = line.split(' = ')
-            if rhs[:2] != "*(":
+            if not any([rhs[:len(expr)] == expr for expr in self._no_vectorization]):
                 rhs = f"@. {rhs}"
             self.add_code_line(f"{lhs} = {rhs}")
 

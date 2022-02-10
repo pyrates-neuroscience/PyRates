@@ -489,13 +489,6 @@ class ComputeGraph(MultiDiGraph):
         func_args, expressions, var_names, rhs_shapes, lhs_indices = undef_vars, [], [], [], []
         for node, update in zip(nodes, updates):
 
-            # collect expression and variables of right-hand side of equation
-            expr_args, expr = self._node_to_expr(update)
-            func_args.extend(expr_args)
-            expr_str, expr_args, _, _ = self._expr_to_str(expr, apply=True)
-            func_args.extend(expr_args)
-            expressions.append(expr_str)
-
             # collect shape of the right-hand side variable
             v = self.get_var(update)
             try:
@@ -504,6 +497,13 @@ class ComputeGraph(MultiDiGraph):
             except IndexError:
                 pass
             rhs_shapes.append(v.shape)
+
+            # collect expression and variables of right-hand side of equation
+            expr_args, expr = self._node_to_expr(update)
+            func_args.extend(expr_args)
+            expr_str, expr_args, _, _ = self._expr_to_str(expr, apply=True)
+            func_args.extend(expr_args)
+            expressions.append(expr_str)
 
             # process left-hand side of equation
             var = self.get_var(node)
