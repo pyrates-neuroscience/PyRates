@@ -98,6 +98,7 @@ def test_full_jansen_rit_circuit_template_load():
 
 def test_edge_definition_via_matrix():
     """Test, if CircuitTemplate.add_edges_from_matrix works as expected."""
+
     from pyrates import CircuitTemplate, NodeTemplate, EdgeTemplate
     import numpy as np
     from copy import deepcopy

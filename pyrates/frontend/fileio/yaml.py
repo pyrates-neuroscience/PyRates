@@ -98,7 +98,7 @@ def dump_to_yaml(circuit, path: str, **kwargs) -> None:
     from pyrates.frontend.dict import from_circuit as dict_from_circuit
 
     # TODO: Ensure that this method returns a dictionary that resembles the YAML Template structure expected by PyRates
-    dict_repr = {circuit.name: dict_from_circuit(circuit)}
+    dict_repr = dict_from_circuit(circuit)
 
     from ruamel.yaml import YAML
     yaml = YAML()
