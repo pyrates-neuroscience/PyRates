@@ -30,10 +30,12 @@ qif_sfa_op:
     replace:
       eta: eta - a
     add:
-      - "a' = alpha*r - a/tau_a"
+      - "a' = x/tau_a"
+      - "x' = alpha*r - 2.*x/tau_a - a/tau_a"
   variables:
     a: variable(0.0)
-    alpha: 0.5
+    x: variable(0.0)
+    alpha: 1.0
     tau_a: 10.0
 
 # qif neurons with gap junctions
@@ -107,7 +109,7 @@ qif_sd:
   nodes:
     p: qif_pop
   edges:
-    - [p/qif_op/r, p/qif_op/r_in, *depression_edge, {weight: 15.0}]
+    - [p/qif_op/r, p/qif_op/r_in, *depression_edge, {weight: 15.0, delay: 0.75, spread: 0.3}]
 
 # qif population with synaptic plasticity
 qif_tsodyks:

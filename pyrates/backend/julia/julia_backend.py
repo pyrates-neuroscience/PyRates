@@ -64,6 +64,9 @@ class JuliaBackend(BaseBackend):
         if ops:
             julia_ops.update(ops)
 
+        # set default float precision to float64
+        kwargs["float_precision"] = "float64"
+
         # call parent method
         super().__init__(ops=julia_ops, imports=imports, file_ending='.jl', start_idx=1, **kwargs)
 
@@ -201,8 +204,6 @@ class JuliaBackend(BaseBackend):
 
     @staticmethod
     def expr_to_str(expr: str, args: tuple):
-
-        # TODO: replace all mathematical operations on vectors with their "." alternative
 
         # replace power operator
         func = '**'

@@ -275,8 +275,8 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         return self
 
-    def add_edges_from_matrix(self, source_var: str, target_var: str, nodes: list, weight=None, delay=None,
-                    template=None, edge_attr: dict = None) -> None:
+    def add_edges_from_matrix(self, source_var: str, target_var: str, nodes: list, weight=None, template=None,
+                              edge_attr: dict = None) -> None:
         """Adds all possible edges between the `source_var` and `target_var` of all passed `nodes`. `Weight` and `Delay`
         need to be arrays containing scalars for each of those edges.
 
@@ -291,9 +291,6 @@ class CircuitTemplate(AbstractBaseTemplate):
         weight
             Optional N x N matrix with edge weights (N = number of nodes). If not passed, all edges receive a weight of
             1.0.
-        delay
-            Optional N x N matrix with edge delays (N = number of nodes). If not passed, all edges receive a delay of
-            0.0.
         template
             Can be link to edge template that should be used for each edge.
         edge_attr
@@ -311,7 +308,7 @@ class CircuitTemplate(AbstractBaseTemplate):
         # weights and delays
         if weight is None:
             weight = 1.0
-        edge_attributes = {'weight': weight, 'delay': delay}
+        edge_attributes = {'weight': weight}
 
         # add rest of the attributes
         edge_attributes.update(edge_attr)
@@ -346,9 +343,7 @@ class CircuitTemplate(AbstractBaseTemplate):
 
                 # add edge to list
                 source_key, target_key = f"{source}/{source_var}", f"{target}/{target_var}"
-
-                if edge_attributes_tmp['weight']:
-                    edges.append((source_key, target_key, template, edge_attributes_tmp))
+                edges.append((source_key, target_key, template, edge_attributes_tmp))
 
         # add edges to network
         self.update_template(edges=edges, in_place=True)
