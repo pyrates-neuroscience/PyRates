@@ -552,6 +552,10 @@ class ComputeGraph(MultiDiGraph):
 
             # non-DE update stored in a single variable
             for target_var, expr, idx, shape in zip(var_names, expressions, indices, rhs_shapes):
+                try:
+                    idx = self.get_var(idx)
+                except (KeyError, AttributeError):
+                    pass
                 code_gen.add_var_update(lhs=self.get_var(target_var), rhs=expr, lhs_idx=idx, rhs_shape=shape)
 
         return func_args, def_vars

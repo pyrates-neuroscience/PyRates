@@ -35,7 +35,7 @@ qif_sfa_op:
   variables:
     a: variable(0.0)
     x: variable(0.0)
-    alpha: 1.0
+    alpha: 0.5
     tau_a: 10.0
 
 # qif neurons with gap junctions

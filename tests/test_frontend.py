@@ -113,9 +113,10 @@ def test_edge_definition_via_matrix():
     edge = EdgeTemplate.from_yaml("model_templates.coupled_oscillators.kuramoto.sin_edge")
     weights = np.random.randn(n, n)
     delays = np.random.uniform(low=1, high=2, size=(n, n))
-    edge_attr = {'sin_edge/coupling_op/theta_s': 'source', 'sin_edge/coupling_op/theta_t': 'p2/phase_op/theta'}
+    edge_attr = {'sin_edge/coupling_op/theta_s': 'source', 'sin_edge/coupling_op/theta_t': 'p2/phase_op/theta',
+                 'delay': delays}
     circuit.add_edges_from_matrix(source_var='phase_op/theta', target_var='phase_op/net_in', nodes=node_names,
-                                  weight=weights, delay=delays, template=edge, edge_attr=edge_attr)
+                                  weight=weights, template=edge, edge_attr=edge_attr)
 
     # test whether edges have been added as expected
     edge_attr_tmp = deepcopy(edge_attr)

@@ -20,7 +20,7 @@ __status__ = "Development"
 # define backends for which to run the tests
 backends = ['torch', 'default', 'tensorflow']
 vectorization = [True, False, True]
-backend_kwargs = [{}, {}, {}, {}]
+backend_kwargs = [{}, {}, {}]
 
 # define test accuracy
 accuracy = 1e-4

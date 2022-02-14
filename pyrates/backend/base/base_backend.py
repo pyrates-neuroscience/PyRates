@@ -221,7 +221,7 @@ class BaseBackend(CodeGen):
                          **kwargs) -> Tuple[str, dict]:
 
         # preprocess idx
-        if separator in idx:
+        if type(idx) is str and separator in idx:
             idx = tuple(idx.split(separator))
 
         # case: multiple indices
