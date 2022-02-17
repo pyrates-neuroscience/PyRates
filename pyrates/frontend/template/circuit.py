@@ -447,8 +447,8 @@ class CircuitTemplate(AbstractBaseTemplate):
                 outputs_ir.update(out_vars_tmp)
 
         # perform simulation
-        outputs = net._ir.run(simulation_time=simulation_time, step_size=step_size, solver=solver,
-                              sampling_step_size=sampling_step_size, outputs=outputs_ir, **kwargs)
+        outputs = net._ir.run(simulation_time=simulation_time, solver=solver, sampling_step_size=sampling_step_size,
+                              outputs=outputs_ir, **kwargs)
 
         # apply indices to output variables
         outputs_final = {}

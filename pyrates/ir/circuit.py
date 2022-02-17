@@ -459,12 +459,16 @@ class NetworkGraph(AbstractBaseIR):
                     if len(orders_tmp) < 2:
                         idx_rhs_str = ''
                     elif i == 0:
-                         idx_rhs = np.asarray(source_idx_tmp)[orders_tmp == i]
-                         idx_rhs_str = f"source_idx2{buffer_id}"
-                         var_dict[f"source_idx2{buffer_id}"] = {'vtype': 'constant',
-                                                               'dtype': 'int',
-                                                               'shape': (len(idx_rhs),),
-                                                               'value': idx_rhs}
+                        idx_rhs = np.asarray(source_idx_tmp)[orders_tmp == i]
+                        n_idx = len(idx_rhs)
+                        if n_idx > 1:
+                            idx_rhs_str = f"source_idx2{buffer_id}"
+                            var_dict[f"source_idx2{buffer_id}"] = {'vtype': 'constant',
+                                                                   'dtype': 'int',
+                                                                   'shape': (n_idx,),
+                                                                   'value': idx_rhs}
+                        else:
+                            idx_rhs_str = f"{idx_rhs[0]}"
                     else:
                         _, idx_rhs_str, _ = self._bool_to_idx(orders_tmp == i)
 
