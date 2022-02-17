@@ -82,13 +82,15 @@ class JuliaBackend(BaseBackend):
         self._no_vectorization = ["*(", "interp("]
 
     def get_var(self, v: ComputeVar):
-        dtype = self._float_precision if v.is_float else self._int_precision
-        v = np.asarray(v.value, dtype=dtype)
+        v = super().get_var(v)
+        dtype = v.dtype
         s = sum(v.shape)
         if s > 0:
             return v
         if 'float' in dtype:
             return float(v)
+        if 'complex' in dtype:
+            return complex(np.real(v), np.imag(v))
         return int(v)
 
     def add_var_update(self, lhs: ComputeVar, rhs: str, lhs_idx: Optional[str] = None, rhs_shape: Optional[tuple] = ()):

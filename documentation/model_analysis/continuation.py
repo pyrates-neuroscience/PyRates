@@ -136,6 +136,9 @@ t_sols, t_cont = qif_auto.run(
     e='qif', c='ivp', name='time', DS=1e-4, DSMIN=1e-10, EPSL=1e-08, EPSU=1e-08, EPSS=1e-06,
     DSMAX=1e-2, NMX=1000, UZR={14: 4.0}, STOP={'UZ1'})
 
+qif_auto.plot_continuation('PAR(14)', 'U(1)', cont='time')
+plt.show()
+
 # %%
 # In this function call, you see how the general interface of the :code:`PyAuto.run()` method works. In every first call
 # of this method, the name of a fortran equations files needs to be specified by the keyword argument :code:`e`. The

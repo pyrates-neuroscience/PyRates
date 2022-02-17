@@ -144,6 +144,7 @@ class BaseBackend(CodeGen):
         # private attributes
         self._float_precision = kwargs.pop('float_precision', 'float32')
         self._int_precision = kwargs.pop('int_precision', 'int16')
+        self._complex_precision = kwargs.pop('complex_precision', 'complex64')
         self._idx_left = kwargs.pop('idx_left', '[')
         self._idx_right = kwargs.pop('idx_right', ']')
         self._start_idx = kwargs.pop('start_idx', 0)
@@ -160,7 +161,12 @@ class BaseBackend(CodeGen):
         self._fend = kwargs.pop('file_ending', '.py')
 
     def get_var(self, v: ComputeVar):
-        dtype = self._float_precision if v.is_float else self._int_precision
+        if v.is_float:
+            dtype = self._float_precision
+        elif v.is_complex:
+            dtype = self._complex_precision
+        else:
+            dtype = self._int_precision
         return np.asarray(v.value, dtype=dtype)
 
     def get_op(self, name: str, **kwargs) -> dict:

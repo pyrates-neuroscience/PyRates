@@ -75,5 +75,7 @@ tf_funcs = {
     'tan': {'call': 'tan', 'func': np.tan, 'imports': ['tensorflow.tan']},
     'exp': {'call': 'exp', 'func': np.exp, 'imports': ['tensorflow.exp']},
     'sigmoid': {'call': 'sigmoid', 'func': sigmoid, 'imports': ['tensorflow.math.sigmoid']},
-    'interp': {'call': 'interp', 'func': np.interp, 'def': interp, 'imports': ['tensorflow.abs', 'tensorflow.argmin']}
+    'interp': {'call': 'interp', 'func': np.interp, 'def': interp, 'imports': ['tensorflow.abs', 'tensorflow.argmin']},
+    'real': {'call': 'real', 'func': np.real, 'imports': ['tensorflow.math.real']},
+    'imag': {'call': 'imag', 'func': np.imag, 'imports': ['tensorflow.math.imag']},
 }

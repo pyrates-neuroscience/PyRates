@@ -98,5 +98,7 @@ base_funcs = {
     'index': {'call': 'index_1d', 'func': index_1d},
     'index_range': {'call': 'index_range', 'func': index_range},
     'index_2d': {'call': 'index_2d', 'func': index_2d},
-    'index_axis': {'call': 'index_axis', 'func': index_axis}
+    'index_axis': {'call': 'index_axis', 'func': index_axis},
+    'real': {'call': 'real', 'func': np.real, 'imports': ['numpy.real']},
+    'imag': {'call': 'imag', 'func': np.imag, 'imports': ['numpy.imag']},
 }

@@ -91,11 +91,11 @@ class TensorflowBackend(BaseBackend):
         super().__init__(ops=tf_ops, imports=imports, **kwargs)
 
     def get_var(self, v: ComputeVar):
-        dtype = self._float_precision if v.is_float else self._int_precision
+        v_tmp = super().get_var(v)
         if v.vtype == 'constant':
-            return tf.constant(name=v.name, value=v.value, dtype=dtype)
+            return tf.constant(name=v.name, value=v_tmp, dtype=v_tmp.dtype)
         else:
-            return tf.Variable(name=v.name, initial_value=v.value, dtype=dtype)
+            return tf.Variable(name=v.name, initial_value=v_tmp, dtype=v_tmp.dtype)
 
     def add_var_update(self, lhs: ComputeVar, rhs: str, lhs_idx: Optional[str] = None, rhs_shape: Optional[tuple] = ()):
 

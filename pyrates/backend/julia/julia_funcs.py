@@ -82,5 +82,7 @@ julia_funcs = {
     'tan': {'call': 'tan', 'func': np.tan, 'imports': []},
     'exp': {'call': 'exp', 'func': np.exp, 'imports': []},
     'sigmoid': {'call': 'sigmoid', 'func': sigmoid_func, 'def': sigmoid_def, 'imports': []},
-    'interp': {'call': 'interp', 'func': np.interp, 'def': interp, 'imports': []}
+    'interp': {'call': 'interp', 'func': np.interp, 'def': interp, 'imports': []},
+    'real': {'call': 'real', 'func': np.real},
+    'imag': {'call': 'imag', 'func': np.imag},
 }
