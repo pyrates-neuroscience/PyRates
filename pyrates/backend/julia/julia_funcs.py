@@ -85,4 +85,5 @@ julia_funcs = {
     'interp': {'call': 'interp', 'func': np.interp, 'def': interp, 'imports': []},
     'real': {'call': 'real', 'func': np.real},
     'imag': {'call': 'imag', 'func': np.imag},
+    'conjugate': {'call': 'conj', 'func': np.conjugate},
 }

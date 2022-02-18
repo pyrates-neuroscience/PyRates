@@ -35,6 +35,27 @@ sin_op:
     theta: input
     s: output
 
+# kuramoto order parameter evolution
+kmo_op:
+  base: OperatorTemplate
+  equations: "r' = r*(i*omega - Delta) - 0.5*(s_in + s_ext)"
+  variables:
+    r: output(0.5+0.1j)
+    omega: 1.0
+    Delta: 1.0
+    i: 0.0+1.0j
+    s_in: input(0.0+0.0j)
+    s_ext: input(0.0+0.0j)
+
+# coupling operator for populations of kuramoto oscillators interacting via their oder parameters
+kmo_coupling:
+  base: OperatorTemplate
+  equations: "s = conjugate(r_s)*r_t^2 - r_s"
+  variables:
+    s: output(complex)
+    r_s: input(complex)
+    r_t: input(complex)
+
 # node templates
 ################
 
@@ -49,6 +70,11 @@ sin_pop:
     - phase_op
     - sin_op
 
+kmo_pop:
+  base: NodeTemplate
+  operators:
+    - kmo_op
+
 # edge templates
 ################
 
@@ -56,6 +82,11 @@ sin_edge:
   base: EdgeTemplate
   operators:
     - coupling_op
+
+kmo_edge:
+  base: EdgeTemplate
+  operators:
+    - kmo_coupling
 
 # circuit templates
 ###################
@@ -75,3 +106,22 @@ kmo_2coupled:
                                                            sin_edge/coupling_op/theta_t: p2/phase_op/theta } ]
     - [ p2/phase_op/theta, p1/phase_op/net_in, sin_edge, { weight: -4.0, sin_edge/coupling_op/theta_s: source,
                                                            sin_edge/coupling_op/theta_t: p1/phase_op/theta } ]
+
+kmo_mf:
+  base: CircuitTemplate
+  nodes:
+    p: kmo_pop
+  edges:
+    - [ p/kmo_op/r, p/kmo_op/s_in, kmo_edge, {weight: 1.0, kmo_edge/kmo_coupling/r_s: source,
+                                              kmo_edge/kmo_coupling/r_t: source}]
+
+kmo_mf_2coupled:
+  base: CircuitTemplate
+  nodes:
+    p1: kmo_pop
+    p2: kmo_pop
+  edges:
+    - [ p1/kmo_op/r, p2/kmo_op/s_in, kmo_edge, { weight: 10.0, kmo_edge/kmo_coupling/r_s: source,
+                                                 kmo_edge/kmo_coupling/r_t: p2/kmo_op/r } ]
+    - [ p2/kmo_op/r, p1/kmo_op/s_in, kmo_edge, { weight: 10.0, kmo_edge/kmo_coupling/r_s: source,
+                                                 kmo_edge/kmo_coupling/r_t: p1/kmo_op/r } ]

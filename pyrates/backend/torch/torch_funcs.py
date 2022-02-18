@@ -79,4 +79,5 @@ torch_funcs = {
     'interp': {'call': 'interp', 'func': np.interp, 'def': interp, 'imports': ['torch.abs', 'torch.argmin']},
     'real': {'call': 'real', 'func': np.real, 'imports': ['torch.real']},
     'imag': {'call': 'imag', 'func': np.imag, 'imports': ['torch.imag']},
+    'conjugate': {'call': 'conj', 'func': np.conjugate, 'imports': ['torch.conj']},
 }
