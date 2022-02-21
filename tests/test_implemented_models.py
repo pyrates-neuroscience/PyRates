@@ -179,7 +179,7 @@ def test_3_4_kuramoto():
         ###################################################
 
         # perform simulation
-        r1 = integrate("model_templates.coupled_oscillators.kuramoto.kmo", simulation_time=T, sampling_step_size=dts,
+        r1 = integrate("model_templates.oscillators.kuramoto.kmo", simulation_time=T, sampling_step_size=dts,
                        outputs={"theta": "p/phase_op/theta"}, backend=b, solver='scipy', step_size=dt, clear=True,
                        method='RK45', file_name='km1', vectorize=False, **kwargs)
 
@@ -193,7 +193,7 @@ def test_3_4_kuramoto():
         ####################################################
 
         # perform simulation
-        r2 = integrate("model_templates.coupled_oscillators.kuramoto.kmo_2coupled", simulation_time=T, sampling_step_size=dts,
+        r2 = integrate("model_templates.oscillators.kuramoto.kmo_2coupled", simulation_time=T, sampling_step_size=dts,
                        outputs={"theta1": "p1/phase_op/theta", "theta2": "p2/phase_op/theta"}, backend=b, solver='scipy',
                        inputs={"p1/phase_op/ext_in": inp}, step_size=dt, clear=True, file_name='km2', vectorize=v,
                        method='RK45', **kwargs)

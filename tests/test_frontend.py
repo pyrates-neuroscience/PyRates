@@ -48,7 +48,7 @@ def setup_module():
                                       "model_templates.base_templates.sigmoid_op",
                                       "model_templates.neural_mass_models.jansenrit.rpo_e_in",
                                       "model_templates.neural_mass_models.qif.qif_sfa_op",
-                                      "model_templates.coupled_oscillators.kuramoto.sin_op"
+                                      "model_templates.oscillators.kuramoto.sin_op"
                                       ])
 def test_import_operator_templates(operator):
     """test basic (vanilla) YAML parsing using ruamel.yaml (for YAML 1.2 support)"""
@@ -104,13 +104,13 @@ def test_edge_definition_via_matrix():
     from copy import deepcopy
 
     # define the network without edges
-    node = NodeTemplate.from_yaml("model_templates.coupled_oscillators.kuramoto.phase_pop")
+    node = NodeTemplate.from_yaml("model_templates.oscillators.kuramoto.phase_pop")
     node_names = ['p1', 'p2', 'p3']
     n = len(node_names)
     circuit = CircuitTemplate(name='delay_coupled_kmos', nodes={key: node for key in node_names})
 
     # add the edges
-    edge = EdgeTemplate.from_yaml("model_templates.coupled_oscillators.kuramoto.sin_edge")
+    edge = EdgeTemplate.from_yaml("model_templates.oscillators.kuramoto.sin_edge")
     weights = np.random.randn(n, n)
     delays = np.random.uniform(low=1, high=2, size=(n, n))
     edge_attr = {'sin_edge/coupling_op/theta_s': 'source', 'sin_edge/coupling_op/theta_t': 'p2/phase_op/theta',
