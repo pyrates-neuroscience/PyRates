@@ -103,6 +103,10 @@ class ComputeNode:
     def is_float(self):
         return "float" in self.dtype
 
+    @property
+    def is_complex(self):
+        return "complex" in self.dtype
+
     def _is_equal_to(self, v):
         for attr in self.__slots__:
             if not hasattr(v, attr) or getattr(v, attr) != getattr(self, attr):
@@ -139,7 +143,12 @@ class ComputeNode:
 
     def _set_dtype(self):
         if not self.dtype:
-            self.dtype = 'float' if 'float' in str(self.value.dtype) else 'int'
+            if 'float' in str(self.value.dtype):
+                self.dtype = 'float'
+            elif 'complex' in str(self.value.dtype):
+                self.dtype = 'complex'
+            else:
+                self.dtype = 'int'
 
     @staticmethod
     def _get_shape(s: Union[tuple, None], s_def: tuple):
@@ -198,10 +207,6 @@ class ComputeOp(ComputeNode):
     @property
     def is_constant(self):
         return False
-
-    @property
-    def is_float(self):
-        return True
 
 
 # networkx-based graph class
@@ -349,11 +354,14 @@ class ComputeGraph(MultiDiGraph):
 
         variables = []
         idx = 0
+        #dtype = 'float'
         for var, update in self.var_updates['DEs'].items():
 
             # extract left-hand side nodes from graph
             lhs, rhs = self._process_var_update(var, update)
             variables.append(lhs.value)
+            #if 'complex' in lhs.dtype:
+            #    dtype = 'complex'
 
             # store information of the original, non-vectorized state variable
             vshape = sum(lhs.shape)
@@ -369,8 +377,9 @@ class ComputeGraph(MultiDiGraph):
             state_vec = np.concatenate(variables, axis=0)
         except ValueError:
             state_vec = np.asarray(variables)
-        state_var_key, y = self.add_var(label='y', vtype='state_var', value=state_vec, dtype='float')
-        rhs_var_key, dy = self.add_var(label='dy', vtype='state_var', value=np.zeros_like(state_vec), dtype='float')
+        dtype = 'complex' if 'complex' in state_vec.dtype.name else 'float'
+        state_var_key, y = self.add_var(label='y', vtype='state_var', value=state_vec, dtype=dtype)
+        rhs_var_key, dy = self.add_var(label='dy', vtype='state_var', value=np.zeros_like(state_vec), dtype=dtype)
         try:
             t = self.get_var('t')
         except KeyError:
@@ -399,13 +408,12 @@ class ComputeGraph(MultiDiGraph):
         func = code_gen.generate_func(func_name=func_name, to_file=to_file, func_args=func_args[3:],
                                       state_vars=self.state_vars, **kwargs)
 
-
         # OPTIONAL: write function arguments (state vectors and constants) to file
         c_fn = kwargs.pop('constants_file_name', None)
         if c_fn:
             arg_dict = {arg: self.get_var(arg).value for arg in func_args}
             fn = f'{self.backend._fdir}/{c_fn}' if self.backend._fdir else c_fn
-            np.savez(c_fn, **arg_dict)
+            np.savez(fn, **arg_dict)
 
         return func, tuple([self.get_var(arg, from_backend=True) for arg in func_args])
 
@@ -489,13 +497,6 @@ class ComputeGraph(MultiDiGraph):
         func_args, expressions, var_names, rhs_shapes, lhs_indices = undef_vars, [], [], [], []
         for node, update in zip(nodes, updates):
 
-            # collect expression and variables of right-hand side of equation
-            expr_args, expr = self._node_to_expr(update)
-            func_args.extend(expr_args)
-            expr_str, expr_args, _, _ = self._expr_to_str(expr, apply=True)
-            func_args.extend(expr_args)
-            expressions.append(expr_str)
-
             # collect shape of the right-hand side variable
             v = self.get_var(update)
             try:
@@ -504,6 +505,13 @@ class ComputeGraph(MultiDiGraph):
             except IndexError:
                 pass
             rhs_shapes.append(v.shape)
+
+            # collect expression and variables of right-hand side of equation
+            expr_args, expr = self._node_to_expr(update)
+            func_args.extend(expr_args)
+            expr_str, expr_args, _, _ = self._expr_to_str(expr, apply=True)
+            func_args.extend(expr_args)
+            expressions.append(expr_str)
 
             # process left-hand side of equation
             var = self.get_var(node)
@@ -552,6 +560,10 @@ class ComputeGraph(MultiDiGraph):
 
             # non-DE update stored in a single variable
             for target_var, expr, idx, shape in zip(var_names, expressions, indices, rhs_shapes):
+                try:
+                    idx = self.get_var(idx)
+                except (KeyError, AttributeError):
+                    pass
                 code_gen.add_var_update(lhs=self.get_var(target_var), rhs=expr, lhs_idx=idx, rhs_shape=shape)
 
         return func_args, def_vars

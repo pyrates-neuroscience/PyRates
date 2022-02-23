@@ -1,0 +1,38 @@
+%YAML 1.2
+---
+
+# operator templates
+####################
+
+theta_op:
+  base: OperatorTemplate
+  equations:
+    - "z' = 0.5*( (i*(eta+I_ext+s*v_s) - Delta)*(z+1)^2 - s*(z^2-1) - i*(z-1)^2)"
+    - "r = (1-abs(z)^2)/(1+z+conjugate(z)+abs(z)^2)"
+  variables:
+    r: output(0.0)
+    z: variable(complex)
+    i: 0.0+1.0j
+    eta: 20.0
+    Delta: 0.5
+    v_s: -10.0
+    s: input(0.0)
+    I_ext: input(0.0)
+
+# node templates
+################
+
+theta_pop:
+  base: NodeTemplate
+  operators:
+    - theta_op
+
+# circuit templates
+###################
+
+kmo_theta:
+  base: CircuitTemplate
+  nodes:
+    p: theta_pop
+  edges:
+    - [ p/theta_op/r, p/theta_op/s, null, {weight: 1.0}]

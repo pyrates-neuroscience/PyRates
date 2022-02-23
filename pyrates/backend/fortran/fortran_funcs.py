@@ -123,5 +123,8 @@ fortran_funcs = {
     'tan': {'call': 'tan', 'func': np.tan},
     'exp': {'call': 'exp', 'func': np.exp},
     'sigmoid': {'call': get_sigmoid_def, 'func': sigmoid},
-    'interp': {'call': get_interp_def, 'func': np.interp}
+    'interp': {'call': get_interp_def, 'func': np.interp},
+    'real': {'call': 'realpart', 'func': np.real},
+    'imag': {'call': 'imagpart', 'func': np.imag},
+    'conjugate': {'call': 'conjg', 'func': np.conjugate},
 }

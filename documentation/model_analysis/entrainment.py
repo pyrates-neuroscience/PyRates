@@ -17,11 +17,11 @@ To learn more about the Van der Pol oscillator model, have a look at the respect
 
 import matplotlib.pyplot as plt
 import numpy as np
-from pyrates import CircuitTemplate, NodeTemplate, EdgeTemplate
+from pyrates import CircuitTemplate, NodeTemplate
 
 # define network nodes
-VPO = NodeTemplate.from_yaml("model_templates.coupled_oscillators.vanderpol.vdp_pop")
-KO = NodeTemplate.from_yaml("model_templates.coupled_oscillators.kuramoto.sin_pop")
+VPO = NodeTemplate.from_yaml("model_templates.oscillators.vanderpol.vdp_pop")
+KO = NodeTemplate.from_yaml("model_templates.oscillators.kuramoto.sin_pop")
 nodes = {'VPO': VPO, 'KO': KO}
 
 # define network edges

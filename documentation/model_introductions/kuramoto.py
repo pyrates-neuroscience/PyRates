@@ -62,7 +62,7 @@ I_ext = np.zeros((steps,))
 I_ext[int(start/step_size):int(stop/step_size)] = 1.0
 
 # perform simulation
-results = integrate("model_templates.coupled_oscillators.kuramoto.kmo_2coupled", step_size=step_size, simulation_time=T,
+results = integrate("model_templates.oscillators.kuramoto.kmo_2coupled", step_size=step_size, simulation_time=T,
                     outputs={'theta_1': 'p1/phase_op/theta', 'theta_2': 'p2/phase_op/theta'},
                     inputs={'p1/phase_op/ext_in': I_ext}, clear=True)
 

@@ -64,6 +64,9 @@ class JuliaBackend(BaseBackend):
         if ops:
             julia_ops.update(ops)
 
+        # set default float precision to float64
+        kwargs["float_precision"] = "float64"
+
         # call parent method
         super().__init__(ops=julia_ops, imports=imports, file_ending='.jl', start_idx=1, **kwargs)
 
@@ -76,15 +79,18 @@ class JuliaBackend(BaseBackend):
         jl = Julia(runtime=kwargs.pop('julia_path'), compiled_modules=False)
         from julia import Main
         self._jl = Main
+        self._no_vectorization = ["*(", "interp("]
 
     def get_var(self, v: ComputeVar):
-        dtype = self._float_precision if v.is_float else self._int_precision
-        v = np.asarray(v.value, dtype=dtype)
+        v = super().get_var(v)
+        dtype = v.dtype.name
         s = sum(v.shape)
         if s > 0:
             return v
         if 'float' in dtype:
             return float(v)
+        if 'complex' in dtype:
+            return complex(np.real(v), np.imag(v))
         return int(v)
 
     def add_var_update(self, lhs: ComputeVar, rhs: str, lhs_idx: Optional[str] = None, rhs_shape: Optional[tuple] = ()):
@@ -93,7 +99,7 @@ class JuliaBackend(BaseBackend):
         if rhs_shape or lhs_idx:
             line = self.code.pop()
             lhs, rhs = line.split(' = ')
-            if rhs[:2] != "*(":
+            if not any([rhs[:len(expr)] == expr for expr in self._no_vectorization]):
                 rhs = f"@. {rhs}"
             self.add_code_line(f"{lhs} = {rhs}")
 
@@ -200,8 +206,6 @@ class JuliaBackend(BaseBackend):
 
     @staticmethod
     def expr_to_str(expr: str, args: tuple):
-
-        # TODO: replace all mathematical operations on vectors with their "." alternative
 
         # replace power operator
         func = '**'

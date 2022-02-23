@@ -26,7 +26,6 @@
 # 
 # Richard Gast and Daniel Rose et. al. in preparation
 # external _imports
-import re
 from copy import deepcopy
 from sys import intern
 from typing import Union
@@ -172,7 +171,7 @@ class OperatorTemplate(AbstractBaseTemplate):
 
 def check_vname(v: str, vtype: str):
 
-    disallowed_names = ['y', 'dy', 'source_idx', 'target_idx', 'I', 'i', 'pi']
+    disallowed_names = ['y', 'dy', 'source_idx', 'target_idx', 'pi']
     disallowed_name_parts = ['_buffer', '_delays', '_maxdelay', '_idx']
 
     if v == 't' and vtype != 'state_var':
@@ -243,7 +242,7 @@ def _parse_defaults(expr: Union[str, int, float]) -> dict:
     """Naive version of a parser for the default key of variables in a template. Returns data type,
     variable type and default value of the variable."""
 
-    value = 0.  # Setting initial conditions for undefined variables to 0. Is that reasonable?
+    value = 0.
     if isinstance(expr, int):
         vtype = "constant"
         value = expr
@@ -252,7 +251,10 @@ def _parse_defaults(expr: Union[str, int, float]) -> dict:
         vtype = "constant"
         value = expr
         dtype = "float"
-        # restriction to 32bit float for consistency. May not be reasonable at all times.
+    elif isinstance(expr, complex):
+        vtype = "constant"
+        value = expr
+        dtype = "complex"
     else:
         # set vtype
         if expr.startswith("input"):
@@ -261,34 +263,17 @@ def _parse_defaults(expr: Union[str, int, float]) -> dict:
             vtype = "output"
         elif expr.startswith("variable"):
             vtype = "state_var"
-        elif expr.startswith("constant"):
+        else:
             vtype = "constant"
-        elif expr.startswith("placeholder"):
-            vtype = "placeholder"
-        else:
             try:
-                # if "." in algebra:
-                value = float(expr)  # default to float
-                # else:
-                #     value = int(algebra)
-                vtype = "constant"
+                value = float(expr)
             except ValueError:
-                raise ValueError(f"Unable to interpret variable type in default definition {expr}.")
+                try:
+                    value = complex(expr)
+                except ValueError:
+                    raise ValueError(f"Unable to interpret variable type in default definition {expr}.")
 
-        # set dtype and value
-        if expr.endswith("(float)"):
-            dtype = "float"
-        elif expr.endswith("(int)"):
-            dtype = "int"
-        elif "." in expr:
-            dtype = "float"
-            value = float(re.search("[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)", expr).group())
-            # see https://stackoverflow.com/questions/12643009/regular-expression-for-floating-point-numbers
-        elif re.search("[0-9]+", expr):
-            dtype = "int"
-            value = float(re.search("[0-9]+", expr).group())
-        else:
-            dtype = "float"  # base assumption
+        dtype, value = _get_variable_info(expr, value)
 
     return {'vtype': vtype, 'dtype': dtype, 'value': value, 'shape': (1,)}
 
@@ -310,3 +295,28 @@ def _separate_variables(variables: dict):
         # identify variable type and data type
         default_vals = vinfo.copy() if type(vinfo) is dict else _parse_defaults(vinfo)
         yield vname, default_vals['vtype'], default_vals['dtype'], default_vals['shape'], default_vals['value']
+
+
+def _get_variable_info(expr: Union[str, int, float], value: Union[int, complex, float]) -> tuple:
+    # set dtype and value
+    if expr.endswith("(float)"):
+        dtype = "float"
+    elif expr.endswith("(complex)"):
+        dtype = "complex"
+        if not isinstance(value, complex):
+            value = complex(value, value)
+    elif "(" in expr:
+        expr = expr.split("(")[1][:-1]
+        dtype, value = _get_variable_info(expr, value)
+    else:
+        try:
+            value = float(expr)
+            dtype = "float"
+        except ValueError:
+            try:
+                value = complex(expr)
+                dtype = "complex"
+            except ValueError:
+                dtype = "float"  # base assumption
+
+    return dtype, value

@@ -44,7 +44,7 @@ T = 100.0
 step_size = 1e-2
 
 # load model template
-model = CircuitTemplate.from_yaml("model_templates.coupled_oscillators.vanderpol.vdp")
+model = CircuitTemplate.from_yaml("model_templates.oscillators.vanderpol.vdp")
 
 # set mu to 0
 model.update_var({'p/vdp_op/mu': 0.0})
@@ -67,7 +67,7 @@ clear(model)
 # Now, we will repeat the procedure for :math:`\\mu = 5`.
 
 # load model template
-model = CircuitTemplate.from_yaml("model_templates.coupled_oscillators.vanderpol.vdp")
+model = CircuitTemplate.from_yaml("model_templates.oscillators.vanderpol.vdp")
 
 # set mu to 0
 model.update_var({'p/vdp_op/mu': 5.0})

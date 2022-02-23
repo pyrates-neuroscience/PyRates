@@ -29,36 +29,84 @@
 """
 """
 from copy import deepcopy
-from pyrates.frontend import CircuitTemplate
-
+from pyrates.frontend import CircuitTemplate, NodeTemplate, EdgeTemplate, OperatorTemplate
+from pyrates.backend.parser import get_unique_label
+from typing import Union
 
 __author__ = "Daniel Rose, Richard Gast"
 __status__ = "Development"
 
 
-def from_circuit(circuit: CircuitTemplate):
+def from_circuit(circuit: CircuitTemplate, return_dict: dict, base: str = 'CircuitTemplate') -> str:
     """Reformat graph structure into a dictionary that can be saved as YAML template. The current implementation assumes
     that nodes and edges are given by as templates."""
 
-    node_dict = {}
-    for node_key, node_data in circuit.nodes.items():
-        node = node_data["node"]
-        if node.template:
-            node_dict[node_key] = node.template
-        else:
-            # if no template is given, build and search deeper for node templates
-            pass
+    new_dict = {'base': base, 'circuits': {}, 'nodes': {}, 'edges': []}
 
-    edge_list = []
-    for source, target, edge_data in circuit.edges(data=True):
-        edge_data = deepcopy(edge_data)
-        edge = edge_data.pop("edge_ir")
-        source = f"{source}/{edge_data['source_var']}"
-        target = f"{target}/{edge_data['target_var']}"
-        edge_list.append((source, target, edge.template, dict(weight=edge_data["weight"],
-                                                              delay=edge_data["delay"])))
+    if circuit.circuits:
 
-    # use Python template as base, since inheritance from YAML templates is ambiguous for circuits
-    base = "CircuitTemplate"
+        # collect circuit definitions
+        for key, c in circuit.circuits.items():
+            ckey_tmp = from_circuit(c, return_dict=return_dict)
+            new_dict['circuits'][key] = ckey_tmp
 
-    return dict(nodes=node_dict, edges=edge_list, base=base)
+    else:
+
+        # collect node definitions
+        for key, n in circuit.nodes.items():
+            nkey = from_node(n, return_dict=return_dict)
+            new_dict['nodes'][key] = nkey
+
+    # collect edge definitions
+    for edge in circuit.edges:
+        edge = list(edge)
+        edge_temp = edge[2]  # type: EdgeTemplate
+        edge[2] = from_edge(edge_temp, return_dict=return_dict)
+        new_dict['edges'].append(tuple(edge))
+
+    # add the circuit information to the return dict
+    return add_to_dict(circuit, new_dict, return_dict)
+
+
+def from_node(node: Union[NodeTemplate, EdgeTemplate], return_dict: dict, base: str = 'NodeTemplate') -> str:
+    """Reformat operator structure into a dictionary that can be saved as YAML template.
+    """
+
+    new_dict = {'base': base, 'operators': []}
+
+    # collect operator definitions
+    for op, updates in node.operators.items():
+        opkey = from_operator(op=op, updates=updates, return_dict=return_dict)
+        new_dict['operators'].append(opkey)
+
+    # add node information to the return dictionary
+    return add_to_dict(node, new_dict, return_dict)
+
+
+def from_operator(op: OperatorTemplate, updates: dict, return_dict: dict, base: str = 'OperatorTemplate') -> str:
+    """Reformat operator template into a dictionary that can be saved as YAML template.
+    """
+
+    # collect operator attributes
+    new_dict = {'base': base, 'equations': deepcopy(op.equations), 'variables': deepcopy(op.variables)}
+    new_dict['variables'].update(updates)
+
+    # add operator definition to the return dictionary
+    return add_to_dict(op, new_dict, return_dict)
+
+
+def from_edge(edge: EdgeTemplate, return_dict: dict, base: str = 'EdgeTemplate') -> Union[str, None]:
+    """Reformat edge template into a list that can be saved as YAML template.
+    """
+    if edge is None:
+        return edge
+    return from_node(edge, return_dict=return_dict, base=base)
+
+
+def add_to_dict(template, template_dict: dict, full_dict: dict):
+
+    temp_key = template.name
+    if temp_key in full_dict and full_dict[temp_key] != template_dict:
+        temp_key = get_unique_label(temp_key, list(full_dict.keys()))
+    full_dict[temp_key] = template_dict
+    return temp_key

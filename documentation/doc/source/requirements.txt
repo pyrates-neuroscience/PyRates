@@ -6,7 +6,6 @@ matplotlib
 networkx
 pandas
 tensorflow>=2.0
-pyparsing
 ruamel.yaml
 scipy
 pytest

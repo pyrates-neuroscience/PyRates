@@ -1,0 +1,80 @@
+rpo_e_in:
+  base: OperatorTemplate
+  equations:
+  - V' = X
+  - X' = h*(m_in + u)/tau - 2*X/tau - V/tau**2
+  variables:
+    V: output(0.0)
+    X: variable(0.0)
+    tau: 0.01
+    h: 0.00325
+    m_in: input(0.0)
+    u: input(220.0)
+rpo_i:
+  base: OperatorTemplate
+  equations:
+  - V' = X
+  - X' = h*m_in/tau - 2*X/tau - V/tau**2
+  variables:
+    V: output(0.0)
+    X: variable(0.0)
+    tau: 0.02
+    h: 0.022
+    m_in: input(0.0)
+pro:
+  base: OperatorTemplate
+  equations:
+  - m = m_max / (1 + exp(s*(V_thr-V)))
+  variables:
+    m: output(0.0)
+    m_max: 5.0
+    s: 560.0
+    r: input(0.0)
+    V_thr: 0.006
+    V: input(0.0)
+PC:
+  base: NodeTemplate
+  operators:
+  - rpo_e_in
+  - rpo_i
+  - pro
+rpo_e:
+  base: OperatorTemplate
+  equations:
+  - V' = X
+  - X' = h*m_in/tau - 2*X/tau - V/tau**2
+  variables:
+    V: output(0.0)
+    X: variable(0.0)
+    tau: 0.01
+    h: 0.00325
+    m_in: input(0.0)
+IN:
+  base: NodeTemplate
+  operators:
+  - rpo_e
+  - pro
+JRC:
+  base: CircuitTemplate
+  circuits: {}
+  nodes:
+    pc: PC
+    ein: IN
+    iin: IN
+  edges:
+  - - pc/pro/m
+    - ein/rpo_e/m_in
+    - 
+    - weight: 135.0
+  - - pc/pro/m
+    - iin/rpo_e/m_in
+    - 
+    - weight: 33.75
+  - - ein/pro/m
+    - pc/rpo_e_in/m_in
+    - 
+    - weight: 108.0
+  - - iin/pro/m
+    - pc/rpo_i/m_in
+    - 
+    - weight: -33.75

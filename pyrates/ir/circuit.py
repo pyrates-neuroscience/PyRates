@@ -459,12 +459,16 @@ class NetworkGraph(AbstractBaseIR):
                     if len(orders_tmp) < 2:
                         idx_rhs_str = ''
                     elif i == 0:
-                         idx_rhs = np.asarray(source_idx_tmp)[orders_tmp == i]
-                         idx_rhs_str = f"source_idx2{buffer_id}"
-                         var_dict[f"source_idx2{buffer_id}"] = {'vtype': 'constant',
-                                                               'dtype': 'int',
-                                                               'shape': (len(idx_rhs),),
-                                                               'value': idx_rhs}
+                        idx_rhs = np.asarray(source_idx_tmp)[orders_tmp == i]
+                        n_idx = len(idx_rhs)
+                        if n_idx > 1:
+                            idx_rhs_str = f"source_idx2{buffer_id}"
+                            var_dict[f"source_idx2{buffer_id}"] = {'vtype': 'constant',
+                                                                   'dtype': 'int',
+                                                                   'shape': (n_idx,),
+                                                                   'value': idx_rhs}
+                        else:
+                            idx_rhs_str = f"{idx_rhs[0]}"
                     else:
                         _, idx_rhs_str, _ = self._bool_to_idx(orders_tmp == i)
 
@@ -675,22 +679,6 @@ class NetworkGraph(AbstractBaseIR):
             else:
                 ssize = 1
 
-            # define new input variable if necessary
-            if multiple_inputs:
-                in_shape = (tsize,)
-                t_str = f'{tvar}_in{i}'
-                w_str = f'weight_in{i}'
-                s_str = f'{svar}_in{i}'
-                sidx_str = f'source_idx_in{i}'
-                tidx_str = f'target_idx_in{i}'
-                args[t_str] = {'value': np.zeros(in_shape), 'dtype': 'float', 'vtype': 'variable', 'shape': in_shape}
-            else:
-                t_str = tvar
-                w_str = 'weight'
-                s_str = svar
-                sidx_str = 'source_idx'
-                tidx_str = 'target_idx'
-
             # check whether the edge can be realized via a matrix productr
             if not tidx:
                 tidx = [0 for _ in range(len(sidx))]
@@ -699,6 +687,23 @@ class NetworkGraph(AbstractBaseIR):
                 dot_edge = len(weight) / (n * m) > matrix_sparseness
             else:
                 dot_edge = False
+
+            # define new input variable if necessary
+            if multiple_inputs:
+                in_shape = (tsize,)
+                t_str = f'{tvar}_in{i}'
+                w_str = f'weight_in{i}'
+                s_str = f'{svar}_in{i}'
+                sidx_str = f'source_idx_in{i}'
+                tidx_str = f'target_idx_in{i}'
+                args[t_str] = {'value': np.zeros(in_shape), 'dtype': 'float', 'vtype': 'variable',
+                               'shape': in_shape}
+            else:
+                t_str = tvar
+                w_str = 'weight'
+                s_str = svar
+                sidx_str = 'source_idx'
+                tidx_str = 'target_idx'
 
             # case I: realize edge projection via a matrix product
             if dot_edge:
@@ -720,6 +725,9 @@ class NetworkGraph(AbstractBaseIR):
                     ssize = len(sidx)
                     s_str_final = f"index({s_str},{sidx_str})"
                     args[sidx_str] = {'vtype': 'constant', 'value': sidx, 'dtype': 'int', 'shape': (ssize,)}
+                elif m == 1 and tsize > 1 and n == 1:
+                    s_str_final = f"index({s_str},{sidx[0]})"
+                    ssize = 0
                 else:
                     s_str_final = s_str
                     ssize = len(weight)
@@ -732,7 +740,7 @@ class NetworkGraph(AbstractBaseIR):
                     args[w_str] = {'vtype': 'constant', 'dtype': 'float', 'value': weight}
 
                 # define edge equation
-                if len(tidx) > 1:
+                if n > 1:
                     eq = f"index({t_str}, {tidx_str}) = {s_str_final}{weighting}"
                     args[tidx_str] = {'vtype': 'constant', 'dtype': 'int', 'value': tidx, 'shape': (len(tidx),)}
                 elif tsize > 1 or ssize < tsize:
@@ -999,88 +1007,6 @@ class CircuitIR(AbstractBaseIR):
         except KeyError:
             v = self._front_to_back[var]
         return v.name if get_key else v
-
-    def add_edges_from_matrix(self, source_var: str, target_var: str, nodes: list, weight=None, delay=None,
-                              template=None, **attr) -> None:
-        """Adds all possible edges between the `source_var` and `target_var` of all passed `nodes`. `Weight` and `Delay`
-        need to be arrays containing scalars for each of those edges.
-
-        Parameters
-        ----------
-        source_var
-            Pointer to a variable on the source nodes ('op/var').
-        target_var
-            Pointer to a variable on the target nodes ('op/var').
-        nodes
-            List of node names that should be connected to each other
-        weight
-            Optional N x N matrix with edge weights (N = number of nodes). If not passed, all edges receive a weight of
-            1.0.
-        delay
-            Optional N x N matrix with edge delays (N = number of nodes). If not passed, all edges receive a delay of
-            0.0.
-        template
-            Can be link to edge template that should be used for each edge.
-        attr
-            Additional edge attributes. Can either be N x N matrices or other scalars/objects.
-
-        Returns
-        -------
-        None
-
-        """
-
-        # TODO: Move method to CircuitTemplate
-
-        raise NotImplementedError('This method does not work. Sry.')
-
-        # construct edge attribute dictionary from arguments
-        ####################################################
-
-        # weights and delays
-        if weight is None:
-            weight = 1.0
-        edge_attributes = {'weight': weight, 'delay': delay}
-
-        # template
-        if template:
-            edge_attributes['edge_ir'] = template if type(template) is EdgeIR else template.apply()
-
-        # add rest of the attributes
-        edge_attributes.update(attr)
-
-        # construct edges list
-        ######################
-
-        # find out which edge attributes have been passed as matrices
-        matrix_attributes = {}
-        for key, attr in edge_attributes.copy().items():
-            if hasattr(attr, 'shape') and len(attr.shape) >= 2:
-                matrix_attributes[key] = edge_attributes.pop(key)
-
-        # create edge list
-        edges = []
-
-        for i, source in enumerate(nodes):
-            for j, target in enumerate(nodes):
-
-                edge_attributes_tmp = {}
-
-                # extract edge attribute value from matrices
-                for key, attr in matrix_attributes.items():
-                    edge_attributes_tmp[key] = attr[i, j]
-
-                # add remaining attributes
-                edge_attributes_tmp.update(edge_attributes.copy())
-
-                # add edge to list
-                source_key, target_key = f"{source}/{source_var}", f"{target}/{target_var}"
-
-                if edge_attributes_tmp['weight'] and source_key in self and target_key in self:
-                    edges.append((source_key, target_key, edge_attributes_tmp))
-
-        # add edges to network
-        self.add_edges_from(edges)
 
     def run(self,
             simulation_time: float,

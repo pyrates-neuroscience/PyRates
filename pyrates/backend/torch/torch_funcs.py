@@ -76,5 +76,8 @@ torch_funcs = {
     'tan': {'call': 'tan', 'func': np.tan, 'imports': ['torch.tan']},
     'exp': {'call': 'exp', 'func': np.exp, 'imports': ['torch.exp']},
     'sigmoid': {'call': 'sigmoid', 'func': sigmoid, 'imports': ['torch.sigmoid']},
-    'interp': {'call': 'interp', 'func': np.interp, 'def': interp, 'imports': ['torch.abs', 'torch.argmin']}
+    'interp': {'call': 'interp', 'func': np.interp, 'def': interp, 'imports': ['torch.abs', 'torch.argmin']},
+    'real': {'call': 'real', 'func': np.real, 'imports': ['torch.real']},
+    'imag': {'call': 'imag', 'func': np.imag, 'imports': ['torch.imag']},
+    'conjugate': {'call': 'conj', 'func': np.conjugate, 'imports': ['torch.conj']},
 }

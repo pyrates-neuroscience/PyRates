@@ -46,7 +46,7 @@ T = 100.0
 step_size = 1e-2
 
 # load model template
-model = CircuitTemplate.from_yaml("model_templates.coupled_oscillators.stuartlandau.sl")
+model = CircuitTemplate.from_yaml("model_templates.oscillators.stuartlandau.sl")
 
 # define omega
 omega = 2*np.pi/12.0
@@ -70,7 +70,7 @@ clear(model)
 
 # simulate model dynamics
 from pyrates import integrate
-results = integrate("model_templates.coupled_oscillators.vanderpol.vdp",
+results = integrate("model_templates.oscillators.vanderpol.vdp",
                     step_size=step_size, simulation_time=T, outputs={'x': 'p/vdp_op/x'},
                     solver='scipy', method='RK23', clear=True)
 
@@ -89,8 +89,8 @@ plt.show()
 from pyrates import NodeTemplate
 
 # define nodes
-vpo = NodeTemplate.from_yaml("model_templates.coupled_oscillators.vanderpol.vdp_pop")
-sl = NodeTemplate.from_yaml("model_templates.coupled_oscillators.stuartlandau.sl_pop")
+vpo = NodeTemplate.from_yaml("model_templates.oscillators.vanderpol.vdp_pop")
+sl = NodeTemplate.from_yaml("model_templates.oscillators.stuartlandau.sl_pop")
 
 # define circuit
 model = CircuitTemplate(name='vpo_forced', nodes={'vpo': vpo, 'sl': sl},

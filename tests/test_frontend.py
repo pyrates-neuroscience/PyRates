@@ -48,11 +48,11 @@ def setup_module():
                                       "model_templates.base_templates.sigmoid_op",
                                       "model_templates.neural_mass_models.jansenrit.rpo_e_in",
                                       "model_templates.neural_mass_models.qif.qif_sfa_op",
-                                      "model_templates.coupled_oscillators.kuramoto.sin_op"
+                                      "model_templates.oscillators.kuramoto.sin_op"
                                       ])
 def test_import_operator_templates(operator):
     """test basic (vanilla) YAML parsing using ruamel.yaml (for YAML 1.2 support)"""
-    from pyrates.frontend.template.operator import OperatorTemplate
+    from pyrates import OperatorTemplate
     from pyrates.frontend.template import template_cache, clear_cache
     clear_cache()
 
@@ -96,6 +96,39 @@ def test_full_jansen_rit_circuit_template_load():
             assert isinstance(op, OperatorTemplate)
 
 
+def test_edge_definition_via_matrix():
+    """Test, if CircuitTemplate.add_edges_from_matrix works as expected."""
+
+    from pyrates import CircuitTemplate, NodeTemplate, EdgeTemplate
+    import numpy as np
+    from copy import deepcopy
+
+    # define the network without edges
+    node = NodeTemplate.from_yaml("model_templates.oscillators.kuramoto.phase_pop")
+    node_names = ['p1', 'p2', 'p3']
+    n = len(node_names)
+    circuit = CircuitTemplate(name='delay_coupled_kmos', nodes={key: node for key in node_names})
+
+    # add the edges
+    edge = EdgeTemplate.from_yaml("model_templates.oscillators.kuramoto.sin_edge")
+    weights = np.random.randn(n, n)
+    delays = np.random.uniform(low=1, high=2, size=(n, n))
+    edge_attr = {'sin_edge/coupling_op/theta_s': 'source', 'sin_edge/coupling_op/theta_t': 'p2/phase_op/theta',
+                 'delay': delays}
+    circuit.add_edges_from_matrix(source_var='phase_op/theta', target_var='phase_op/net_in', nodes=node_names,
+                                  weight=weights, template=edge, edge_attr=edge_attr)
+
+    # test whether edges have been added as expected
+    edge_attr_tmp = deepcopy(edge_attr)
+    edge_attr_tmp['weight'] = weights[2, 1]
+    edge_attr_tmp['delay'] = delays[2, 1]
+    assert len(circuit.edges) == int(n**2)
+    assert ('p3/phase_op/theta', 'p2/phase_op/net_in', edge, edge_attr_tmp) in circuit.edges
+
+    # perform short simulation to ensure that the network has been constructed correctly
+    circuit.run(simulation_time=1.0, step_size=1e-4, outputs=['all/phase_op/theta'])
+
+
 def test_circuit_instantiation():
     """Test, if apply() functions all work properly"""
     path = "model_templates.neural_mass_models.jansenrit.JRC"
@@ -137,16 +170,13 @@ def test_circuit_instantiation():
     # assert float(var['value']) - 0.1234 == pytest.approx(0, rel=1e-4, abs=1e-4)
 
 
-@pytest.mark.skip
 def test_multi_circuit_instantiation():
     """Test, if a circuit with subcircuits is also working."""
-    path = "model_templates.jansen_rit.circuit.MultiJansenRitCircuit"
-    from pyrates.frontend import template as tpl
-    tpl.clear_cache()
+    path = "model_templates.neural_mass_models.jansenrit.JRC_2delaycoupled"
+    from pyrates import clear_frontend_caches, CircuitTemplate
+    clear_frontend_caches()
 
-    template = tpl.from_yaml(path)
-
-    circuit = template.apply()
+    circuit = CircuitTemplate.from_yaml(path)
     assert circuit
 
 
@@ -158,37 +188,6 @@ def test_equation_alteration():
     from pyrates.frontend.template.operator import OperatorTemplate
 
     template = OperatorTemplate.from_yaml(path)
-
     operator, _ = template.apply()
 
     assert operator.equations[1] == "X' = h*(m_in + u)/tau - 2*X/tau - V/tau**2"
-
-
-# ToDo: implement to_dict methods on template classes
-@pytest.mark.skip
-def test_yaml_dump():
-    """Test the functionality to dump an object to YAML"""
-    from pyrates.frontend import fileio
-    from pyrates import clear_frontend_caches
-
-    with pytest.raises(AttributeError):
-        fileio.save("no_to_dict()", "random_art", "yaml")
-
-    from pyrates.frontend.template.circuit import CircuitTemplate
-    clear_frontend_caches()
-    circuit = CircuitTemplate.from_yaml("model_templates.jansen_rit.circuit.JansenRitCircuit")
-
-    with pytest.raises(ValueError):
-        fileio.save(circuit, "output/yaml_dump.yaml", "yml")
-
-    with pytest.raises(TypeError):
-        fileio.save(circuit, "output/yaml_dump.yaml", "yaml")
-
-    fileio.save(circuit, "output/yaml_dump.yaml", "yaml", "DumpedCircuit")
-
-    # reload saved circuit
-    circuit.clear()
-    clear_frontend_caches()
-    saved_circuit = CircuitTemplate.from_yaml("output/yaml_dump/DumpedCircuit"
-                                              ).apply(step_size=1e-3)[0]
-    assert saved_circuit

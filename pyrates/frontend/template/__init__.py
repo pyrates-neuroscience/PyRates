@@ -52,18 +52,6 @@ register_template_class("EdgeTemplate", EdgeTemplate)
 register_template_class("CircuitTemplate", CircuitTemplate)
 
 
-def from_file(path: str, mode: str = "yaml"):
-    """Generic file loader function that looks for correct template class"""
-
-    if mode == "yaml":
-        loader = from_yaml
-
-    else:
-        raise ValueError(f"Unknown file loading mode '{mode}'.")
-
-    return loader(path)
-
-
 def from_yaml(path):
     """Load template from yaml file. Templates are cached by path. Depending on the 'base' key of the yaml template,
     either a template class is instantiated or the function recursively loads base templates until it hits a known
@@ -116,33 +104,27 @@ def from_yaml(path):
     return template
 
 
+def to_yaml(template, path: str, **kwargs) -> None:
+    """Save a `CircuitTemplate` to a yaml file.
+
+    Parameters:
+    -----------
+    template
+        Instance of a `CircuitTemplate`.
+    path
+        (str) path to YAML template of the form `path.to.template_file.template_name` or
+        path/to/template_file/template_name.TemplateName. The dot notation refers to a path that can be found
+        using python's import functionality. That means it needs to be a module (a folder containing an `__init__.py`)
+        located in the Python path (e.g. the current working directory). The slash notation refers to a file in an
+        absolute or relative path from the current working directory. In either case the second-to-last part refers to
+        the filename without file extension and the last part refers to the template name.
+    kwargs
+    """
+
+    from pyrates.frontend.fileio.yaml import dump_to_yaml
+    dump_to_yaml(template, path=path, **kwargs)
+
+
 def clear_cache():
     """Shorthand to clear template cache for whatever reason."""
     template_cache.clear()
-
-
-def _select_template_class():
-    pass
-
-
-# module-lvl functions for template conversion
-# writing them out explicitly
-
-def to_circuit(template: CircuitTemplate):
-    """Takes a circuit template and returns a CircuitIR instance from it."""
-    return template.apply()
-
-
-def to_node(template: NodeTemplate):
-    """Takes a node template and returns a NodeIR instance from it."""
-    return template.apply()
-
-
-def to_edge(template: EdgeTemplate):
-    """Takes a edge template and returns a EdgeIR instance from it."""
-    return template.apply()
-
-
-def to_operator(template: OperatorTemplate):
-    """Takes a operator template and returns a OperatorIR instance from it."""
-    return template.apply()
