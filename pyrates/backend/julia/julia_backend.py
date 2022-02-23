@@ -83,7 +83,7 @@ class JuliaBackend(BaseBackend):
 
     def get_var(self, v: ComputeVar):
         v = super().get_var(v)
-        dtype = v.dtype
+        dtype = v.dtype.name
         s = sum(v.shape)
         if s > 0:
             return v
