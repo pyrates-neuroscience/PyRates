@@ -302,6 +302,9 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         """
 
+        if edge_attr is None:
+            edge_attr = dict()
+
         # construct edge attribute dictionary from arguments
         ####################################################
 
@@ -317,7 +320,7 @@ class CircuitTemplate(AbstractBaseTemplate):
         ######################
 
         # find out which edge attributes have been passed as matrices
-        matrix_attributes = {}
+        matrix_attributes = dict()
         for key, attr in edge_attributes.copy().items():
             if hasattr(attr, 'shape') and len(attr.shape) >= 2:
                 matrix_attributes[key] = edge_attributes.pop(key)
@@ -336,7 +339,7 @@ class CircuitTemplate(AbstractBaseTemplate):
 
                 # extract edge attribute value from matrices
                 for key, attr in matrix_attributes.items():
-                    edge_attributes_tmp[key] = attr[i, j]
+                    edge_attributes_tmp[key] = attr[j, i]
 
                 # add remaining attributes
                 edge_attributes_tmp.update(edge_attributes.copy())

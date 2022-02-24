@@ -410,7 +410,7 @@ def test_2_5_inputs_outputs():
                        step_size=dt, backend=b, solver='euler', clear=True, sampling_step_size=dts,
                        outputs={'a1': 'c1/p1/op9/a', 'a2': 'c1/p2/op10/a', 'a3': 'c2/p1/op9/a', 'a4': 'c2/p2/op10/a'},
                        inputs={'c1/p1/op9/I_ext': inp, 'c1/p2/op10/I_ext': inp2, 'c2/p1/op9/I_ext': inp,
-                              'c2/p2/op10/I_ext': inp2}, file_name='inout_3')
+                               'c2/p2/op10/I_ext': inp2}, file_name='inout_3')
 
         # perform simulation
         r2 = integrate("model_templates.test_resources.test_backend.net14", simulation_time=sim_time,

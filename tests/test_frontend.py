@@ -120,8 +120,8 @@ def test_edge_definition_via_matrix():
 
     # test whether edges have been added as expected
     edge_attr_tmp = deepcopy(edge_attr)
-    edge_attr_tmp['weight'] = weights[2, 1]
-    edge_attr_tmp['delay'] = delays[2, 1]
+    edge_attr_tmp['weight'] = weights[1, 2]
+    edge_attr_tmp['delay'] = delays[1, 2]
     assert len(circuit.edges) == int(n**2)
     assert ('p3/phase_op/theta', 'p2/phase_op/net_in', edge, edge_attr_tmp) in circuit.edges
 
