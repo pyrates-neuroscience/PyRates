@@ -1,6 +1,25 @@
 # Changelog
 
+## 0.11
+
+### 0.11.0
+
+- added support for complex-valued systems
+- added model templates for the kuramoto order parameter and the theta neuron model
+- added model templates for the van der pol oscillator and the stuart-landau oscillator
+- added support for Python 3.9
+- added new example galleries
+- extended pytest library
+- added the `CircuitTemplate.to_yaml` method that allows to save a given `CircuiTemplate` instance to a YAML definition file
+- added the `CircuitTemplate.add_edges_from_matrix` method that allows to connect nodes in a `CircuiTemplate` instance via connectivity matrices
+- deleted old, deprecated code fragments
+- removed the dependecy on pyparsing
+
 ## 0.10
+
+### 0.10.1
+
+- updates to changelog and setup.py
 
 ### 0.10.0
 
