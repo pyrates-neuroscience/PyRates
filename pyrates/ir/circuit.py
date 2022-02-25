@@ -679,11 +679,15 @@ class NetworkGraph(AbstractBaseIR):
             else:
                 ssize = 1
 
-            # check whether the edge can be realized via a matrix productr
+            # check whether the edge can be realized via a matrix product
             if not tidx:
                 tidx = [0 for _ in range(len(sidx))]
             n, m = len(tidx), len(sidx)
-            if n*m > 1 and tsize*ssize > 1:
+            if len(np.unique(tidx)) < len(tidx):
+                if not sidx:
+                    sidx = [i for i in range(len(weight))]
+                dot_edge = True
+            elif n*m > 1 and tsize*ssize > 1:
                 dot_edge = len(weight) / (n * m) > matrix_sparseness
             else:
                 dot_edge = False

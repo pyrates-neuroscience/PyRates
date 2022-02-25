@@ -158,7 +158,7 @@ class ComputeNode:
 
     def __deepcopy__(self, memodict: dict):
         node = ComputeNode(name=self.name, symbol=self.symbol, dtype=self.dtype, shape=self.shape)
-        node._value = node._value[:]
+        node._value = np.zeros_like(node._value) + node._value
         return node
 
     def __str__(self):
