@@ -2,6 +2,13 @@
 
 ## 0.11
 
+### 0.11.1
+
+- removed bug where vectorized circuits with multiple edges to the same target wre not resolved correctly
+- removed bug where creating deepcopies of a `CircuitTemplate` raised an error for scalar-valued models
+- added a new gallery example demonstrating different ways of adding delays to models
+- added a new gallery example demonstrating the different options to optimize run times of numerical simulations
+
 ### 0.11.0
 
 - added support for complex-valued systems
