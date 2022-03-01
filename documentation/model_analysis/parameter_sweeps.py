@@ -90,7 +90,7 @@ results, results_map = grid_search(circuit_template="model_templates.neural_mass
 
 
 # %%
-# After performing the parameter sweep, :code:`grid_search()` returns a tuple with 2 entries:
+# After performing the parameter sweep, :code:`grid_search()` returns a tuple with 2 entries
 #   - a 2D :code:`pandas.DataFrame` that contains the simulated timeseries (rows) for each output variable for
 #     each model parametrization (columns)
 #   - a 2D :code:`pandas.DataFrame` that contains a mapping between the column names of the timeseries in the first

@@ -7,12 +7,12 @@ Here, we will introduce the Van der Pol model, a widely studied non-linear oscil
 In its two-dimensional form, the Van der Pol oscillator is governed by the following non-linear ODEs:
 
 .. math::
-        \\dot x &= z,
-        \\dot z &= \\mu(1-x^2)y - x,
+        \\dot x &= z, \n
+        \\dot z &= \\mu (1-x^2) y - x,
 
-with damping constant :math:`\\mu`. Depending on the latter parameter, the periodic solutions of the Van der Pol oscillator change,
-with simple harmonic oscillations for :math:`\\mu = 0` and non-harmonic limit cycle oscillations for :math:`\\mu > 0`.
-In this gallery, we will simulate and visualize the model dynamics for :math:`\\mu = 0` and :math:`\\mu = 0`.
+with damping constant :math:`\mu`. Depending on the latter parameter, the periodic solutions of the Van der Pol oscillator change,
+with simple harmonic oscillations for :math:`\mu = 0` and non-harmonic limit cycle oscillations for :math:`\mu > 0`.
+In this gallery, we will simulate and visualize the model dynamics for :math:`\mu = 0` and :math:`\mu = 0`.
 
 References
 ^^^^^^^^^^
@@ -63,8 +63,8 @@ clear(model)
 # Step 2: Numerical simulation of the model dynamics for :math:`\\mu = 5`
 # -----------------------------------------------------------------------
 #
-# As expected, we found harmonical oscillations for :math:`\\mu = 0`.
-# Now, we will repeat the procedure for :math:`\\mu = 5`.
+# As expected, we found harmonical oscillations for :math:`\mu = 0`.
+# Now, we will repeat the procedure for :math:`\mu = 5`.
 
 # load model template
 model = CircuitTemplate.from_yaml("model_templates.oscillators.vanderpol.vdp")

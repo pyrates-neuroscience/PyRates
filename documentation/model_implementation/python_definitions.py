@@ -13,13 +13,13 @@ network, can be found in the figure below.
 
 .. _fig1:
 
-.. figure:: ../../../pyrates_interfaces/images/pyrates_model.png
+.. figure:: ../img/pyrates_model.png
    :width: 700
 
    Figure 1
 
 The structure of the full Jansen-Rit model is depicted in :ref:`fig1` B. As visualized for the pyramidal cell
-population in :ref:`fig1`C, the model can be decomposed into a number of generic mathematical operators that can be
+population in :ref:`fig1` C, the model can be decomposed into a number of generic mathematical operators that can be
 used to build the dynamic equations for the Jansen-Rit model. We will use this decomposition to introduce the different
 possibilities that exist in PyRates to compose the dynamic equations of a neural population from different operators.
 This will be done for all 3 nodes (i.e. populations), which will then be connected via edges to yield the full
@@ -76,7 +76,7 @@ pro = OperatorTemplate(
 # In this case, we need the keyword arguments `equations` and `variables` to set up an operator (which is identical for
 # the YAML operator template). As a general rule, every argument that is followed by a list of :code:`- <value>`
 # entries in the YAML template also requires a Python list to be passed in the Python call (as it is the case for the
-# :code:`equations` argument). Similarly, every argument that is followed by a list of :code:`<key>: <value>`entries in
+# :code:`equations` argument). Similarly, every argument that is followed by a list of :code:`<key>: <value>` entries in
 # the YAML template, requires a Python dictionary to be passed in the Python call (as it is the case for the
 # :code:`variables` argument).
 

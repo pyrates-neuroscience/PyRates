@@ -81,7 +81,7 @@ clear(net)
 #
 # .. math::
 #
-#         \\dot x_i(t) = - \\frac{x_i(t)}{\\tau} + \\sum_{j=1}^N J_{ij} \\tanh(x_j(t-d_{ij})),
+#         \dot x_i(t) = - \frac{x_i(t)}{\tau} + \sum_{j=1}^N J_{ij} \tanh(x_j(t-d_{ij})),
 #
 # where :math:`d_{ij}` are scalar delays specific for the connection from :math:`j` to :math:`i`.
 # This can be achieved by using the :code:`delay` keyword to define :math:`d_{ij}` for an edge.
@@ -121,11 +121,11 @@ clear(net)
 #
 # .. math::
 #
-#         \\dot x_i = - \\frac{x_i}{\\tau} + \\sum_{j=1}^N J_{ij} \\tanh(\\Gamma_{ij} * x_j),
-#         \\Gamma_{ij}(t) = \\frac{a_{ij}^{b_{ij}} t^{b_{ij}-1} e^{a_{ij}t}}{(b_{ij}-1)!},
+#         \dot x_i &= - \frac{x_i}{\tau} + \sum_{j=1}^N J_{ij} \tanh(\Gamma_{ij} * x_j), \n
+#         \Gamma_{ij}(t) &= \frac{a_{ij}^{b_{ij}} t^{b_{ij}-1} e^{a_{ij}t}}{(b_{ij}-1)!},
 #
 # where :math:`*` is the convolution operator and :math:`a_{ij}` and :math:`b_{ij}` are the parameters of the gamma
-# kernel :math:`\\Gamma_{ij}`. In PyRates, such a convolution can simply be added by specifying an additional keyword
+# kernel :math:`\Gamma_{ij}`. In PyRates, such a convolution can simply be added by specifying an additional keyword
 # :code:`spread` for a given edge definition:
 
 # define variances
@@ -139,10 +139,10 @@ net = CircuitTemplate(name="gamma", nodes={"p1": li, "p2": li},
                       )
 
 # %%
-# In that case, :code:`delay` and :code:`spread` are interpreted as the mean :math:`\\mu` and variance :math:`\\sigma^2`
+# In that case, :code:`delay` and :code:`spread` are interpreted as the mean :math:`\mu` and variance :math:`\sigma^2`
 # of the gamma kernel that the source variable should be convoluted with, respectively.
-# These quantities are related to :math:`a` and :math:`b` via :math:`\\mu = \\frac{a}{b}` and
-# :math:`\\sigma^2 = \\frac{a}{b^2}`. In addition, PyRates automatically uses the linear chain trick described in [1]_
+# These quantities are related to :math:`a` and :math:`b` via :math:`\mu = \frac{a}{b}` and
+# :math:`\sigma^2 = \frac{a}{b^2}`. In addition, PyRates automatically uses the linear chain trick described in [1]_
 # and [2]_ to translate the convolution operation into a set of coupled ODEs that will be added to the model equations.
 # Let's see how these changes to our model affected the dynamics.
 

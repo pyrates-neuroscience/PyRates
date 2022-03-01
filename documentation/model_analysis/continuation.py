@@ -11,8 +11,8 @@ the quadratic integrate-and-fire population model [1]_, a detailed introduction 
 introductions example gallery. The dynamic equations of this model read the following:
 
 .. math::
-    \\tau \\dot r = \\frac{\\Delta}{\\pi\\tau} + 2 r v, \n
-    \\tau \\dot v = v^2 +\\bar\\eta + I(t) + J r \\tau - (\\pi r \\tau)^2,
+    \\tau \\dot r &= \\frac{\\Delta}{\\pi\\tau} + 2 r v, \n
+    \\tau \\dot v &= v^2 +\\bar\\eta + I(t) + J r \\tau - (\\pi r \\tau)^2,
 
 where :math:`r` is the average firing rate and :math:`v` is the average membrane potential of the QIF population.
 It is governed by 4 parameters:
@@ -92,20 +92,20 @@ print(f.read())
 
 # %%
 # The default parameters written out by PyRates allow to solve the initial value problem, i.e. perform simple numerical
-# simulations via :code:`auto-07p`. For a detailed explanation of these parameters, see the :code:`auto-07p`
-# `documentation<https://github.com/auto-07p/auto-07p>`_.
+# simulations via :code:`auto-07p`. For a detailed explanation of these parameters, see the
+# `Auto-07p documentation <https://github.com/auto-07p/auto-07p>`_.
 
 # %%
 # Step 3: Generate a PyAuto instance
 # ----------------------------------
 #
 # Now that the model equations are compiled, we can generate an instance of :code:`pyauto.PyAuto`, a Python
-# `tool<https://github.com/pyrates-neuroscience/PyAuto>`_ that provides and interface to :code:`auto-07p`.
+# `tool <https://github.com/pyrates-neuroscience/PyAuto>`_ that provides and interface to :code:`auto-07p`.
 
 qif_auto = PyAuto(working_dir=None, auto_dir=auto_dir)
 
 # %%
-# Now, we can use all the tools provided by auto-07p to investigate how the model reacts to changes in its
+# Now, we can use all the tools provided by Auto-07p to investigate how the model reacts to changes in its
 # parameterization.
 
 # %%

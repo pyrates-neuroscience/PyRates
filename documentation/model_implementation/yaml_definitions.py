@@ -18,13 +18,13 @@ network, can be found in the figure below.
 
 .. _fig1:
 
-.. figure:: ../../../pyrates_interfaces/images/pyrates_model.png
+.. figure:: ../img/pyrates_model.png
    :width: 700
 
    Figure 1
 
 The structure of the full Jansen-Rit model is depicted in :ref:`fig1` B. As visualized for the pyramidal cell
-population in :ref:`fig1`C, the model can be decomposed into a number of generic mathematical operators that can be
+population in :ref:`fig1` C, the model can be decomposed into a number of generic mathematical operators that can be
 used to build the dynamic equations for the Jansen-Rit model. We will use this decomposition to introduce the different
 possibilities that exist in PyRates to compose the dynamic equations of a neural population from different operators.
 This will be done for all 3 nodes (i.e. populations), which will then be connected via edges to yield the full
@@ -132,7 +132,7 @@ References
 #       * :code:`input` -> the variable will be provided with a value from a previous operator or external,
 #         user-defined input
 #       * :code:`output` -> the value of this variable can be connected to another operator
-#       * a scalar value, e.g. :code:`default: 1.0` -> indicates that this variable is a constant with value 1.0
+#       * a scalar value, e.g. :code:`m_max: 5.0` -> indicates that this variable is a constant with value 5.0
 #   - be aware that there is a difference between the variable definition :code:`a: 1` and :code:`1.0`, i.e. PyRates
 #     distinguishes between integers and float variables and requires matching variable types in mathematical
 #     operations.
@@ -335,8 +335,8 @@ References
 #   - defines which circuit template to derive this specific circuit template from
 #   - The default base for a circuit template is the python class :code:`CircuitTemplate`
 #   - If you have other circuit templates defined that are derived from :code:`CircuitTemplate`, you can use them as
-#      base as well. In this case, you will inherit all nodes and edges of this template. You can add additional
-#      nodes and edges and overwrite existing nodes, but not edges.
+#     base as well. In this case, you will inherit all nodes and edges of this template. You can add additional nodes
+#     and edges and overwrite existing nodes, but not edges.
 #
 # :code:`nodes`
 #   - lists all nodes that this circuit is composed of

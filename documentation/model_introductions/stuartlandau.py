@@ -7,11 +7,11 @@ Here, we will introduce the Stuart Landau equations, a model of non-linear oscil
 In cartesian coordinates, the evolution equations of the Stuart Landau oscillator can be written as:
 
 .. math::
-        \\dot x = \\omega*z + x*(1-z^2-x^2),
-        \\dot z = -\\omega*x + z*(1-z^2-x^2),
+        \\dot x &= \\omega*z + x*(1-z^2-x^2), \n
+        \\dot z &= -\\omega*x + z*(1-z^2-x^2),
 
-with intrinsic angular frequency :math:`\\omega`. It can be used as the generating model of a harmonic oscillation with
-frequency :math:`\\omega` and is thus useful to incorporate periodic forcing into dynamical systems models.
+with intrinsic angular frequency :math:`\omega`. It can be used as the generating model of a harmonic oscillation with
+frequency :math:`\omega` and is thus useful to incorporate periodic forcing into dynamical systems models.
 Below, we provide an example where we apply periodic forcing to a Van der Pol oscillator (for a detailed description of
 the latter, see the corresponding gallery example in the section `Model introductions`).
 

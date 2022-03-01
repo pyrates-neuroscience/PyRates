@@ -77,6 +77,7 @@ plt.show()
 # entrainment of :code:`VPO` to the intrinsic frequency of :code:`KO`. The coherence :math:`C` between :code:`VPO`
 # and :code:`KO` is given by:
 # .. math::
+#
 #         C = \frac{|P_{x\theta}|}{P_{x} P_{\theta}},
 #
 # where :math:`P_{x}` and :math:`P_{\theta}` are the power spectral densities of :code:`VPO` and :code:`KO`, respectively,
@@ -98,7 +99,7 @@ ax2.set_ylabel('C')
 plt.show()
 
 # %%
-# As we can see, the coherence at the input frequency (0.5 Hz) is :math:'C \approx 0.15'
+# As we can see, the coherence at the input frequency (0.5 Hz) is :math:`C \approx 0.15`
 # for this set of parameters. In a next step, we'll examine how this changes as we
 # systematically alter the input frequency :math:`\omega` as well as the input
 # strength :math:`J`.
