@@ -76,6 +76,7 @@ plt.show()
 # As a next step, lets calculate a metric called *coherence*, which can be used to quantify the
 # entrainment of :code:`VPO` to the intrinsic frequency of :code:`KO`. The coherence :math:`C` between :code:`VPO`
 # and :code:`KO` is given by:
+#
 # .. math::
 #
 #         C = \frac{|P_{x\theta}|}{P_{x} P_{\theta}},

@@ -1,6 +1,6 @@
 """
-A Mean-Field Model of a Quadratic Integrate-and-Fire (QIF) Neuron Population
-============================================================================
+Quadratic Integrate-and-Fire (QIF) Neuron Mean-Field Model
+==========================================================
 
 Here, we will introduce the QIF population mean-field model, which has been derived from a population of all-to-all
 coupled QIF neurons in [1]_. The model equations are given by:

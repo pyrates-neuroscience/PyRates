@@ -121,8 +121,8 @@ clear(net)
 #
 # .. math::
 #
-#         \dot x_i &= - \frac{x_i}{\tau} + \sum_{j=1}^N J_{ij} \tanh(\Gamma_{ij} * x_j), \n
-#         \Gamma_{ij}(t) &= \frac{a_{ij}^{b_{ij}} t^{b_{ij}-1} e^{a_{ij}t}}{(b_{ij}-1)!},
+#         \dot x_i = - \frac{x_i}{\tau} + \sum_{j=1}^N J_{ij} \tanh(\Gamma_{ij} * x_j), \\
+#         \Gamma_{ij}(t) = \frac{a_{ij}^{b_{ij}} t^{b_{ij}-1} e^{a_{ij}t}}{(b_{ij}-1)!},
 #
 # where :math:`*` is the convolution operator and :math:`a_{ij}` and :math:`b_{ij}` are the parameters of the gamma
 # kernel :math:`\Gamma_{ij}`. In PyRates, such a convolution can simply be added by specifying an additional keyword

@@ -112,7 +112,7 @@ kmo_mf:
   nodes:
     p: kmo_pop
   edges:
-    - [ p/kmo_op/r, p/kmo_op/s_in, kmo_edge, {weight: 1.0, kmo_edge/kmo_coupling/r_s: source,
+    - [ p/kmo_op/r, p/kmo_op/s_in, kmo_edge, {weight: 10.0, kmo_edge/kmo_coupling/r_s: source,
                                               kmo_edge/kmo_coupling/r_t: source}]
 
 kmo_mf_2coupled:

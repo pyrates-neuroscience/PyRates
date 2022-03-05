@@ -16,7 +16,7 @@ placed inside a brain network, can be found in the figure below.
 
 .. _fig1:
 
-.. figure:: ../../../pyrates_interfaces/images/pyrates_model.png
+.. figure:: ../../../../../img/pyrates_model.png
    :width: 700
 
    Figure 1

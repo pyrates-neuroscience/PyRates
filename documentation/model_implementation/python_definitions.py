@@ -13,7 +13,7 @@ network, can be found in the figure below.
 
 .. _fig1:
 
-.. figure:: ../img/pyrates_model.png
+.. figure:: ../../../../../img/pyrates_model.png
    :width: 700
 
    Figure 1
