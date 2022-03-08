@@ -114,7 +114,7 @@ class TorchBackend(BaseBackend):
         steps = int(np.round(T / dt))
         store_steps = int(np.round(T / dts))
         store_step = int(np.round(dts / dt))
-        state_rec = torch.zeros((store_steps, y.shape[0]) if y.shape else (store_steps, 1))
+        state_rec = torch.zeros((store_steps, y.shape[0]) if y.shape else (store_steps, 1), dtype=y.dtype)
 
         # solve ivp for forward Euler method
         for step in torch.arange(idx, steps):

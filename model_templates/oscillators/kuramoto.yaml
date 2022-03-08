@@ -50,7 +50,7 @@ kmo_op:
 # coupling operator for populations of kuramoto oscillators interacting via their oder parameters
 kmo_coupling:
   base: OperatorTemplate
-  equations: "s = conjugate(r_s)*r_t^2 - r_s"
+  equations: "s = conj(r_s)*r_t^2 - r_s"
   variables:
     s: output(complex)
     r_s: input(complex)

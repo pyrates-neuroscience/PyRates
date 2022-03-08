@@ -7,17 +7,26 @@
 theta_op:
   base: OperatorTemplate
   equations:
-    - "z' = 0.5*( (i*(eta+I_ext+s*v_s) - Delta)*(z+1)^2 - s*(z^2-1) - i*(z-1)^2)"
-    - "r = (1-abs(z)^2)/(1+z+conjugate(z)+abs(z)^2)"
+    - "z' = ((z+1)^2*(i*(eta+I_ext+s) - Delta) - i*(z-1)^2) / (2*tau)"
+    - "r = (1-abs(z)^2)/(pi*tau*(1+z+conj(z)+abs(z)^2))"
   variables:
-    r: output(0.0)
-    z: variable(complex)
+    r: output(0.01)
+    z: variable(-0.6-0.8j)
     i: 0.0+1.0j
-    eta: 20.0
-    Delta: 0.5
-    v_s: -10.0
+    tau: 1.0
+    eta: -5.0
+    Delta: 1.0
     s: input(0.0)
     I_ext: input(0.0)
+
+conductance_op:
+  base: theta_op
+  equations:
+    replace:
+      I_ext+s: I_ext+s*v_s
+      Delta): Delta) - s*(z^2-1)
+    variables:
+      v_s: -10.0
 
 # node templates
 ################
@@ -27,6 +36,11 @@ theta_pop:
   operators:
     - theta_op
 
+conductance_pop:
+  base: NodeTemplate
+  operators:
+    - conductance_op
+
 # circuit templates
 ###################
 
@@ -35,4 +49,11 @@ kmo_theta:
   nodes:
     p: theta_pop
   edges:
-    - [ p/theta_op/r, p/theta_op/s, null, {weight: 1.0}]
+    - [ p/theta_op/r, p/theta_op/s, null, {weight: 15.0}]
+
+kmo_conductance:
+  base: CircuitTemplate
+  nodes:
+    p: conductance_pop
+    edges:
+      - [ p/conductance_op/r, p/conductance_op/s, null, {weight: 15.0}]

@@ -83,7 +83,8 @@ julia_funcs = {
     'exp': {'call': 'exp', 'func': np.exp, 'imports': []},
     'sigmoid': {'call': 'sigmoid', 'func': sigmoid_func, 'def': sigmoid_def, 'imports': []},
     'interp': {'call': 'interp', 'func': np.interp, 'def': interp, 'imports': []},
-    'real': {'call': 'real', 'func': np.real},
-    'imag': {'call': 'imag', 'func': np.imag},
-    'conjugate': {'call': 'conj', 'func': np.conjugate},
+    'real': {'call': 'real', 'func': np.real, 'imports': []},
+    'imag': {'call': 'imag', 'func': np.imag, 'imports': []},
+    'conj': {'call': 'conj', 'func': np.conjugate, 'imports': []},
+    'abs': {'call': 'abs', 'func': np.abs, 'imports': []},
 }

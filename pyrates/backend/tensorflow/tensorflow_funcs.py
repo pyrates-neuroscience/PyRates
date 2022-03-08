@@ -78,5 +78,6 @@ tf_funcs = {
     'interp': {'call': 'interp', 'func': np.interp, 'def': interp, 'imports': ['tensorflow.abs', 'tensorflow.argmin']},
     'real': {'call': 'real', 'func': np.real, 'imports': ['tensorflow.math.real']},
     'imag': {'call': 'imag', 'func': np.imag, 'imports': ['tensorflow.math.imag']},
-    'conjugate': {'call': 'conj', 'func': np.conjugate, 'imports': ['tensorflow.math.conj']},
+    'conj': {'call': 'conj', 'func': np.conjugate, 'imports': ['tensorflow.math.conj']},
+    'abs': {'call': 'abs_tf', 'func': np.abs, 'imports': ['tensorflow.abs']},
 }

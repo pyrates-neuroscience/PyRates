@@ -143,7 +143,7 @@ class BaseBackend(CodeGen):
 
         # private attributes
         self._float_precision = kwargs.pop('float_precision', 'float32')
-        self._int_precision = kwargs.pop('int_precision', 'int16')
+        self._int_precision = kwargs.pop('int_precision', 'int32')
         self._complex_precision = kwargs.pop('complex_precision', 'complex64')
         self._idx_left = kwargs.pop('idx_left', '[')
         self._idx_right = kwargs.pop('idx_right', ']')
@@ -426,7 +426,7 @@ class BaseBackend(CodeGen):
         steps = int(np.round(T / dt))
         store_steps = int(np.round(T / dts))
         store_step = int(np.round(dts / dt))
-        state_rec = np.zeros((store_steps, y.shape[0]) if y.shape else (store_steps, 1))
+        state_rec = np.zeros((store_steps, y.shape[0]) if y.shape else (store_steps, 1), dtype=y.dtype)
 
         # solve ivp for forward Euler method
         for step in range(t0, steps):

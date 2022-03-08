@@ -308,16 +308,14 @@ class ExpressionParser:
             # replace names of old expression arguments with new variable symbols
             replacements = {old: new for old, new in zip(old_args, func_args) if old != new}
             if replacements:
-                expr = expr.subs(replacements, simultaneous=True)
-                for arg_old in replacements:
-                    if expr.count(arg_old):
-                        expr = expr.replace(arg_old, replacements[arg_old])
+                expr = replace_in_expr(expr, replacements)
 
             # create callable function of the operation
             label = expr.func.__name__
             try:
                 v_tmp = self.cg.get_var(func_args[0].name)
-                backend_funcs = {label: self.cg.get_op(label, shape=v_tmp.shape, dtype=v_tmp.dtype)['func']}
+                op = self.cg.get_op(label, shape=v_tmp.shape, dtype=v_tmp.dtype)
+                backend_funcs = {label: op['func']}
             except (KeyError, IndexError):
                 backend_funcs = dict()
             func = lambdify(func_args, expr=expr, modules=[backend_funcs, "numpy"])
@@ -752,3 +750,11 @@ def get_unique_label(label: str, labels: list) -> str:
         except ValueError:
             label = f"{label}0"
     return label
+
+
+def replace_in_expr(expr: Expr, replacements: dict):
+    expr = expr.subs(replacements, simultaneous=True)
+    for arg_old in replacements:
+        if expr.count(arg_old):
+            expr = expr.replace(arg_old, replacements[arg_old])
+    return expr

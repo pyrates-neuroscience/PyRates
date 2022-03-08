@@ -15,8 +15,8 @@ qif_op:
     - "r' = (Delta/(pi*tau) + 2.0*r*v) / tau"
     - "v' = (v^2 + eta + I_ext + tau*r_in - (pi*tau*r)^2) / tau"
   variables:
-    r: output(0.0)
-    v: variable(0.0)
+    r: output(0.01)
+    v: variable(-2.0)
     Delta: 1.0
     tau: 1.0
     eta: -5.0

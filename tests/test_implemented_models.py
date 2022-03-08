@@ -86,8 +86,8 @@ def test_3_1_jansenrit():
         assert np.mean(r1.values.flatten() - r2.values.flatten()) == pytest.approx(0., rel=accuracy, abs=accuracy)
 
 
-def test_3_2_qif():
-    """Testing accuracy of mean-field representation of QIF population.
+def test_3_2_qif_theta():
+    """Testing accuracy of mean-field representation of QIF population and theta neuron model.
     """
 
     T = 80.0
@@ -123,6 +123,27 @@ def test_3_2_qif():
         time = 49.0
         idx = np.argmin(np.abs(time - r1.index))
         assert r1.iloc[idx, 0] > r2.iloc[idx, 0] > r3.iloc[idx, 0]
+
+        # compare qif population dynamics with theta neuron dynamics
+        ############################################################
+
+        # backends that can't handle complex variables
+        if b in ['tensorflow']:
+            continue
+
+        # basic theta neuron population
+        r4 = integrate("model_templates.neural_mass_models.theta.kmo_theta", simulation_time=T, sampling_step_size=dts,
+                       inputs={"p/theta_op/I_ext": inp}, outputs={"z": "p/theta_op/z"}, backend=b,
+                       step_size=dt, clear=True, file_name='m1', vectorize=False, **kwargs)
+
+        # translate complex variable z into firing rate r
+        z = r4["z"].values
+        z_conj = np.conjugate(z)
+        w = (1-z_conj)/(1+z_conj)
+        r = np.real(w)/np.pi
+
+        # compare firing rate dynamics between theta and qif neuron
+        assert np.mean(r - r1["r"].values) == pytest.approx(0., rel=1e-2, abs=1e-2)
 
 
 def test_3_3_wilson_cowan():

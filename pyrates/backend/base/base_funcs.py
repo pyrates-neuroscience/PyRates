@@ -101,5 +101,6 @@ base_funcs = {
     'index_axis': {'call': 'index_axis', 'func': index_axis},
     'real': {'call': 'real', 'func': np.real, 'imports': ['numpy.real']},
     'imag': {'call': 'imag', 'func': np.imag, 'imports': ['numpy.imag']},
-    'conjugate': {'call': 'conjugate', 'func': np.conjugate, 'imports': ['numpy.conjugate']},
+    'conj': {'call': 'conjugate', 'func': np.conjugate, 'imports': ['numpy.conjugate']},
+    'abs': {'call': 'abs', 'func': np.abs, 'imports': ['numpy.abs']},
 }

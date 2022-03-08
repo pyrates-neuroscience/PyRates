@@ -126,5 +126,6 @@ fortran_funcs = {
     'interp': {'call': get_interp_def, 'func': np.interp},
     'real': {'call': 'realpart', 'func': np.real},
     'imag': {'call': 'imagpart', 'func': np.imag},
-    'conjugate': {'call': 'conjg', 'func': np.conjugate},
+    'conj': {'call': 'conjg', 'func': np.conjugate},
+    'abs': {'call': 'abs', 'func': np.abs},
 }

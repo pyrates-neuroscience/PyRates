@@ -162,7 +162,7 @@ class TensorflowBackend(BaseBackend):
             steps = tf.constant(int(np.round(T / dt)))
             store_steps = int(np.round(T / dts))
             store_step = tf.constant(int(np.round(dts / dt)))
-            state_rec = tf.Variable(np.zeros((store_steps, y0.shape[0])))
+            state_rec = tf.Variable(np.zeros((store_steps, y0.shape[0])), dtype=y0.dtype)
             dt = tf.constant(dt)
 
             # solve ivp via forward euler method (fixed integration step-size)
