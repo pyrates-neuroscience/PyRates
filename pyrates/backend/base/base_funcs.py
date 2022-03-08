@@ -102,5 +102,5 @@ base_funcs = {
     'real': {'call': 'real', 'func': np.real, 'imports': ['numpy.real']},
     'imag': {'call': 'imag', 'func': np.imag, 'imports': ['numpy.imag']},
     'conj': {'call': 'conjugate', 'func': np.conjugate, 'imports': ['numpy.conjugate']},
-    'abs': {'call': 'abs', 'func': np.abs, 'imports': ['numpy.abs']},
+    'absv': {'call': 'abs', 'func': np.abs, 'imports': ['numpy.abs']},
 }

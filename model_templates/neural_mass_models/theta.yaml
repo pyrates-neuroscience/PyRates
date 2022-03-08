@@ -8,7 +8,7 @@ theta_op:
   base: OperatorTemplate
   equations:
     - "z' = ((z+1)^2*(i*(eta+I_ext+s) - Delta) - i*(z-1)^2) / (2*tau)"
-    - "r = (1-abs(z)^2)/(pi*tau*(1+z+conj(z)+abs(z)^2))"
+    - "r = (1-absv(z)^2)/(pi*tau*(1+z+conj(z)+absv(z)^2))"
   variables:
     r: output(0.01)
     z: variable(-0.6-0.8j)

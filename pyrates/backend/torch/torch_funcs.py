@@ -80,5 +80,5 @@ torch_funcs = {
     'real': {'call': 'real', 'func': np.real, 'imports': ['torch.real']},
     'imag': {'call': 'imag', 'func': np.imag, 'imports': ['torch.imag']},
     'conj': {'call': 'conj', 'func': np.conjugate, 'imports': ['torch.conj']},
-    'abs': {'call': 'abs', 'func': np.abs, 'imports': ['torch.abs']},
+    'absv': {'call': 'abs', 'func': np.abs, 'imports': ['torch.abs']},
 }

@@ -86,5 +86,5 @@ julia_funcs = {
     'real': {'call': 'real', 'func': np.real, 'imports': []},
     'imag': {'call': 'imag', 'func': np.imag, 'imports': []},
     'conj': {'call': 'conj', 'func': np.conjugate, 'imports': []},
-    'abs': {'call': 'abs', 'func': np.abs, 'imports': []},
+    'absv': {'call': 'abs', 'func': np.abs, 'imports': []},
 }

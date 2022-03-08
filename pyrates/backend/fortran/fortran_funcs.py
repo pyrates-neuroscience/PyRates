@@ -127,5 +127,5 @@ fortran_funcs = {
     'real': {'call': 'realpart', 'func': np.real},
     'imag': {'call': 'imagpart', 'func': np.imag},
     'conj': {'call': 'conjg', 'func': np.conjugate},
-    'abs': {'call': 'abs', 'func': np.abs},
+    'absv': {'call': 'abs', 'func': np.abs},
 }
