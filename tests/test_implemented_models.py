@@ -21,6 +21,7 @@ __status__ = "Development"
 backends = ['torch', 'default', 'tensorflow']
 vectorization = [True, False, True]
 backend_kwargs = [{}, {}, {}]
+complex_compat = [False, True, False]
 
 # define test accuracy
 accuracy = 1e-4
@@ -99,7 +100,7 @@ def test_3_2_qif_theta():
     inp = np.zeros((int(np.round(T/dt)),))
     inp[in_start:in_start+in_dur] = 5.0
 
-    for b, kwargs in zip(backends, backend_kwargs):
+    for b, kwargs, c in zip(backends, backend_kwargs, complex_compat):
 
         # compare qif population dynamics with and without plasticity
         #############################################################
@@ -127,23 +128,21 @@ def test_3_2_qif_theta():
         # compare qif population dynamics with theta neuron dynamics
         ############################################################
 
-        # backends that can't handle complex variables
-        if b in ['tensorflow']:
-            continue
+        if c:
 
-        # basic theta neuron population
-        r4 = integrate("model_templates.neural_mass_models.theta.kmo_theta", simulation_time=T, sampling_step_size=dts,
-                       inputs={"p/theta_op/I_ext": inp}, outputs={"z": "p/theta_op/z"}, backend=b,
-                       step_size=dt, clear=True, file_name='m1', vectorize=False, **kwargs)
+            # basic theta neuron population
+            r4 = integrate("model_templates.neural_mass_models.theta.kmo_theta", simulation_time=T, sampling_step_size=dts,
+                           inputs={"p/theta_op/I_ext": inp}, outputs={"z": "p/theta_op/z"}, backend=b,
+                           step_size=dt, clear=True, file_name='m1', vectorize=False, **kwargs)
 
-        # translate complex variable z into firing rate r
-        z = r4["z"].values
-        z_conj = np.conjugate(z)
-        w = (1-z_conj)/(1+z_conj)
-        r = np.real(w)/np.pi
+            # translate complex variable z into firing rate r
+            z = r4["z"].values
+            z_conj = np.conjugate(z)
+            w = (1-z_conj)/(1+z_conj)
+            r = np.real(w)/np.pi
 
-        # compare firing rate dynamics between theta and qif neuron
-        assert np.mean(r - r1["r"].values) == pytest.approx(0., rel=1e-2, abs=1e-2)
+            # compare firing rate dynamics between theta and qif neuron
+            assert np.mean(r - r1["r"].values) == pytest.approx(0., rel=1e-2, abs=1e-2)
 
 
 def test_3_3_wilson_cowan():
@@ -194,7 +193,7 @@ def test_3_4_kuramoto():
     inp = np.zeros((int(np.round(T / dt)),))
     inp[in_start:in_start + in_dur] = 1.0
 
-    for b, v, kwargs in zip(backends, vectorization, backend_kwargs):
+    for b, v, kwargs, c in zip(backends, vectorization, backend_kwargs, complex_compat):
 
         # assess correct response of single base oscillator
         ###################################################
@@ -216,7 +215,7 @@ def test_3_4_kuramoto():
         # perform simulation
         r2 = integrate("model_templates.oscillators.kuramoto.kmo_2coupled", simulation_time=T, sampling_step_size=dts,
                        outputs={"theta1": "p1/phase_op/theta", "theta2": "p2/phase_op/theta"}, backend=b, solver='scipy',
-                       inputs={"p1/phase_op/ext_in": inp}, step_size=dt, clear=True, file_name='km2', vectorize=v,
+                       inputs={"p1/phase_op/s_ext": inp}, step_size=dt, clear=True, file_name='km2', vectorize=v,
                        method='RK45', **kwargs)
 
         # test whether the oscillators expressed de-phasing
@@ -224,3 +223,28 @@ def test_3_4_kuramoto():
         diff_init = r2['theta1'].iloc[init] - r2['theta2'].iloc[init]
         diff_end = r2['theta1'].iloc[-1] - r2['theta2'].iloc[-1]
         assert diff_end > diff_init
+
+        # assess correct response of kuramoto order parameter mean-field model
+        ######################################################################
+
+        # backends that can't handle complex variables
+        if c:
+
+            # define oscillatory input
+            t = np.linspace(0, T, num=int(np.round(T/dt)))
+            inp = 2.0/(1.0 + np.exp(np.sin(2.0*np.pi*t*1.0)))
+
+            # perform simulation
+            r3 = integrate("model_templates.oscillators.kuramoto.kmo_mf_2coupled", simulation_time=T,
+                           sampling_step_size=dts, outputs={"z1": "p1/kmo_op/z", "z2": "p2/kmo_op/z"}, backend=b,
+                           step_size=dt, solver='scipy', clear=True, file_name='km3', vectorize=v, **kwargs)
+
+            # perform simulation
+            r4 = integrate("model_templates.oscillators.kuramoto.kmo_mf_2coupled", simulation_time=T,
+                           sampling_step_size=dts, outputs={"z1": "p1/kmo_op/z", "z2": "p2/kmo_op/z"}, backend=b,
+                           inputs={"p1/kmo_op/s_ext": inp}, step_size=dt,
+                           solver='scipy', clear=True, file_name='km4', vectorize=v, **kwargs)
+
+            # verify that the stimulated model shows stronger synchronization than un-stimulated model
+            assert np.abs(r3.iloc[-1, 0]) < np.abs(r4.iloc[-1, 0])
+            assert np.abs(r3.iloc[-1, 1]) < np.abs(r4.iloc[-1, 1])

@@ -8,13 +8,13 @@
 phase_op:
   base: OperatorTemplate
   equations:
-    - "d/dt * theta = omega + K*net_in + ext_in"
+    - "d/dt * theta = omega + K*s_in + s_ext"
   variables:
     theta: output
     omega: 10.0
     K: 1.0
-    net_in: input
-    ext_in: input
+    s_in: input
+    s_ext: input
 
 # sinusoidal phase coupling operator
 coupling_op:
@@ -38,23 +38,17 @@ sin_op:
 # kuramoto order parameter evolution
 kmo_op:
   base: OperatorTemplate
-  equations: "r' = r*(i*omega - Delta) - 0.5*(s_in + s_ext)"
+  equations:
+    - "s = s_in + s_ext"
+    - "z' = (i*omega - Delta)*z + (s - conj(s)*z^2) / 2"
   variables:
-    r: output(0.5+0.1j)
-    omega: 1.0
+    z: output(0.5+0.1j)
+    s: variable(complex)
+    omega: 10.0
     Delta: 1.0
     i: 0.0+1.0j
     s_in: input(0.0+0.0j)
     s_ext: input(0.0+0.0j)
-
-# coupling operator for populations of kuramoto oscillators interacting via their oder parameters
-kmo_coupling:
-  base: OperatorTemplate
-  equations: "s = conj(r_s)*r_t^2 - r_s"
-  variables:
-    s: output(complex)
-    r_s: input(complex)
-    r_t: input(complex)
 
 # node templates
 ################
@@ -83,11 +77,6 @@ sin_edge:
   operators:
     - coupling_op
 
-kmo_edge:
-  base: EdgeTemplate
-  operators:
-    - kmo_coupling
-
 # circuit templates
 ###################
 
@@ -102,9 +91,9 @@ kmo_2coupled:
     p1: phase_pop
     p2: phase_pop
   edges:
-    - [ p1/phase_op/theta, p2/phase_op/net_in, sin_edge, { weight: -4.0, sin_edge/coupling_op/theta_s: source,
+    - [ p1/phase_op/theta, p2/phase_op/s_in, sin_edge, { weight: -4.0, sin_edge/coupling_op/theta_s: source,
                                                            sin_edge/coupling_op/theta_t: p2/phase_op/theta } ]
-    - [ p2/phase_op/theta, p1/phase_op/net_in, sin_edge, { weight: -4.0, sin_edge/coupling_op/theta_s: source,
+    - [ p2/phase_op/theta, p1/phase_op/s_in, sin_edge, { weight: -4.0, sin_edge/coupling_op/theta_s: source,
                                                            sin_edge/coupling_op/theta_t: p1/phase_op/theta } ]
 
 kmo_mf:
@@ -112,8 +101,7 @@ kmo_mf:
   nodes:
     p: kmo_pop
   edges:
-    - [ p/kmo_op/r, p/kmo_op/s_in, kmo_edge, {weight: 10.0, kmo_edge/kmo_coupling/r_s: source,
-                                              kmo_edge/kmo_coupling/r_t: source}]
+    - [ p/kmo_op/z, p/kmo_op/s_in, null, {weight: 1.0}]
 
 kmo_mf_2coupled:
   base: CircuitTemplate
@@ -121,7 +109,7 @@ kmo_mf_2coupled:
     p1: kmo_pop
     p2: kmo_pop
   edges:
-    - [ p1/kmo_op/r, p2/kmo_op/s_in, kmo_edge, { weight: 10.0, kmo_edge/kmo_coupling/r_s: source,
-                                                 kmo_edge/kmo_coupling/r_t: p2/kmo_op/r } ]
-    - [ p2/kmo_op/r, p1/kmo_op/s_in, kmo_edge, { weight: 10.0, kmo_edge/kmo_coupling/r_s: source,
-                                                 kmo_edge/kmo_coupling/r_t: p1/kmo_op/r } ]
+    - [ p1/kmo_op/z, p1/kmo_op/s_in, null, {weight: 2.0} ]
+    - [ p1/kmo_op/z, p2/kmo_op/s_in, null, {weight: -2.0} ]
+    - [ p2/kmo_op/z, p2/kmo_op/s_in, null, {weight: 2.0} ]
+    - [ p2/kmo_op/z, p1/kmo_op/s_in, null, {weight: -2.0} ]

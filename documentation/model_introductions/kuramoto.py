@@ -63,7 +63,7 @@ I_ext[int(start/step_size):int(stop/step_size)] = 1.0
 # perform simulation
 results = integrate("model_templates.oscillators.kuramoto.kmo_2coupled", step_size=step_size, simulation_time=T,
                     outputs={'theta_1': 'p1/phase_op/theta', 'theta_2': 'p2/phase_op/theta'},
-                    inputs={'p1/phase_op/ext_in': I_ext}, clear=True)
+                    inputs={'p1/phase_op/s_ext': I_ext}, clear=True)
 
 # plot resulting phases
 import matplotlib.pyplot as plt
@@ -74,27 +74,27 @@ plt.show()
 # Kuramoto Order Parameter Dynamics
 # =================================
 #
-# The Kuramoto order parameter :math:`r` of a system of coupled phase oscillators is given by
+# The Kuramoto order parameter :math:`z` of a system of coupled phase oscillators is given by
 #
 # .. math::
-#         r = \sigma e^{i\phi} = \frac{1}{N} \sum_{j=1}^N e^{i \theta_j},
+#         z = \sigma e^{i\phi} = \frac{1}{N} \sum_{j=1}^N e^{i \theta_j},
 #         :label: eq3
 #
 # where :math:`\sigma` and :math:`\phi` are the phase coherence and average phase of the phase oscillators, respectively.
 # In 2008, Ott and Antonsen derived the evolution equations for these order parameters for a system of all-to-all
 # coupled Kuramoto oscillators of the form :eq:`eq1`. While the evolution of the average phase is determined by a mere
-# constant, the evolution equation of :math:`r` is given by
+# constant, the evolution equation of :math:`z` is given by
 #
 # .. math::
-#        \dot r = r(i\omega - \Delta) - \frac{\bar r r^2 - r}{2},
+#        \dot z = z(i\omega - \Delta) - \frac{\bar{J z} z^2 - J z}{2},
 #        :label: eq4
 #
-# where :math:`\bar r` denotes the complex conjugate of :math:`r`, and :math:`\omega` and :math:`\Delta` represent the
+# where :math:`\bar z` denotes the complex conjugate of :math:`z`, and :math:`\omega` and :math:`\Delta` represent the
 # center and half-width-at-half-maximum of a Lorentzian distribution over the intrinsic frequencies :math:`\omega_i` of
 # the individual Kuramoto oscillators (see [2]_ for a detailed derivation of the mean-field equation).
-# Below, we simulate the dynamics of the dynamics of :math:`r` of an all-to-all coupled system of Kuramoto oscillators
-# in response to a step-function input (similar to the simulation above). Note that :math:`r` is a complex variable and
-# we plot its absolute value :math:`|r|` to receive the coherence of the system over time.
+# Below, we simulate the dynamics of the dynamics of :math:`z` of an all-to-all coupled system of Kuramoto oscillators
+# in response to a step-function input (similar to the simulation above). Note that :math:`z` is a complex variable and
+# we plot its absolute value :math:`|z|` to receive the coherence of the system over time.
 
 # define simulation time and input start and stop
 T = 40.0
@@ -105,11 +105,11 @@ stop = 30.0
 # extrinsic input definition
 steps = int(np.round(T/step_size))
 I_ext = np.zeros((steps,))
-I_ext[int(start/step_size):int(stop/step_size)] = 1.0
+I_ext[int(start/step_size):int(stop/step_size)] = 2.0
 
 # perform simulation
 results = integrate("model_templates.oscillators.kuramoto.kmo_mf", step_size=step_size, simulation_time=T,
-                    outputs={'r': 'p/kmo_op/r'}, inputs={'p/kmo_op/s_ext': I_ext}, clear=True, solver='scipy')
+                    outputs={'z': 'p/kmo_op/z'}, inputs={'p/kmo_op/s_ext': I_ext}, clear=True, solver='scipy')
 
 # plot resulting coherence dynamics
 import matplotlib.pyplot as plt

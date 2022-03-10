@@ -115,7 +115,7 @@ def test_edge_definition_via_matrix():
     delays = np.random.uniform(low=1, high=2, size=(n, n))
     edge_attr = {'sin_edge/coupling_op/theta_s': 'source', 'sin_edge/coupling_op/theta_t': 'p2/phase_op/theta',
                  'delay': delays}
-    circuit.add_edges_from_matrix(source_var='phase_op/theta', target_var='phase_op/net_in', nodes=node_names,
+    circuit.add_edges_from_matrix(source_var='phase_op/theta', target_var='phase_op/s_in', nodes=node_names,
                                   weight=weights, template=edge, edge_attr=edge_attr)
 
     # test whether edges have been added as expected
@@ -123,7 +123,7 @@ def test_edge_definition_via_matrix():
     edge_attr_tmp['weight'] = weights[1, 2]
     edge_attr_tmp['delay'] = delays[1, 2]
     assert len(circuit.edges) == int(n**2)
-    assert ('p3/phase_op/theta', 'p2/phase_op/net_in', edge, edge_attr_tmp) in circuit.edges
+    assert ('p3/phase_op/theta', 'p2/phase_op/s_in', edge, edge_attr_tmp) in circuit.edges
 
     # perform short simulation to ensure that the network has been constructed correctly
     circuit.run(simulation_time=1.0, step_size=1e-4, outputs=['all/phase_op/theta'])
