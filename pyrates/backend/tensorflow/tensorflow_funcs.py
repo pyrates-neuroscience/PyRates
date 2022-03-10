@@ -79,5 +79,5 @@ tf_funcs = {
     'real': {'call': 'real', 'func': np.real, 'imports': ['tensorflow.math.real']},
     'imag': {'call': 'imag', 'func': np.imag, 'imports': ['tensorflow.math.imag']},
     'conj': {'call': 'conj', 'func': np.conjugate, 'imports': ['tensorflow.math.conj']},
-    'abs': {'call': 'abs_tf', 'func': np.abs, 'imports': ['tensorflow.abs']},
+    'absv': {'call': 'abs', 'func': np.abs, 'imports': ['tensorflow.abs']},
 }

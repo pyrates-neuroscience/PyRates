@@ -27,7 +27,7 @@ Basic features:
    - choose between different numerical solvers
    - perform parameter sweeps over multiple parameters at once
    - generate backend-specific run functions that evaluate the vector field of your dynamical system
-   - Implement dynamic edge equations that include scalar dealys or delay distributions (delay distributions are automatically translated into :math:`\gamma`-kernel convolutions)
+   - Implement dynamic edge equations that include scalar dealys or delay distributions (delay distributions are automatically translated into gamma-kernel convolutions)
    - choose from various pre-implemented dynamical systems that can be directly used for simulations or integrated into custom models
 
 Installation:
