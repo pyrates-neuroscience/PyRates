@@ -62,7 +62,7 @@ class FortranBackend(BaseBackend):
                  imports: Optional[List[str]] = None,
                  **kwargs
                  ) -> None:
-        """Instantiates tensorflow backend, i.e. a tensorflow graph.
+        """Instantiates Fortran backend.
         """
 
         # add user-provided operations to function dict
@@ -96,7 +96,7 @@ class FortranBackend(BaseBackend):
         else:
             return super().create_index_str(idx, separator, apply, **kwargs)
 
-    def generate_func_head(self, func_name: str, state_var: str = None, func_args: list = None):
+    def generate_func_head(self, func_name: str, state_var: str = 'y', return_var: str = 'dy', func_args: list = None):
 
         # finalize list of arguments for the function call
         if func_args:
@@ -123,7 +123,7 @@ class FortranBackend(BaseBackend):
 
         # add function header
         self.add_linebreak()
-        self._add_func_call(name=func_name, args=func_args)
+        self._add_func_call(name=func_name, args=func_args, return_var=return_var)
 
         return func_args
 
@@ -405,7 +405,7 @@ class FortranBackend(BaseBackend):
 
         return func_info
 
-    def _add_func_call(self, name: str, args: Iterable):
+    def _add_func_call(self, name: str, args: Iterable, return_var: str = 'dy'):
 
         # add function header
         self.add_code_line(f"subroutine {name}({','.join(args)})")

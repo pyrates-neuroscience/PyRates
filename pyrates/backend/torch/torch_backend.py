@@ -56,7 +56,7 @@ class TorchBackend(BaseBackend):
                  imports: Optional[List[str]] = None,
                  **kwargs
                  ) -> None:
-        """Instantiates tensorflow backend, i.e. a tensorflow graph.
+        """Instantiates PyTorch backend.
         """
 
         # add user-provided operations to function dict

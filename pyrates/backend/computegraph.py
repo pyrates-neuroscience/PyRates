@@ -393,7 +393,7 @@ class ComputeGraph(MultiDiGraph):
         code_gen.code.clear()
 
         # generate function head
-        func_args = code_gen.generate_func_head(func_name=func_name, state_var=state_var_key,
+        func_args = code_gen.generate_func_head(func_name=func_name, state_var=state_var_key, return_var=rhs_var_key,
                                                 func_args=[self.get_var(arg) for arg in func_args])
 
         # add lines from function body after function head

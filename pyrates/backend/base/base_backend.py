@@ -116,13 +116,7 @@ class BaseBackend(CodeGen):
                  imports: Optional[List[str]] = None,
                  **kwargs
                  ) -> None:
-        """Instantiates the standard, numpy-based backend, i.e. a compute graph with numpy operations.
-
-        Parameters
-        ----------
-        ops
-        imports
-        kwargs
+        """Instantiates the standard, numpy-based backend.
         """
 
         # call to super method (initializes code generator)
@@ -256,7 +250,7 @@ class BaseBackend(CodeGen):
             *path, file = f.split('/')
             return '/'.join(path), file
 
-    def generate_func_head(self, func_name: str, state_var: str = None, func_args: list = None):
+    def generate_func_head(self, func_name: str, state_var: str = 'y', return_var: str = 'dy', func_args: list = None):
 
         imports = self._imports
         helper_funcs = self._helper_funcs
@@ -284,12 +278,12 @@ class BaseBackend(CodeGen):
 
         # add function header
         self.add_linebreak()
-        self._add_func_call(name=func_name, args=func_args)
+        self._add_func_call(name=func_name, args=func_args, return_var=return_var)
         self.add_indent()
 
         return func_args
 
-    def generate_func_tail(self, rhs_var: str = None):
+    def generate_func_tail(self, rhs_var: str = 'dy'):
 
         self.add_code_line(f"return {rhs_var}")
         self.remove_indent()
@@ -415,7 +409,7 @@ class BaseBackend(CodeGen):
 
         return results
 
-    def _add_func_call(self, name: str, args: Iterable):
+    def _add_func_call(self, name: str, args: Iterable, return_var: str = 'dy'):
         self.add_code_line(f"def {name}({','.join(args)}):")
 
     @staticmethod

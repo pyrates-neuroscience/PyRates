@@ -26,15 +26,15 @@
 #
 # Richard Gast and Daniel Rose et. al. in preparation
 
-"""Wraps Julia such that its low-level functions can be used by PyRates to create and simulate a compute graph.
+"""Wraps Matlab such that its low-level functions can be used by PyRates to create and simulate a compute graph.
 """
 
 # pyrates internal _imports
 import sys
 
-from ..base import BaseBackend
+from ..julia import JuliaBackend
 from ..computegraph import ComputeVar
-from .julia_funcs import julia_funcs
+from .matlab_funcs import matlab_funcs
 
 # external _imports
 from typing import Optional, Dict, List, Callable, Iterable, Union, Tuple
@@ -49,87 +49,57 @@ __status__ = "development"
 #################
 
 
-class JuliaBackend(BaseBackend):
+class MatlabBackend(JuliaBackend):
 
     def __init__(self,
                  ops: Optional[Dict[str, str]] = None,
                  imports: Optional[List[str]] = None,
                  **kwargs
                  ) -> None:
-        """Instantiates Julia backend.
+        """Instantiates Matlab backend.
         """
 
         # add user-provided operations to function dict
-        julia_ops = julia_funcs.copy()
+        matlab_ops = matlab_funcs.copy()
         if ops:
-            julia_ops.update(ops)
+            matlab_ops.update(ops)
 
-        # set default float precision to float64
-        kwargs["float_precision"] = "float64"
+        # define matlab-specific attributes
+        kwargs['idx_left'] = '('
+        kwargs['idx_right'] = ')'
+        kwargs['start_idx'] = 1
 
         # call parent method
-        super().__init__(ops=julia_ops, imports=imports, file_ending='.m', start_idx=1, **kwargs)
+        super(JuliaBackend, self).__init__(ops=matlab_ops, imports=imports, file_ending='.jl', start_idx=1, **kwargs)
 
-        # define julia-specific imports
+        # define matlab-specific imports
         self._imports.pop(0)
-        self._imports.append("using LinearAlgebra")
 
-        # set up pyjulia
-        from julia.api import Julia
-        jl = Julia(runtime=kwargs.pop('julia_path'), compiled_modules=False)
-        from julia import Main
-        self._jl = Main
-        self._no_vectorization = ["*(", "interp("]
+        # define which function calls should not be vectorized during code generation
+        self._no_vectorization = ["*("]
 
-    def get_var(self, v: ComputeVar):
-        v = super().get_var(v)
-        dtype = v.dtype.name
-        s = sum(v.shape)
-        if s > 0:
-            return v
-        if 'float' in dtype:
-            return float(v)
-        if 'complex' in dtype:
-            return complex(np.real(v), np.imag(v))
-        return int(v)
+        # create matlab session
+        import matlab.engine as en
+        self._matlab = en.start_matlab()
 
     def add_var_update(self, lhs: ComputeVar, rhs: str, lhs_idx: Optional[str] = None, rhs_shape: Optional[tuple] = ()):
 
-        super().add_var_update(lhs=lhs, rhs=rhs, lhs_idx=lhs_idx, rhs_shape=rhs_shape)
+        super(JuliaBackend, self).add_var_update(lhs=lhs, rhs=rhs, lhs_idx=lhs_idx, rhs_shape=rhs_shape)
         if rhs_shape or lhs_idx:
             line = self.code.pop()
             lhs, rhs = line.split(' = ')
             if not any([rhs[:len(expr)] == expr for expr in self._no_vectorization]):
-                rhs = f"@. {rhs}"
+                rhs = self._matlab.vectorize(rhs)
             self.add_code_line(f"{lhs} = {rhs}")
 
-    def create_index_str(self, idx: Union[str, int, tuple], separator: str = ',', apply: bool = True,
-                         **kwargs) -> Tuple[str, dict]:
+    def generate_func_tail(self, rhs_var: str = None):
 
-        if not apply:
-            self._start_idx = 0
-            idx, idx_dict = super().create_index_str(idx, separator, apply, **kwargs)
-            self._start_idx = 1
-            return idx, idx_dict
-        else:
-            return super().create_index_str(idx, separator, apply, **kwargs)
-
-    def generate_func_tail(self, rhs_var: str = 'dy'):
-
-        self.add_code_line(f"return {rhs_var}")
         self.remove_indent()
         self.add_code_line("end")
 
     def generate_func(self, func_name: str, to_file: bool = True, **kwargs):
 
         # generate the current function string via the code generator
-        if kwargs.pop('julia_diffeq', False):
-            self.add_linebreak()
-            self.add_code_line(f"function {func_name}_julia(dy, y, p, t)")
-            self.add_indent()
-            self.add_code_line(f"return {func_name}(t, y, dy, p...)")
-            self.remove_indent()
-            self.add_code_line("end")
         func_str = self.generate()
 
         if to_file:
@@ -141,12 +111,14 @@ class JuliaBackend(BaseBackend):
                 f.close()
 
             # import function from file
-            rhs_eval = self._jl.include(file)
+            if self._fdir:
+                self._matlab.addpath(self._fdir, nargout=0)
+            rhs_eval = exec(f"self._matlab.{self._fname}")
 
         else:
 
             # just execute the function string, without writing it to file
-            rhs_eval = self._jl.eval(func_str)
+            rhs_eval = self._matlab.eval(func_str)
 
         # apply function decorator
         decorator = kwargs.pop('decorator', None)
@@ -191,25 +163,4 @@ class JuliaBackend(BaseBackend):
         return results
 
     def _add_func_call(self, name: str, args: Iterable, return_var: str = 'dy'):
-        self.add_code_line(f"function {name}({','.join(args)})")
-
-    def _process_idx(self, idx: Union[Tuple[int, int], int, str, ComputeVar], **kwargs) -> str:
-
-        if type(idx) is str and ':' in idx:
-            idx0, idx1 = idx.split(':')
-            self._start_idx = 0
-            idx0 = int(self._process_idx(idx0))
-            idx1 = int(self._process_idx(idx1))
-            self._start_idx = 1
-            return self._process_idx((idx0, idx1))
-        return super()._process_idx(idx=idx, **kwargs)
-
-    @staticmethod
-    def expr_to_str(expr: str, args: tuple):
-
-        # replace power operator
-        func = '**'
-        while func in expr:
-            expr = expr.replace(func, '^')
-
-        return expr
+        self.add_code_line(f"function {return_var} = {name}({','.join(args)})")
