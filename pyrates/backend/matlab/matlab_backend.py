@@ -171,9 +171,7 @@ class MatlabBackend(JuliaBackend):
 
         else:
 
-            # solve ivp via matlab solver ode45
-            results = self._matlab.ode45(lambda t, y: func_mat(t, y, *args_m), (t0, T), y0, **kwargs)
-            results = np.asarray(results).T
+            raise ValueError(f'Solver {solver} is not supported for this backend.')
 
         return results
 
