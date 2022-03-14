@@ -64,13 +64,9 @@ class MatlabBackend(JuliaBackend):
         if ops:
             matlab_ops.update(ops)
 
-        # define matlab-specific attributes
-        kwargs['idx_left'] = '('
-        kwargs['idx_right'] = ')'
-        kwargs['start_idx'] = 1
-
         # call parent method
-        super(JuliaBackend, self).__init__(ops=matlab_ops, imports=imports, file_ending='.jl', start_idx=1, **kwargs)
+        super(JuliaBackend, self).__init__(ops=matlab_ops, imports=imports, file_ending='.m', start_idx=1,
+                                           idx_left='(', idx_right=')', **kwargs)
 
         # define matlab-specific imports
         self._imports.pop(0)
@@ -79,23 +75,40 @@ class MatlabBackend(JuliaBackend):
         self._no_vectorization = ["*("]
 
         # create matlab session
-        import matlab.engine as en
-        self._matlab = en.start_matlab()
+        import matlab.engine
+        self._constr = matlab
+        self._matlab = matlab.engine.start_matlab()
 
     def add_var_update(self, lhs: ComputeVar, rhs: str, lhs_idx: Optional[str] = None, rhs_shape: Optional[tuple] = ()):
 
         super(JuliaBackend, self).add_var_update(lhs=lhs, rhs=rhs, lhs_idx=lhs_idx, rhs_shape=rhs_shape)
+        line = self.code.pop()
+        lhs, rhs = line.split(' = ')
         if rhs_shape or lhs_idx:
-            line = self.code.pop()
-            lhs, rhs = line.split(' = ')
             if not any([rhs[:len(expr)] == expr for expr in self._no_vectorization]):
                 rhs = self._matlab.vectorize(rhs)
-            self.add_code_line(f"{lhs} = {rhs}")
+        self.add_code_line(f"{lhs} = {rhs};")
+
+    def generate_func_head(self, func_name: str, state_var: str = 'y', return_var: str = 'dy', func_args: list = None):
+
+        helper_funcs = tuple(self._helper_funcs)
+        self._helper_funcs = []
+        fhead = super().generate_func_head(func_name, state_var, return_var, func_args)
+        self._helper_funcs = list(helper_funcs)
+        return fhead
 
     def generate_func_tail(self, rhs_var: str = None):
 
         self.remove_indent()
         self.add_code_line("end")
+        self.add_code_line("")
+
+        if self._helper_funcs:
+
+            # add definitions of helper functions after the _imports
+            for func in self._helper_funcs:
+                self.add_code_line(func)
+            self.add_linebreak()
 
     def generate_func(self, func_name: str, to_file: bool = True, **kwargs):
 
@@ -113,7 +126,7 @@ class MatlabBackend(JuliaBackend):
             # import function from file
             if self._fdir:
                 self._matlab.addpath(self._fdir, nargout=0)
-            rhs_eval = exec(f"self._matlab.{self._fname}")
+            rhs_eval = eval(f"self._matlab.{self._fname}")
 
         else:
 
@@ -131,11 +144,20 @@ class MatlabBackend(JuliaBackend):
     def _solve(self, solver: str, func: Callable, args: tuple, T: float, dt: float, dts: float, y0: np.ndarray,
                t0: np.ndarray, times: np.ndarray, **kwargs) -> np.ndarray:
 
+        # transform function arguments into matlab variables
+        args_m = tuple([self._transform_to_mat(arg) for arg in args])
+
+        # define wrapper function to ensure that python arrays are transformed into matlab variables
+        def func_mat(t, y):
+            y_m = self._transform_to_mat(y)
+            t_m = self._transform_to_mat(t)
+            return np.asarray(func(t_m, y_m, *args_m))[0]
+
         # perform integration via scipy solver (mostly Runge-Kutta methods)
         if solver == 'euler':
 
             # solve ivp via forward euler method (fixed integration step-size)
-            results = self._solve_euler(func, args, T, dt, dts, y0, t0)
+            results = self._solve_euler(func_mat, (), T, dt, dts, y0, t0)
 
         elif solver == 'scipy':
 
@@ -144,23 +166,34 @@ class MatlabBackend(JuliaBackend):
             kwargs['t_eval'] = times
 
             # call scipy solver
-            results = solve_ivp(fun=func, t_span=(t0, T), y0=y0, first_step=dt, args=args, **kwargs)
+            results = solve_ivp(fun=func_mat, t_span=(t0, T), y0=y0, first_step=dt, **kwargs)
             results = results['y'].T
 
         else:
 
-            # solve ivp via DifferentialEquations.jl solver
-            self._jl.eval('using DifferentialEquations')
-            model = self._jl.ODEProblem(func, y0, [0.0, T], args[1:])
-            method = kwargs.pop('method', 'Tsit5')
-            if hasattr(self._jl, method):
-                method = getattr(self._jl, method)
-            else:
-                method = self._jl.Tsit5
-            results = self._jl.solve(model, method(), saveat=times, reltol=1e-6, abstol=1e-6)
+            # solve ivp via matlab solver ode45
+            results = self._matlab.ode45(lambda t, y: func_mat(t, y, *args_m), (t0, T), y0, **kwargs)
             results = np.asarray(results).T
 
         return results
 
     def _add_func_call(self, name: str, args: Iterable, return_var: str = 'dy'):
         self.add_code_line(f"function {return_var} = {name}({','.join(args)})")
+
+    def _transform_to_mat(self, v: np.ndarray):
+        if hasattr(v, 'shape') and sum(v.shape) > 0:
+            if 'complex' in v.dtype.name:
+                return self._constr.complex(v.real, v.imag)
+            elif 'float' in v.dtype.name:
+                return self._constr.double(v.tolist())[0]
+            else:
+                return self._constr.int32(v.tolist())[0]
+        elif hasattr(v, 'shape'):
+            if 'complex' in v.dtype.name:
+                return self._constr.complex(v.real, v.imag)
+            elif 'float' in v.dtype.name:
+                return self._constr.double([v])[0]
+            else:
+                return self._constr.int32([v])[0]
+        else:
+            return v

@@ -41,6 +41,12 @@ __status__ = "development"
 
 sigmoid_func = lambda x: 1./(1. + np.exp(-x))
 
+interp = """
+function y_new = interp(x_new, x, y)
+    y_new = interp1(x, y, x_new);
+end
+"""
+
 # dictionary for backend import
 ###############################
 
@@ -50,6 +56,6 @@ matlab_funcs = {
     'roll': {'call': 'circshift', 'func': np.roll, 'imports': []},
     'randn': {'call': 'randn', 'func': np.random.randn, 'imports': []},
     'sigmoid': {'call': 'sigmoid', 'func': sigmoid_func, 'imports': []},
-    'interp': {'call': 'interp1', 'func': np.interp, 'imports': []},
+    'interp': {'call': 'interp', 'func': np.interp, 'def': interp, 'imports': []},
     'conj': {'call': 'conj', 'func': np.conjugate, 'imports': []},
 }

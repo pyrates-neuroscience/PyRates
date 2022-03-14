@@ -232,6 +232,9 @@ class ComputeGraph(MultiDiGraph):
         elif backend == 'julia':
             from pyrates.backend.julia import JuliaBackend
             backend = JuliaBackend
+        elif backend == 'matlab':
+            from pyrates.backend.matlab import MatlabBackend
+            backend = MatlabBackend
         else:
             from pyrates.backend.base import BaseBackend
             backend = BaseBackend
