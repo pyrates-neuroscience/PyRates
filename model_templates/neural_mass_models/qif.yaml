@@ -47,6 +47,31 @@ qif_gap_op:
   variables:
     g: 0.0
 
+# izhikevich operator
+ik_op:
+  base: qif_op
+  equations:
+    - "r' = (Delta/(pi*tau) + r*(2.0*v - alpha - s)) / tau"
+    - "v' = (v^2 - alpha*v + eta + I_ext - w + tau*s*(e_r - v) - (pi*tau*r)^2) / tau"
+    - "w' = (b*v - w)/tau_a + k*r"
+    - "s' = -s/tau_s + r_in"
+  variables:
+    r: output(0.01)
+    v: variable(-2.0)
+    w: variable(0.0)
+    s: variable(0.0)
+    Delta: 0.02
+    tau: 1.0
+    eta: 0.0
+    alpha: 0.6
+    e_r: 1.0
+    b: -0.006
+    tau_a: 130.0
+    k: 0.02
+    tau_s: 2.5
+    I_ext: input(0.0)
+    r_in: input(0.0)
+
 # node templates
 ################
 
@@ -67,6 +92,12 @@ qif_gap_pop:
   base: NodeTemplate
   operators:
     - qif_gap_op
+
+# population of izhikevich neurons with mono-exponential synapses
+ik_pop:
+  base: NodeTemplate
+  operators:
+    - ik_op
 
 # circuit templates
 ###################
@@ -118,3 +149,11 @@ qif_tsodyks:
     p: qif_pop
   edges:
     - [p/qif_op/r, p/qif_op/r_in, *tsodyks_edge, {weight: 15.0}]
+
+# izhikevich population with mono-exponential synapses
+ik:
+  base: CircuitTemplate
+  nodes:
+    p: ik_pop
+  edges:
+    - [p/ik_op/r, p/ik_op/r_in, null, {weight: 1.5}]
