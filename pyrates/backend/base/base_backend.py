@@ -423,8 +423,8 @@ class BaseBackend(CodeGen):
         state_rec = np.zeros((store_steps, y.shape[0]) if y.shape else (store_steps, 1), dtype=y.dtype)
 
         # solve ivp for forward Euler method
-        for step in range(t0, steps):
-            if step % store_step == 0:
+        for step in range(t0, steps+t0):
+            if step % store_step == t0:
                 state_rec[idx, :] = y
                 idx += 1
             rhs = func(step, y, *args)

@@ -40,10 +40,21 @@ __status__ = "development"
 ######################
 
 sigmoid_func = lambda x: 1./(1. + np.exp(-x))
+sigmoid_def = """
+function y = sigmoid(x)
+    y = 1.0 ./ (1.0 + exp(-x));
+end
+"""
 
 interp = """
 function y_new = interp(x_new, x, y)
     y_new = interp1(x, y, x_new);
+end
+"""
+
+matmul = """
+function z = matmul(x,y)
+    z = mtimes(y,x');
 end
 """
 
@@ -53,9 +64,11 @@ end
 matlab_funcs = {
     'max': {'call': 'max', 'func': np.maximum, 'imports': []},
     'min': {'call': 'min', 'func': np.minimum, 'imports': []},
+    'matmul': {'call': 'matmul', 'func': np.dot, 'def': matmul, 'imports': []},
+    'matvec': {'call': 'matmul', 'func': np.dot, 'def': matmul, 'imports': []},
     'roll': {'call': 'circshift', 'func': np.roll, 'imports': []},
     'randn': {'call': 'randn', 'func': np.random.randn, 'imports': []},
-    'sigmoid': {'call': 'sigmoid', 'func': sigmoid_func, 'imports': []},
+    'sigmoid': {'call': 'sigmoid', 'func': sigmoid_func, 'def': sigmoid_def, 'imports': []},
     'interp': {'call': 'interp', 'func': np.interp, 'def': interp, 'imports': []},
     'conj': {'call': 'conj', 'func': np.conjugate, 'imports': []},
 }

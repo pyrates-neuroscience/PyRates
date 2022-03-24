@@ -357,14 +357,11 @@ class ComputeGraph(MultiDiGraph):
 
         variables = []
         idx = 0
-        #dtype = 'float'
         for var, update in self.var_updates['DEs'].items():
 
             # extract left-hand side nodes from graph
             lhs, rhs = self._process_var_update(var, update)
             variables.append(lhs.value)
-            #if 'complex' in lhs.dtype:
-            #    dtype = 'complex'
 
             # store information of the original, non-vectorized state variable
             vshape = sum(lhs.shape)

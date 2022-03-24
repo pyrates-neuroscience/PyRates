@@ -18,8 +18,8 @@ __status__ = "Development"
 ###########
 
 # define backends for which to run the tests
-backends = ['default', 'torch', 'tensorflow']
-vectorization = [False, True, True]
+backends = ['tensorflow', 'torch', 'default']
+vectorization = [True, True, False]
 backend_kwargs = [{}, {}, {}]
 complex_compat = [False, True, False]
 

@@ -33,6 +33,7 @@
 import sys
 
 from ..julia import JuliaBackend
+from ..julia.julia_funcs import julia_funcs
 from ..computegraph import ComputeVar
 from .matlab_funcs import matlab_funcs
 
@@ -63,16 +64,14 @@ class MatlabBackend(JuliaBackend):
         matlab_ops = matlab_funcs.copy()
         if ops:
             matlab_ops.update(ops)
+        julia_funcs.update(matlab_ops)
 
         # call parent method
-        super(JuliaBackend, self).__init__(ops=matlab_ops, imports=imports, file_ending='.m', start_idx=1,
+        super(JuliaBackend, self).__init__(ops=julia_funcs, imports=imports, file_ending='.m', start_idx=1,
                                            idx_left='(', idx_right=')', **kwargs)
 
         # define matlab-specific imports
         self._imports.pop(0)
-
-        # define which function calls should not be vectorized during code generation
-        self._no_vectorization = ["*("]
 
         # create matlab session
         import matlab.engine
@@ -85,8 +84,7 @@ class MatlabBackend(JuliaBackend):
         line = self.code.pop()
         lhs, rhs = line.split(' = ')
         if rhs_shape or lhs_idx:
-            if not any([rhs[:len(expr)] == expr for expr in self._no_vectorization]):
-                rhs = self._matlab.vectorize(rhs)
+            rhs = self._matlab.vectorize(rhs)
         self.add_code_line(f"{lhs} = {rhs};")
 
     def generate_func_head(self, func_name: str, state_var: str = 'y', return_var: str = 'dy', func_args: list = None):
@@ -151,7 +149,7 @@ class MatlabBackend(JuliaBackend):
         def func_mat(t, y):
             y_m = self._transform_to_mat(y)
             t_m = self._transform_to_mat(t)
-            return np.asarray(func(t_m, y_m, *args_m))[0]
+            return np.asarray(func(t_m, y_m, *args_m)).squeeze()
 
         # perform integration via scipy solver (mostly Runge-Kutta methods)
         if solver == 'euler':
@@ -183,15 +181,15 @@ class MatlabBackend(JuliaBackend):
             if 'complex' in v.dtype.name:
                 return self._constr.complex(v.real, v.imag)
             elif 'float' in v.dtype.name:
-                return self._constr.double(v.tolist())[0]
+                return self._constr.double(v.tolist())
             else:
-                return self._constr.int32(v.tolist())[0]
+                return self._constr.int32(v.tolist())
         elif hasattr(v, 'shape'):
             if 'complex' in v.dtype.name:
                 return self._constr.complex(v.real, v.imag)
             elif 'float' in v.dtype.name:
-                return self._constr.double([v])[0]
+                return self._constr.double([v])
             else:
-                return self._constr.int32([v])[0]
+                return self._constr.int32([v])
         else:
             return v
