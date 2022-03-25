@@ -81,4 +81,5 @@ torch_funcs = {
     'imag': {'call': 'imag', 'func': np.imag, 'imports': ['torch.imag']},
     'conj': {'call': 'conj', 'func': np.conjugate, 'imports': ['torch.conj']},
     'absv': {'call': 'abs', 'func': np.abs, 'imports': ['torch.abs']},
+    'log': {'call': 'log', 'func': np.log, 'imports': ['torch.log']},
 }

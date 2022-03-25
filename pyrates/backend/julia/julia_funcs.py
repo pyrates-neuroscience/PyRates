@@ -87,4 +87,5 @@ julia_funcs = {
     'imag': {'call': 'imag', 'func': np.imag, 'imports': []},
     'conj': {'call': 'conj', 'func': np.conjugate, 'imports': []},
     'absv': {'call': 'abs', 'func': np.abs, 'imports': []},
+    'log': {'call': 'log', 'func': np.log, 'imports': []},
 }

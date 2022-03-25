@@ -128,4 +128,5 @@ fortran_funcs = {
     'imag': {'call': 'imagpart', 'func': np.imag},
     'conj': {'call': 'conjg', 'func': np.conjugate},
     'absv': {'call': 'abs', 'func': np.abs},
+    'log': {'call': 'log', 'func': np.log},
 }

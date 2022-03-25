@@ -18,7 +18,7 @@ __status__ = "Development"
 ###########
 
 # set backends to run the tests for
-backends = ['matlab']
+backends = ['default']
 
 # set accuracy for all tests
 accuracy = 1e-4
