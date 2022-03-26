@@ -202,4 +202,4 @@ ik2:
   nodes:
     p: ik2_pop
   edges:
-    - [p/ik2_op/r, p/ik2_op/r_in, null, {weight: -1.0}]
+    - [p/ik2_op/r, p/ik2_op/r_in, null, {weight: 1.0}]

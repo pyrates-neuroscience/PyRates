@@ -737,7 +737,7 @@ class NetworkGraph(AbstractBaseIR):
                     ssize = len(weight)
 
                 # check wether weighting of source variables is required
-                if all([abs(abs(w) - 1) < weight_minimum for w in weight]):
+                if all([w-1 < weight_minimum for w in weight]):
                     weighting = ""
                 else:
                     weighting = f" * {w_str}"

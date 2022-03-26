@@ -264,7 +264,7 @@ class FortranBackend(BaseBackend):
         return expr
 
     def _generate_auto_files(self, func_name: str, func_args: tuple = (), state_vars: tuple = (),
-                             blocked_indices: tuple = (10, 32), **kwargs):
+                             blocked_indices: tuple = (10, 15), **kwargs):
 
         # wrapper to the right-hand side evaluation function
         ####################################################
@@ -292,6 +292,7 @@ class FortranBackend(BaseBackend):
         for i, arg in enumerate(func_args):
             idx = i + increment
             if blocked_indices[0] <= idx <= blocked_indices[1]:
+                idx -= increment
                 increment += blocked_indices[1] - blocked_indices[0]
                 idx += increment
             params.append(f'args({idx})')
@@ -322,6 +323,7 @@ class FortranBackend(BaseBackend):
         for i, arg in enumerate(func_args):
             idx = i + increment
             if blocked_indices[0] <= idx <= blocked_indices[1]:
+                idx -= increment
                 increment += blocked_indices[1] - blocked_indices[0]
                 idx += increment
             p = self._var_declaration_info[arg]
