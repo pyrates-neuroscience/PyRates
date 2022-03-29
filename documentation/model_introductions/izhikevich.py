@@ -9,9 +9,9 @@ The model equations are given by:
 .. math::
 
     \\tau \\dot r &= \\frac{\\Delta}{\\pi\\tau} +  r(2 v - \\alpha - g \\tau s), \n
-    \\tau \\dot v &= v^2 - \\alpha v + \\bar\\eta + I(t) - u + g s \\tau (E-v) - (\\pi r \\tau)^2,
-    \\dot u &= a(b v - u) + d r,
-    \\tau_s \\dot s &= \\frac{-s}{\\tau_s} + J r
+    \\tau \\dot v &= v^2 - \\alpha v + \\bar\\eta + I(t) - u + g s \\tau (E-v) - (\\pi r \\tau)^2, \n
+    \\dot u &= a(b v - u) + d r, \n
+    \\tau_s \\dot s &= \\frac{-s}{\\tau_s} + J r,
 
 where :math:`r` is the average firing rate, :math:`v` is the average membrane potential, :math:`u` is an average
 recovery variable, and :math:`s` is a post-synaptic current.
@@ -56,7 +56,7 @@ References
 # the backend, starting with a defined step-size. Here, we use the default backend and solver. Furthermore,
 # we provide a step-function extrinsic input that excites the population model in a time window from :code:`start` to
 # :code:`stop`. This input is defined on a time vector with fixed time steps of size :code:`step_size`.
-# Check out the arguments of the code:`CircuitTemplate.run()` method for a detailed explanation of the
+# Check out the arguments of the :code:`CircuitTemplate.run()` method for a detailed explanation of the
 # arguments that you can use to adjust this numerical procedure.
 
 from pyrates import integrate
