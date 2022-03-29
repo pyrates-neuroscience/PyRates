@@ -28,12 +28,13 @@ Basic features:
    - `Tensorflow` and `PyTorch` backends for parameter optimization via gradient descent and dynamical systems modeling on GPUs
    - `Julia` backend for dynamical system modeling in *Julia*, via tools such as `DifferentialEquations.jl`
    - `Fortran` backend for dynamical systems modeling via *Fortran 90* and interfacing the parameter continuation software *Auto-07p*
+   - `Matlab` backend for differential equation solving via Matlab
 - Other features:
    - perform quick numerical simulations via a single function call
    - choose between different numerical solvers
    - perform parameter sweeps over multiple parameters at once
    - generate backend-specific run functions that evaluate the vector field of your dynamical system
-   - Implement dynamic edge equations that include scalar dealys or delay distributions (delay distributions are automatically translated into gamma-kernel convolutions)
+   - Implement dynamic edge equations that include scalar delays or delay distributions (delay distributions are automatically translated into gamma-kernel convolutions)
    - choose from various pre-implemented dynamical systems that can be directly used for simulations or integrated into custom models
 
 Installation
