@@ -118,8 +118,8 @@ jrc = CircuitTemplate.from_yaml("model_templates.neural_mass_models.jansenrit.JR
 results = jrc.run(simulation_time=2.0,
                   step_size=1e-4,
                   sampling_step_size=1e-3,
-                  outputs={'V_pce': 'pc/rpo_e_in/Z',
-                           'V_pci': 'pc/rpo_i/Z'},
+                  outputs={'V_pce': 'pc/rpo_e_in/v',
+                           'V_pci': 'pc/rpo_i/v'},
                   backend='default',
                   solver='scipy')
 

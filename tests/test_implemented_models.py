@@ -81,7 +81,7 @@ def test_3_1_jansenrit():
 
         # multi-node JRC
         r2 = integrate("model_templates.neural_mass_models.jansenrit.JRC", simulation_time=T,
-                       outputs={'EIN': 'ein/rpo_e/V'}, backend=b, step_size=dt, solver='scipy',
+                       outputs={'EIN': 'ein/rpo_e/v'}, backend=b, step_size=dt, solver='scipy',
                        sampling_step_size=dts, clear=True, file_name='jrc2', vectorize=v, **kwargs)
 
         assert np.mean(r1.values.flatten() - r2.values.flatten()) == pytest.approx(0., rel=accuracy, abs=accuracy)

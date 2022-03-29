@@ -56,6 +56,7 @@ inp = 1.0/(1.0 + np.exp(10.0*np.sin(2.0*np.pi*0.7*times)))
 
 # plot input
 plt.plot(times, inp)
+plt.title("Input")
 plt.show()
 
 # perform simulation
@@ -65,6 +66,7 @@ res = net.run(simulation_time=T, step_size=dt, sampling_step_size=dts, vectorize
 # plot the results
 plt.plot(res)
 plt.legend(res.columns.values)
+plt.title("LI Signals: No Delays")
 plt.show()
 
 clear(net)
@@ -88,7 +90,7 @@ clear(net)
 
 # define delays
 d_21 = 0.2
-d_12 = 0.4
+d_12 = 0.3
 
 # define circuit model with discrete delays
 net = CircuitTemplate(name="dde", nodes={"p1": li, "p2": li},
@@ -103,6 +105,7 @@ res = net.run(simulation_time=T, step_size=dt, sampling_step_size=dts, vectorize
 # plot the results
 plt.plot(res)
 plt.legend(res.columns.values)
+plt.title("LI Signals: Scalar Delays")
 plt.show()
 
 clear(net)
@@ -130,7 +133,7 @@ clear(net)
 
 # define variances
 v_21 = 0.1
-v_12 = 0.1
+v_12 = 0.2
 
 # define circuit model with distributed delays
 net = CircuitTemplate(name="gamma", nodes={"p1": li, "p2": li},
@@ -153,10 +156,11 @@ res = net.run(simulation_time=T, step_size=dt, sampling_step_size=dts, vectorize
 # plot the results
 plt.plot(res)
 plt.legend(res.columns.values)
+plt.title("LI Signals: Distributed Delays")
 plt.show()
 
 clear(net)
 
 # %%
-# We can see that the period of the periodic solution of the model dynamics were further slowed down by the
+# We can see that the period of the periodic solution of the model dynamics were sped up slightly by the
 # addition of distributed delays in comparison to scalar delays.

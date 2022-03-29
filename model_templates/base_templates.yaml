@@ -37,9 +37,9 @@ tanh_op:
 # mono-exponential kernel convolution
 monoexp_op:
   base: OperatorTemplate
-  equations: "V' = -V/tau + r_in"
+  equations: "v' = -v/tau + r_in"
   variables:
-    V: output(0.0)
+    v: output(0.0)
     tau: 1.0
     r_in: input(0.0)
 
@@ -47,11 +47,11 @@ monoexp_op:
 biexp_op:
   base: OperatorTemplate
   equations:
-    - "V' = X"
-    - "X' = (r_in - X*(tau_r+tau_d) - V)/(tau_r*tau_d)"
+    - "v' = x"
+    - "x' = (r_in - x*(tau_r+tau_d) - v)/(tau_r*tau_d)"
   variables:
-    V: output(0.0)
-    X: variable(0.0)
+    v: output(0.0)
+    x: variable(0.0)
     tau_r: 1.0
     tau_d: 10.0
     r_in: input(0.0)
@@ -60,11 +60,11 @@ biexp_op:
 alpha_op:
   base: OperatorTemplate
   equations:
-    - "V' = X"
-    - "X' = r_in - 2*X/tau - V/tau**2"
+    - "v' = x"
+    - "x' = r_in - 2*x/tau - v/tau**2"
   variables:
-    V: output(0.0)
-    X: variable(0.0)
+    v: output(0.0)
+    x: variable(0.0)
     tau: 1.0
     r_in: input(0.0)
 

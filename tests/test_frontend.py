@@ -190,4 +190,4 @@ def test_equation_alteration():
     template = OperatorTemplate.from_yaml(path)
     operator, _ = template.apply()
 
-    assert operator.equations[1] == "X' = h*(m_in + u)/tau - 2*X/tau - V/tau**2"
+    assert operator.equations[1] == "x' = h*(m_in + u)/tau - 2*x/tau - v/tau**2"

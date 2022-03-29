@@ -429,7 +429,7 @@ class CircuitTemplate(AbstractBaseTemplate):
                 net = net._add_input(target, in_array, adaptive_steps, simulation_time, vectorize)
 
         # validate backend settings
-        self._validate_backend_args(backend, vectorize, adaptive_steps, **kwargs)
+        self._validate_backend_args(backend, vectorize, run=True, **kwargs)
 
         # apply template (translate into compute graph, optional vectorization process)
         net.apply(adaptive_steps=adaptive_steps, vectorize=vectorize, verbose=verbose, backend=backend,
@@ -553,7 +553,7 @@ class CircuitTemplate(AbstractBaseTemplate):
                 net = net._add_input(target, in_array, adaptive_steps, in_array.shape[0] * step_size, vectorize)
 
         # validate backend settings
-        net._validate_backend_args(backend, vectorize, adaptive_steps, **kwargs)
+        net._validate_backend_args(backend, vectorize, **kwargs)
 
         # translate circuit template into a graph representation
         net.apply(adaptive_steps=adaptive_steps, verbose=verbose, backend=backend, step_size=step_size,
@@ -1295,7 +1295,7 @@ class CircuitTemplate(AbstractBaseTemplate):
         return var
 
     @staticmethod
-    def _validate_backend_args(backend: str, vectorize: bool, dt_adapt: bool, **kwargs) -> None:
+    def _validate_backend_args(backend: str, vectorize: bool, run: bool = False, **kwargs) -> None:
 
         if vectorize and backend in ['fortran']:
             raise PyRatesException(f'Vectorization of the network has been requested but is not implemented for your '
@@ -1304,6 +1304,11 @@ class CircuitTemplate(AbstractBaseTemplate):
         if backend == 'julia' and 'julia_path' not in kwargs:
             raise PyRatesException('You chose the Julia backend, which compiles Julia code via PyJulia. To do this, '
                                    'please provide the path to Julia executable via `julia_path`.')
+        if run and backend in ['matlab']:
+            print("WARNING: Running simulations via the Matlab backend is extremely slow point, since it requires "
+                  "multiple transformations between numpy arrays and Matlab arrays at every simulation step. It is thus"
+                  " only recommended to be used with `CirucitTemplate.generate_run_function()` at this point, but not "
+                  "for usage with `CircuitTemplate.run()`. ")
 
 
 def update_edges(base_edges: List[tuple], updates: List[Union[tuple, dict]]):

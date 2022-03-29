@@ -52,7 +52,7 @@ def test_yaml_template():
 
     template.to_yaml(out_file)
     # to update the reference dump, uncomment the following
-    # save(template, test_file, filetype='yaml', template_name='jrc1')
+    #save(template, test_file, filetype='yaml')
 
     compare_files(out_file, test_file)
 

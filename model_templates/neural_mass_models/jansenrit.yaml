@@ -18,11 +18,8 @@ rpo_e:
 # rate-to-potential operator for inhibitory synapses
 rpo_i:
   base: rpo_e
-  equations:
-    replace:
-      r_in: m_in
   variables:
-    h: 22e-3
+    h: -22e-3
     tau: 20e-3
     m_in: input(0.0)
 
@@ -40,13 +37,13 @@ pro:
   base: model_templates.base_templates.sigmoid_op
   equations:
     replace:
-      r: V
-      r_thr: V_thr
+      r: v
+      r_thr: v_thr
   variables:
     m_max: 5.0
     s: 560.0
-    V_thr: 6e-3
-    V: input(0.0)
+    v_thr: 6e-3
+    v: input(0.0)
 
 # full jansen-rit operator
 jrc_op:
@@ -122,7 +119,7 @@ JRC:
     - [pc/pro/m, ein/rpo_e/m_in, null, {weight: 135.0}]
     - [pc/pro/m, iin/rpo_e/m_in, null, {weight: 33.75}]
     - [ein/pro/m, pc/rpo_e_in/m_in, null, {weight: 108.0}]
-    - [iin/pro/m, pc/rpo_i/m_in, null, {weight: -33.75}]
+    - [iin/pro/m, pc/rpo_i/m_in, null, {weight: 33.75}]
 
 JRC2:
   base: CircuitTemplate
