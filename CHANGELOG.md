@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.12
+
+### 0.12.1
+
+- added gallery example for the izhikevich mean-field model
+- updated changelog
+- updated default parameterization of the izhikevich model 
+
+### 0.12.0
+
+- added a matlab backend (mainly for code generation, since simulations are very slow due to array conversion between numpy and matlab)
+- added a mean-field model of the Izhikevich neuron
+- small bug fixes
+  - removed an issue of the fortran interface to Auto-07p that led to wrong function argument indices being generated
+  - removed an issue with synaptic weights of -1 being converted to 1
+  - removed a compatibility issue between old and new versions of the 'to_yaml' methods
+- added the natural logarithm 'log' as backend function
+
 ## 0.11
 
 ### 0.11.1
