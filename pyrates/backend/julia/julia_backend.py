@@ -68,7 +68,7 @@ class JuliaBackend(BaseBackend):
         kwargs["float_precision"] = "float64"
 
         # call parent method
-        super().__init__(ops=julia_ops, imports=imports, file_ending='.m', start_idx=1, **kwargs)
+        super().__init__(ops=julia_ops, imports=imports, file_ending='.jl', start_idx=1, **kwargs)
 
         # define julia-specific imports
         self._imports.pop(0)
