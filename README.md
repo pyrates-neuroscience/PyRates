@@ -70,14 +70,6 @@ or
 pip install '.[<options>]'
 ```
 
-Singularity container
----------------------
-
-Finally, a singularity container of the most recent version of this software can be found [here](https://singularity.gwdg.de/containers/3).
-This container provides a stand-alone version of PyRates including all necessary Python tools to be run, independent of local operating systems. 
-To be able to use this container, you need to install [Singularity](https://singularity.lbl.gov/) on your local machine first.
-Follow these [instructions](https://singularity.lbl.gov/quickstart) to install singularity and run scripts inside the PyRates container.
-
 Documentation
 =============
 
@@ -93,4 +85,4 @@ If you use this framework, please cite:
 Contact
 =======
 
-If you have questions, problems or suggestions regarding PyRates, please contact [Richard Gast](https://www.cbs.mpg.de/person/59190/376039).
+If you have questions, problems or suggestions regarding PyRates, please contact [Richard Gast](https://www.richardgast.me).
