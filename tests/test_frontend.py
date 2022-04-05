@@ -221,5 +221,4 @@ def test_python_interface():
                       outputs={'r': 'p/qif_op/r'}, inputs={'p/qif_op/I_ext': inp})
     clear(qif_yaml)
 
-    diff = np.mean(r1.values - r2.values)
-    assert pytest.approx(diff == 0.0, rel=1e-4, abs=1e-4)
+    assert np.mean(r1.values - r2.values) == pytest.approx(0.0, rel=1e-4, abs=1e-4)
