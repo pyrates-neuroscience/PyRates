@@ -2,9 +2,18 @@
 
 ## 0.12
 
+### 0.12.2
+
+- debugged latex equation error in Izhikevich model gallery example
+- bugfix in julia backend where a wrong file ending was provided 
+- added new pytests for the izhikevich model, the python model definition interface and the CircuitIR translation
+- updated the readme
+- added a new QIF model template that includes conductance-based synapses
+
 ### 0.12.1
 
 - added gallery example for the izhikevich mean-field model
+- updated readme
 - updated changelog
 - updated default parameterization of the izhikevich model 
 
