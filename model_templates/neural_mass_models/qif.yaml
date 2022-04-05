@@ -47,6 +47,26 @@ qif_gap_op:
   variables:
     g: 0.0
 
+# qif neuron with conductance-based synapses
+qif_conduct_op:
+  base: OperatorTemplate
+  equations:
+    - "r' = (Delta/(pi*tau) + r*(2.0*v - g*s*tau)) / tau"
+    - "v' = (v^2 + eta + I_ext + g*s*tau*(e_r - v) - (pi*tau*r)^2) / tau"
+    - "s' = -s/tau_s + r_in"
+  variables:
+    r: output(0.0)
+    v: variable(0.0)
+    s: variable(0.0)
+    Delta: 1.0
+    tau: 1.0
+    eta: -5.0
+    g: 5.0
+    e_r: 1.0
+    tau_s: 2.0
+    I_ext: input(0.0)
+    r_in: input(0.0)
+
 # izhikevich operator
 ik_op:
   base: OperatorTemplate
@@ -95,6 +115,12 @@ qif_gap_pop:
   operators:
     - qif_gap_op
 
+# population of qif neurons with conductance-based synapses
+qif_conduct_pop:
+  base: NodeTemplate
+  operators:
+    - qif_conduct_op
+
 # population of izhikevich neurons with mono-exponential synapses
 ik_pop:
   base: NodeTemplate
@@ -136,6 +162,14 @@ qif_alpha_syn:
     p: qif_pop
   edges:
     - [p/qif_op/r, p/qif_op/r_in, alpha_edge, {weight: 15.0}]
+
+# QIF population with conductance-based synapse
+qif_conduct:
+  base: CircuitTemplate
+  nodes:
+    p: qif_conduct_pop
+  edges:
+    - [p/qif_conduct_op/r, p/qif_conduct_op/r_in, null, {weight: 1.0}]
 
 # qif population with synaptic depression
 qif_sd:

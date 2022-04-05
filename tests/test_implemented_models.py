@@ -144,6 +144,33 @@ def test_3_2_qif_theta():
             # compare firing rate dynamics between theta and qif neuron
             assert np.mean(r - r1["r"].values) == pytest.approx(0., rel=1e-2, abs=1e-2)
 
+        # compare qif population dynamics with Izhikevich neuron dynamics
+        #################################################################
+
+        from pyrates import CircuitTemplate, clear
+
+        # load IK neuron model
+        ik = CircuitTemplate.from_yaml("model_templates.neural_mass_models.qif.ik")
+
+        # update IK parameters such that it should be equivalent to QIF model
+        ik.update_var(node_vars={'p/ik_op/alpha': 0.0, 'p/ik_op/d': 0.0, 'p/ik_op/b': 0.0,
+                                 'p/ik_op/tau': 1.0, 'p/ik_op/eta': -5.0, 'p/ik_op/Delta': 1.0,
+                                 'p/ik_op/tau_s': 2.0, 'p/ik_op/g': 5.0, 'p/ik_op/e_r': 1.0})
+
+        # simulate IK dynamics
+        r5 = ik.run(simulation_time=T, step_size=dt, sampling_step_size=dts, solver='scipy',
+                    outputs={'r': 'p/ik_op/r'}, inputs={'p/ik_op/I_ext': inp})
+        clear(ik)
+
+        # load equivalent QIF model
+        qif = CircuitTemplate.from_yaml("model_templates.neural_mass_models.qif.qif_conduct")
+        r6 = qif.run(simulation_time=T, step_size=dt, sampling_step_size=dts, solver='scipy',
+                     outputs={'r': 'p/qif_conduct_op/r'}, inputs={'p/qif_conduct_op/I_ext': inp})
+        clear(qif)
+
+        # compare firing rate dynamics between ik and qif neuron
+        assert np.mean(r5['r'].values - r6["r"].values) == pytest.approx(0., rel=1e-2, abs=1e-2)
+
 
 def test_3_3_wilson_cowan():
     """Test accuracy of wilson cowan neural mass model implementation.

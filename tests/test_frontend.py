@@ -134,6 +134,7 @@ def test_circuit_instantiation():
     path = "model_templates.neural_mass_models.jansenrit.JRC"
     from pyrates import clear_frontend_caches
     from pyrates.frontend import template
+    from pyrates.backend.computegraph import ComputeGraph, ComputeVar
     clear_frontend_caches()
 
     circuit = template.from_yaml(path)
@@ -141,33 +142,12 @@ def test_circuit_instantiation():
     circuit.apply()
     ir = circuit.intermediate_representation
 
-    # TODO: rework the below tests.
-    # test whether edge operator is properly connected with network
-    # assert circuit.edges[('LCEdge', 'JR_PC', 0)]
-    # assert circuit.edges[('LCEdge', 'JR_PC', 1)]
-    # assert len(circuit.edges[('LCEdge', 'JR_IIN', 0)]['target_idx']) == 2
-    # assert circuit.edges[('JR_IIN', 'LCEdge', 0)]
-    # assert circuit.edges[('JR_IIN', 'LCEdge', 1)]
-    # assert len(circuit.edges[('JR_PC', 'LCEdge', 0)]['target_idx']) == 2
-    #
-    # # now test, if JR_EIN and JR_IIN have been vectorized into a single operator graph
-    # assert len(circuit["JR_IIN"]['JansenRitPRO']['variables']['m_out']['value']) == 2
-    #
-    # # now test, if the references are collected properly
-    # for node in circuit_template.nodes:
-    #     if node in circuit_template._ir_map:
-    #         node = circuit_template._ir_map[node]
-    #     assert node in circuit
-    # circuit_template.clear()
-    #
-    # # verify that .apply also understands value updates to nodes
-    # value_dict = {"JR_PC/JansenRitExcitatorySynapseRCO/h": 0.1234}
-    # clear_frontend_caches()
-    # circuit_template = template.from_yaml(path)
-    # circuit2 = circuit_template.apply(node_values=value_dict)[0]
-    # var = circuit2["JR_PC"]["JansenRitExcitatorySynapseRCO"]['variables']['h']
-    # circuit_template.clear()
-    # assert float(var['value']) - 0.1234 == pytest.approx(0, rel=1e-4, abs=1e-4)
+    # test whether calling apply translated the template into a proper intermediate representation
+    assert type(ir.graph) is ComputeGraph
+    assert circuit._vectorization_indices['pc'] == 0
+    assert len(circuit._vectorization_indices) == 3
+    assert len(circuit._vectorization_labels) == 3
+    assert type(ir._front_to_back['pc/pro/m']) is ComputeVar
 
 
 def test_multi_circuit_instantiation():
@@ -191,3 +171,55 @@ def test_equation_alteration():
     operator, _ = template.apply()
 
     assert operator.equations[1] == "x' = h*(m_in + u)/tau - 2*x/tau - v/tau**2"
+
+
+def test_python_interface():
+    """Test, if yaml and Python interface for template definition deliver equivalent results.
+    """
+    from pyrates import OperatorTemplate, NodeTemplate, CircuitTemplate, clear
+    import numpy as np
+
+    # build qif model via python interface
+    eqs = [
+        "r' = (Delta/(pi*tau) + 2.0*r*v) / tau",
+        "v' = (v^2 + eta + I_ext + tau*r_in - (pi*tau*r)^2) / tau"
+    ]
+
+    variables = {
+        "r": "output(0.01)",
+        "v": "variable(-2.0)",
+        "Delta": 1.0,
+        "tau": 1.0,
+        "eta": -5.0,
+        "I_ext": "input(0.0)",
+        "r_in": "input(0.0)"
+    }
+
+    op = OperatorTemplate(name='qif_op', equations=eqs, variables=variables, path=None)
+    node = NodeTemplate(name='qif_pop', operators=[op], path=None)
+    qif_python = CircuitTemplate(name='qif', nodes={'p': node},
+                                 edges=[('p/qif_op/r', 'p/qif_op/r_in', None, {'weight': 15.0})]
+                                 )
+
+    # load YAML-based qif model definition from template
+    qif_yaml = CircuitTemplate.from_yaml('model_templates.neural_mass_models.qif.qif')
+
+    # compare dynamics of QIF population defined above with QIF population defined via YAML interface
+    T = 40.0
+    dt = 1e-3
+    dts = 1e-2
+
+    in_start = int(np.round(10.0 / dt))
+    in_dur = int(np.round(20.0 / dt))
+    inp = np.zeros((int(np.round(T / dt)),))
+    inp[in_start:in_start + in_dur] = 3.0
+
+    r1 = qif_python.run(simulation_time=T, step_size=dt, sampling_step_size=dts, solver='scipy',
+                        outputs={'r': 'p/qif_op/r'}, inputs={'p/qif_op/I_ext': inp})
+    clear(qif_python)
+    r2 = qif_yaml.run(simulation_time=T, step_size=dt, sampling_step_size=dts, solver='scipy',
+                      outputs={'r': 'p/qif_op/r'}, inputs={'p/qif_op/I_ext': inp})
+    clear(qif_yaml)
+
+    diff = np.mean(r1.values - r2.values)
+    assert pytest.approx(diff == 0.0, rel=1e-4, abs=1e-4)
