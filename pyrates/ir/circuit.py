@@ -37,7 +37,7 @@ import numpy as np
 from copy import deepcopy
 
 # pyrates-internal _imports
-from pyrates.backend import PyRatesException
+from pyrates.backend import PyRatesException, PyRatesWarning
 from pyrates.ir.node import NodeIR
 from pyrates.ir.edge import EdgeIR
 from pyrates.ir.abc import AbstractBaseIR
@@ -500,7 +500,7 @@ class NetworkGraph(AbstractBaseIR):
                 lhs = get_indexed_var_str(f"{var}_buffered{buffer_id}", idx_l, var_length=buffer_length)
                 rhs = get_indexed_var_str(f"{var}_d{i}{buffer_id}" if i != 0 else var, idx_r, var_length=buffer_length)
                 buffer_eqs.append(f"{lhs} = {rhs}")
-            var_dict[f"{var}_buffered{buffer_id}"] = {'vtype': 'state_var',
+            var_dict[f"{var}_buffered{buffer_id}"] = {'vtype': 'variable',
                                                       'dtype': 'float',
                                                       'shape': (buffer_length,),
                                                       'value': 0.0}
@@ -552,74 +552,16 @@ class NetworkGraph(AbstractBaseIR):
                               f"{var}_buffered{buffer_id} = index_2d({var}_buffer{buffer_id}, source_idx{buffer_id}, "
                               f"{var}_delays{buffer_id})"]
 
-        # continuous delay buffers
-        ##########################
+        # Turn ODE system into DDE system
+        #################################
 
         else:
 
-            # TODO: rework continuous edge buffers
-            raise ValueError('Interpolation of delay buffers is currently not implemented. Either translate your edge'
-                             'delays into gamma-kernel convolutions (e.g. by providing the `spread` attributes for '
-                             'edges) or choose a solver with fixed integration step-size (e.g. `euler`).')
-
-            # # create buffer variables
-            # max_delay_int = int(np.round(max_delay / self.step_size, decimals=0)) + 2
-            # times = [0. - i * self.step_size for i in range(max_delay_int)]
-            # if len(target_shape) < 1 or (len(target_shape) == 1 and target_shape[0] == 1):
-            #     buffer_shape = (len(times),)
-            # else:
-            #     buffer_shape = (target_shape[0], len(times))
-            #
-            # # create buffer variable definitions
-            # var_dict = {f'{var}_buffer': {'vtype': 'variable',
-            #                               'dtype': 'float',
-            #                               'shape': buffer_shape,
-            #                               'value': 0.
-            #                               },
-            #             'times': {'vtype': 'variable',
-            #                       'dtype': 'float',
-            #                       'shape': (len(times),),
-            #                       'value': np.asarray(times)
-            #                       },
-            #             't': {'vtype': 'state_var',
-            #                   'dtype': 'float',
-            #                   'shape': (),
-            #                   'value': 0.0
-            #                   },
-            #             f'{var}_buffered': {'vtype': 'variable',
-            #                                 'dtype': 'float',
-            #                                 'shape': (len(delays),),
-            #                                 'value': 0.},
-            #             f'{var}_delays': {'vtype': 'constant',
-            #                               'dtype': 'float',
-            #                               'value': delays},
-            #             f'source_idx': {'vtype': 'constant',
-            #                             'dtype': 'int',
-            #                             'value': source_idx},
-            #             f'{var}_maxdelay': {'vtype': 'constant',
-            #                                 'dtype': 'float',
-            #                                 'value': (max_delay_int + 1) * self.step_size},
-            #             f'{var}_idx': {'vtype': 'variable',
-            #                            'dtype': 'bool',
-            #                            'value': True}}
-            #
-            # # create buffer equations
-            # if len(target_shape) < 1 or (len(target_shape) == 1 and target_shape[0] == 1):
-            #     buffer_eqs = [f"{var}_idx = times >= (t - {var}_maxdelay)",
-            #                   f"{var}_buffer = {var}_buffer[{var}_idx]",
-            #                   f"times = times[{var}_idx]",
-            #                   f"times = append(t, times)",
-            #                   f"{var}_buffer = append({var}, {var}_buffer)",
-            #                   f"{var}_buffered = interpolate_1d(times, {var}_buffer, t - {var}_delays)"
-            #                   ]
-            # else:
-            #     buffer_eqs = [f"{var}_idx = times >= (t - {var}_maxdelay)",
-            #                   f"{var}_buffer = {var}_buffer[:, {var}_idx]",
-            #                   f"times = times[{var}_idx]",
-            #                   f"times = append(t, times)",
-            #                   f"{var}_buffer = append({var}, {var}_buffer, 1)",
-            #                   f"{var}_buffered = interpolate_nd(times, {var}_buffer, {var}_delays, source_idx, t)"
-            #                   ]
+            # TODO: Implement transformation of delayed edges into DDE systems here
+            raise PyRatesException('Delayed differential equations cannot be solved with adaptive step-size solvers '
+                                   'yet. Either translate your edge delays into gamma-kernel convolutions '
+                                   '(e.g. by providing the `spread` attributes for edges) or choose a solver with fixed'
+                                   ' integration step-size (e.g. `euler`).')
 
         # add buffer equations to node operator
         op_info = node_ir[op]

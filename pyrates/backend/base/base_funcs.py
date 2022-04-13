@@ -62,12 +62,13 @@ def index_axis(x, idx=None, axis=0):
     else:
         return x[:]
 
+def past(x, tau):
+    return x
 
 sigmoid = """
 def sigmoid(x):
     return 1./(1. + exp(-x))
 """
-
 
 # dictionary for backend import
 ###############################
@@ -104,5 +105,5 @@ base_funcs = {
     'conj': {'call': 'conjugate', 'func': np.conjugate, 'imports': ['numpy.conjugate']},
     'absv': {'call': 'abs', 'func': np.abs, 'imports': ['numpy.abs']},
     'log': {'call': 'log', 'func': np.log, 'imports': ['numpy.log']},
-
+    'past': {'call': 'past', 'func': past}
 }

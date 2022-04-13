@@ -38,7 +38,7 @@ class AbstractBaseTemplate:
 
     target_ir = None  # placeholder for template-specific intermediate representation (IR) target class
 
-    def __init__(self, name: str, path: str, description: str = "A template."):
+    def __init__(self, name: str, path: str = None, description: str = "A template."):
         """Basic initialiser for template classes, requires template name and path that it is loaded from. For custom
         templates that are not loaded from a file, the path can be set arbitrarily."""
         self.name = name

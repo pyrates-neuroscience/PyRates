@@ -50,7 +50,7 @@ class OperatorTemplate(AbstractBaseTemplate):
     cache = {}  # tracks all unique instances of applied operator templates
     target_ir = OperatorIR
 
-    def __init__(self, name: str, path: str, equations: Union[list, str], variables: dict,
+    def __init__(self, name: str, equations: Union[list, str], variables: dict, path: str = None,
                  description: str = "An operator template."):
         """For now: only allow single equations in operator template."""
 
@@ -172,19 +172,19 @@ class OperatorTemplate(AbstractBaseTemplate):
 def check_vname(v: str, vtype: str):
 
     disallowed_names = ['y', 'dy', 'source_idx', 'target_idx', 'pi']
-    disallowed_name_parts = ['_buffer', '_delays', '_maxdelay', '_idx']
+    disallowed_name_parts = ['_buffer', '_delays', '_maxdelay', '_idx', '_hist']
 
     if v == 't' and vtype != 'state_var':
         vtype = 'state_var'
 
     if v in disallowed_names:
-        raise ValueError(f'The variable name {v} is reserved for internal variables created by PyRates. Please choose '
-                         f'another variable name.')
+        raise PyRatesException(f'The variable name {v} is reserved for internal variables created by PyRates. '
+                               f'Please choose a different variable name.')
 
     for dpart in disallowed_name_parts:
         if dpart in v:
-            raise ValueError(f'The variable name {v} contains the sub-string {dpart} which is reserved for internal '
-                             f'variables created by PyRates. Please choose another variable name.')
+            raise PyRatesException(f'The variable name {v} contains the sub-string {dpart} which is reserved for '
+                                   f'internal variables created by PyRates. Please choose a different variable name.')
 
     return vtype
 

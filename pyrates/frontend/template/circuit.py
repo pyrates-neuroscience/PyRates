@@ -48,7 +48,7 @@ from pyrates.frontend.template.abc import AbstractBaseTemplate
 from pyrates.frontend.template.edge import EdgeTemplate
 from pyrates.frontend.template.node import NodeTemplate
 from pyrates.frontend.template.operator import OperatorTemplate
-from pyrates.ir.circuit import get_unique_label, CircuitIR, PyRatesException
+from pyrates.ir.circuit import get_unique_label, CircuitIR, PyRatesException, PyRatesWarning
 from pyrates.ir.edge import EdgeIR
 from pyrates.ir.node import clear_ir_caches
 
@@ -91,7 +91,7 @@ class CircuitTemplate(AbstractBaseTemplate):
 
     target_ir = CircuitIR
 
-    def __init__(self, name: str, path: str = "", description: str = "A circuit template.", circuits: dict = None,
+    def __init__(self, name: str, path: str = None, description: str = "A circuit template.", circuits: dict = None,
                  nodes: dict = None, edges: List[tuple] = None):
 
         # initialize base template clase
@@ -262,7 +262,7 @@ class CircuitTemplate(AbstractBaseTemplate):
             *node, op, var = key.split('/')
             target_nodes = self.get_nodes(node_identifier=node, var_identifier=(op, var))
             if not target_nodes:
-                print(f'WARNING: Variable {var} has not been found on operator {op} of node {node[0]}.')
+                raise PyRatesWarning(f'Variable {var} has not been found on operator {op} of node {node[0]}.')
             for n in target_nodes:
                 node_temp = deepcopy(self.get_node_template(n))
                 node_temp.update_var(op=op, var=var, val=val)
@@ -1305,10 +1305,12 @@ class CircuitTemplate(AbstractBaseTemplate):
             raise PyRatesException('You chose the Julia backend, which compiles Julia code via PyJulia. To do this, '
                                    'please provide the path to Julia executable via `julia_path`.')
         if run and backend in ['matlab']:
-            print("WARNING: Running simulations via the Matlab backend is extremely slow point, since it requires "
-                  "multiple transformations between numpy arrays and Matlab arrays at every simulation step. It is thus"
-                  " only recommended to be used with `CirucitTemplate.generate_run_function()` at this point, but not "
-                  "for usage with `CircuitTemplate.run()`. ")
+            raise PyRatesWarning(
+                "Running simulations via the Matlab backend is extremely slow point, since it requires "
+                "multiple transformations between numpy arrays and Matlab arrays at every simulation step. It is thus "
+                "only recommended to be used with `CirucitTemplate.generate_run_function()` at this point, but not "
+                "for usage with `CircuitTemplate.run()`."
+            )
 
 
 def update_edges(base_edges: List[tuple], updates: List[Union[tuple, dict]]):

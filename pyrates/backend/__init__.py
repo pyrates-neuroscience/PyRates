@@ -41,3 +41,7 @@ from .parser import parse_equations
 
 class PyRatesException(Exception):
     pass
+
+
+class PyRatesWarning(Warning):
+    pass

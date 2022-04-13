@@ -673,6 +673,12 @@ class ComputeGraph(MultiDiGraph):
             # replace `no_op` calls with first argument to the function call
             expr_str = self._process_func_call(expr=expr_str, func='identity', replacement=var)
 
+        if 'past(' in expr_str:
+
+            # replace past calls with the delayed version of the backend variable
+            replacement = self.backend.get_var_hist(var=var, delay=self.get_var(expr.args[1].name))
+            expr_str = self._process_func_call(expr=expr_str, func="past", replacement=replacement)
+
         # backend-specific function call adjustments
         expr_str = self.backend.expr_to_str(expr_str, expr.args)
 
