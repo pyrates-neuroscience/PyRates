@@ -136,6 +136,9 @@ class BaseBackend(CodeGen):
                 if imp not in self._imports:
                     self._imports.append(imp)
 
+        # public attributes
+        self.add_hist_arg = kwargs.pop('add_hist_arg', False)
+
         # private attributes
         self._float_precision = kwargs.pop('float_precision', 'float32')
         self._int_precision = kwargs.pop('int_precision', 'int32')
@@ -151,7 +154,7 @@ class BaseBackend(CodeGen):
             sys.path.append(fdir)
         else:
             sys.path.append(os.getcwd())
-        self._fdir = fdir
+        self.fdir = fdir
         self._fname = fname
         self._fend = kwargs.pop('file_ending', '.py')
 
@@ -218,7 +221,12 @@ class BaseBackend(CodeGen):
             lhs = f"{lhs}{idx}"
         self.add_code_line(f"{lhs} = {rhs}")
 
-    def add_var_hist(self, lhs: str, delay: float, state_idx: str):
+    def add_var_hist(self, lhs: str, delay: ComputeVar, state_idx: str):
+        raise PyRatesException('The default backend does not allow for the implementation of delayed differential'
+                               'equations. Please choose a backend dedicated to DDEs or remove `past` calls from the '
+                               'system equations.')
+
+    def hist_func(self, y: np.ndarray):
         raise PyRatesException('The default backend does not allow for the implementation of delayed differential'
                                'equations. Please choose a backend dedicated to DDEs or remove `past` calls from the '
                                'system equations.')
@@ -256,7 +264,8 @@ class BaseBackend(CodeGen):
             *path, file = f.split('/')
             return '/'.join(path), file
 
-    def generate_func_head(self, func_name: str, state_var: str = 'y', return_var: str = 'dy', func_args: list = None):
+    def generate_func_head(self, func_name: str, state_var: str = 'y', return_var: str = 'dy', func_args: list = None,
+                           add_hist_func: bool = False):
 
         imports = self._imports
         helper_funcs = self._helper_funcs
@@ -265,6 +274,8 @@ class BaseBackend(CodeGen):
         else:
             func_args = []
         state_vars = ['t', state_var]
+        if add_hist_func:
+            state_vars.append('hist')
         _, indices = np.unique(func_args, return_index=True)
         func_args = state_vars + [func_args[idx] for idx in np.sort(indices)]
 
@@ -302,7 +313,7 @@ class BaseBackend(CodeGen):
         if to_file:
 
             # save rhs function to file
-            file = f'{self._fdir}/{self._fname}' if self._fdir else self._fname
+            file = f'{self.fdir}/{self._fname}' if self.fdir else self._fname
             with open(f'{file}{self._fend}', 'w') as f:
                 f.writelines(func_str)
                 f.close()
@@ -354,8 +365,8 @@ class BaseBackend(CodeGen):
         super().clear()
 
         # remove files and directories that have been created during simulation process
-        if self._fdir:
-            rmtree(self._fdir)
+        if self.fdir:
+            rmtree(self.fdir)
         else:
             try:
                 os.remove(f"{self._fname}{self._fend}")
@@ -403,7 +414,7 @@ class BaseBackend(CodeGen):
             # solve ivp via forward euler method (fixed integration step-size)
             results = self._solve_euler(func, args, T, dt, dts, y0, t0)
 
-        else:
+        elif solver == 'scipy':
 
             # solve ivp via scipy methods (solvers of various orders with adaptive step-size)
             from scipy.integrate import solve_ivp
@@ -412,6 +423,11 @@ class BaseBackend(CodeGen):
             # call scipy solver
             results = solve_ivp(fun=func, t_span=(t0, T), y0=y0, first_step=dt, args=args, **kwargs)
             results = results['y'].T
+
+        else:
+
+            raise PyRatesException('Invalid option for keyword `solver`. Please check the documentation of the '
+                                   '`CircuitTemplate.run` method for valid options.')
 
         return results
 

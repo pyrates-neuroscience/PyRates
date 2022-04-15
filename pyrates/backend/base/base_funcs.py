@@ -62,8 +62,10 @@ def index_axis(x, idx=None, axis=0):
     else:
         return x[:]
 
+
 def past(x, tau):
     return x
+
 
 sigmoid = """
 def sigmoid(x):

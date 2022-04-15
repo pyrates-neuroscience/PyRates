@@ -96,7 +96,8 @@ class FortranBackend(BaseBackend):
         else:
             return super().create_index_str(idx, separator, apply, **kwargs)
 
-    def generate_func_head(self, func_name: str, state_var: str = 'y', return_var: str = 'dy', func_args: list = None):
+    def generate_func_head(self, func_name: str, state_var: str = 'y', return_var: str = 'dy', func_args: list = None,
+                           add_hist_func: bool = False):
 
         # finalize list of arguments for the function call
         if func_args:
@@ -105,6 +106,8 @@ class FortranBackend(BaseBackend):
         else:
             func_args = []
         state_vars = ['t', state_var]
+        if add_hist_func:
+            state_vars.append('hist')
         _, indices = np.unique(func_args, return_index=True)
         func_args = state_vars + [func_args[idx] for idx in np.sort(indices)]
 
@@ -182,7 +185,7 @@ class FortranBackend(BaseBackend):
                       **kwargs):
 
         if to_file:
-            file = f'{self._fdir}/{self._fname}{self._fend}' if self._fdir else f'{self._fname}{self._fend}'
+            file = f'{self.fdir}/{self._fname}{self._fend}' if self.fdir else f'{self._fname}{self._fend}'
         else:
             file = None
 
@@ -195,7 +198,7 @@ class FortranBackend(BaseBackend):
                                                               state_vars=state_vars, **kwargs)
 
             # write auto constants to file
-            build_dir = f"{self._fdir}/" if self._fdir else ""
+            build_dir = f"{self.fdir}/" if self.fdir else ""
             cname = kwargs.pop('auto_constants_file', 'ivp')
             try:
                 with open(f'{build_dir}c.{cname}', 'wt') as cfile:
@@ -235,7 +238,7 @@ class FortranBackend(BaseBackend):
         """
 
         # delete fortran-specific temporary files
-        wdir = self._fdir if self._fdir else os.getcwd()
+        wdir = self.fdir if self.fdir else os.getcwd()
         for f in [f for f in os.listdir(wdir)]:
             if "cpython" in f and self._fname in f and f[-3:] == ".so":
                 os.remove(f"{wdir}/{f}")

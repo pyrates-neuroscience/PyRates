@@ -30,7 +30,7 @@
 """
 
 # external _imports
-from typing import Any, Callable, Union, Iterable, Optional
+from typing import Any, Callable, Union, Iterable, Optional, Dict
 from networkx import MultiDiGraph
 from sympy import Symbol, Expr, Function
 import numpy as np
@@ -394,8 +394,24 @@ class ComputeGraph(MultiDiGraph):
         code_gen.code.clear()
 
         # generate function head
+        add_hist_calls = self._state_var_hist and code_gen.add_hist_arg
         func_args = code_gen.generate_func_head(func_name=func_name, state_var=state_var_key, return_var=rhs_var_key,
-                                                func_args=[self.get_var(arg) for arg in func_args])
+                                                func_args=[self.get_var(arg) for arg in func_args],
+                                                add_hist_func=add_hist_calls)
+
+        # extract state variable histories for delayed interactions
+        code_gen.add_linebreak()
+        for var, delays in self._state_var_hist.items():
+
+            # extract index of variable in state vector
+            idx = self._state_var_indices[var]
+
+            # extract state variable history from backend-specific buffer
+            if type(idx) is not int:
+                if idx[1]-idx[0] < 2:
+                    idx = idx[0]
+            for delay, v_hist in delays.items():  # type: ComputeVar, str
+                code_gen.add_var_hist(lhs=v_hist, delay=delay, state_idx=idx)
 
         # add lines from function body after function head
         code_gen.add_linebreak()
@@ -406,17 +422,31 @@ class ComputeGraph(MultiDiGraph):
         code_gen.generate_func_tail(rhs_var=rhs_var_key)
 
         # generate the function (and write to file, optionally)
-        func = code_gen.generate_func(func_name=func_name, to_file=to_file, func_args=func_args[3:],
+        func_args_tmp = func_args[4:] if add_hist_calls else func_args[3:]
+        func = code_gen.generate_func(func_name=func_name, to_file=to_file, func_args=func_args_tmp,
                                       state_vars=self.state_vars, **kwargs)
 
         # OPTIONAL: write function arguments (state vectors and constants) to file
         c_fn = kwargs.pop('constants_file_name', None)
         if c_fn:
-            arg_dict = {arg: self.get_var(arg).value for arg in func_args}
-            fn = f'{self.backend._fdir}/{c_fn}' if self.backend._fdir else c_fn
+            arg_dict = {arg: self.get_var(arg).value for arg in func_args if arg != 'hist'}
+            fn = f'{self.backend.fdir}/{c_fn}' if self.backend.fdir else c_fn
             np.savez(fn, **arg_dict)
 
-        return func, tuple([self.get_var(arg, from_backend=True) for arg in func_args])
+        # finalize the function arguments
+        fargs = []
+        for arg in func_args:
+            if arg == 'hist':
+                if 'hist' in kwargs:
+                    arg = kwargs.pop('hist')
+                else:
+                    y_init = np.asarray(state_vec[:])
+                    arg = code_gen.get_hist_func(y_init)
+                fargs.append(arg)
+            else:
+                fargs.append(self.get_var(arg, from_backend=True))
+
+        return func, tuple(fargs)
 
     def run(self, func: Callable, func_args: tuple, T: float, dt: float, dts: Optional[float] = None,
             outputs: Optional[dict] = None, **kwargs):
@@ -467,20 +497,6 @@ class ComputeGraph(MultiDiGraph):
             rhs_idx, _ = code_gen.create_index_str(idx)
             code_gen.add_var_update(lhs=self.get_var(var), rhs=f"y{rhs_idx}")
             rhs_indices_str.append(idx)
-
-        # extract state variable histories for delayed interactions
-        code_gen.add_linebreak()
-        for var, delays in self._state_var_hist.items():
-
-            # extract index of variable in state vector
-            idx = (self._state_var_indices[var],)
-
-            # extract state variable history from backend-specific buffer
-            rhs_idx, _ = code_gen.create_index_str(idx)
-            for delay, v_hist in delays.items():
-                code_gen.add_var_hist(lhs=v_hist, delay=delay, state_idx=rhs_idx)
-
-        code_gen.add_linebreak()
 
         # get equation string and argument list for each non-DE node at the end of the compute graph hierarchy
         func_args2, delete_args1 = self._generate_update_equations(differential_equations=False)

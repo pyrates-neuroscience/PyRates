@@ -1000,7 +1000,7 @@ class CircuitIR(AbstractBaseIR):
             print("\t (1) Generating the network run function...")
 
         # generate run function
-        func_name = kwargs.pop('func_name', 'run')
+        func_name = kwargs.pop('func_name', 'vector_field')
         func, func_args = self.get_run_func(func_name, **kwargs)
 
         # extract backend variables that correspond to requested output variables

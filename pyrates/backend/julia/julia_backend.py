@@ -68,7 +68,7 @@ class JuliaBackend(BaseBackend):
         kwargs["float_precision"] = "float64"
 
         # call parent method
-        super().__init__(ops=julia_ops, imports=imports, file_ending='.jl', start_idx=1, **kwargs)
+        super().__init__(ops=julia_ops, imports=imports, file_ending='.jl', start_idx=1, add_hist_arg=True, **kwargs)
 
         # define julia-specific imports
         self._imports.pop(0)
@@ -80,6 +80,7 @@ class JuliaBackend(BaseBackend):
         from julia import Main
         self._jl = Main
         self._no_vectorization = ["*(", "interp("]
+        self._fcall = None
 
     def get_var(self, v: ComputeVar):
         v = super().get_var(v)
@@ -103,8 +104,23 @@ class JuliaBackend(BaseBackend):
                 rhs = f"@. {rhs}"
             self.add_code_line(f"{lhs} = {rhs}")
 
-    def add_var_hist(self, lhs: str, delay: float, state_idx: str):
-        self.add_code_line(f"{lhs} = h((), t-{delay}; idxs={state_idx})")
+    def add_var_hist(self, lhs: str, delay: ComputeVar, state_idx: Union[int, tuple]):
+        if type(state_idx) is int:
+            idx = state_idx + self._start_idx
+        else:
+            idx = tuple([i+self._start_idx for i in state_idx])
+        delay_str = f"{delay}[{self._start_idx}]" if delay.shape else f"{delay}"
+        self.add_code_line(f"{lhs} = hist((), t-{delay_str}; idxs={idx})")
+
+    def get_hist_func(self, y: np.ndarray):
+        self._jl.eval(f"y_init = {y.tolist()}")
+        hist = """
+        function hist(p, t; idxs=nothing)
+            return idxs == nothing ? y_init : y_init[idxs]
+        end
+        """
+        self._jl.eval(hist)
+        return self._jl.hist
 
     def create_index_str(self, idx: Union[str, int, tuple], separator: str = ',', apply: bool = True,
                          **kwargs) -> Tuple[str, dict]:
@@ -125,12 +141,21 @@ class JuliaBackend(BaseBackend):
 
     def generate_func(self, func_name: str, to_file: bool = True, **kwargs):
 
+        self._fcall = func_name
+
         # generate the current function string via the code generator
-        if kwargs.pop('julia_diffeq', False):
+        if kwargs.pop('julia_ode', False):
             self.add_linebreak()
             self.add_code_line(f"function {func_name}_julia(dy, y, p, t)")
             self.add_indent()
             self.add_code_line(f"return {func_name}(t, y, dy, p...)")
+            self.remove_indent()
+            self.add_code_line("end")
+        if kwargs.pop('julia_dde', False):
+            self.add_linebreak()
+            self.add_code_line(f"function {func_name}_julia(dy, y, h, p, t)")
+            self.add_indent()
+            self.add_code_line(f"return {func_name}(t, y, h, dy, p...)")
             self.remove_indent()
             self.add_code_line("end")
         func_str = self.generate()
@@ -138,7 +163,7 @@ class JuliaBackend(BaseBackend):
         if to_file:
 
             # save rhs function to file
-            file = f'{self._fdir}/{self._fname}{self._fend}' if self._fdir else f"{self._fname}{self._fend}"
+            file = f'{self.fdir}/{self._fname}{self._fend}' if self.fdir else f"{self._fname}{self._fend}"
             with open(file, 'w') as f:
                 f.writelines(func_str)
                 f.close()
@@ -178,18 +203,52 @@ class JuliaBackend(BaseBackend):
             results = solve_ivp(fun=func, t_span=(t0, T), y0=y0, first_step=dt, args=args, **kwargs)
             results = results['y'].T
 
+        elif 'julia' in solver:
+
+            self._jl.eval('using DifferentialEquations')
+
+            if 'dde' in solver:
+
+                # define wrapper function and solver family
+                jfunc = f"""
+                function julia_dderun(du,u,h,p,t)
+                    return {self._fcall}(t,u,h,du,p...)
+                end
+                """
+
+                # solve ivp via DifferentialEquations.jl solver
+                self._jl.eval(jfunc)
+                model = self._jl.DDEProblem(self._jl.julia_dderun, y0, args[0], [0.0, T], args[2:])
+                method = kwargs.pop('method', 'Tsit5')
+                solver = getattr(self._jl, method)
+                solver = self._jl.MethodOfSteps(solver())
+                atol, rtol = kwargs.pop('atol', 1e-6), kwargs.pop('rtol', 1e-3)
+                results = self._jl.solve(model, solver, saveat=times, atol=atol, rtol=rtol)
+
+            else:
+
+                # define wrapper function and solver family
+                jfunc = f"""
+                function julia_oderun(du,u,p,t)
+                    return {self._fcall}(t,u,du,p...)
+                end
+                """
+
+                # solve ivp via DifferentialEquations.jl solver
+                self._jl.eval(jfunc)
+                model = self._jl.ODEProblem(self._jl.julia_oderun, y0, [0.0, T], args[1:])
+                method = kwargs.pop('method', 'Tsit5')
+                solver = getattr(self._jl, method)
+                solver = self._jl.MethodOfSteps(solver())
+                atol, rtol = kwargs.pop('atol', 1e-6), kwargs.pop('rtol', 1e-3)
+                results = self._jl.solve(model, solver, saveat=times, atol=atol, rtol=rtol)
+
+            results = np.asarray(results).T
+
         else:
 
-            # solve ivp via DifferentialEquations.jl solver
-            self._jl.eval('using DifferentialEquations')
-            model = self._jl.ODEProblem(func, y0, [0.0, T], args[1:])
-            method = kwargs.pop('method', 'Tsit5')
-            if hasattr(self._jl, method):
-                method = getattr(self._jl, method)
-            else:
-                method = self._jl.Tsit5
-            results = self._jl.solve(model, method(), saveat=times, reltol=1e-6, abstol=1e-6)
-            results = np.asarray(results).T
+            # invalid option: call super method to raise exception
+            results = super()._solve(solver=solver, **kwargs)
 
         return results
 

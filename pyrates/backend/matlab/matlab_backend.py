@@ -87,11 +87,12 @@ class MatlabBackend(JuliaBackend):
             rhs = self._matlab.vectorize(rhs)
         self.add_code_line(f"{lhs} = {rhs};")
 
-    def generate_func_head(self, func_name: str, state_var: str = 'y', return_var: str = 'dy', func_args: list = None):
+    def generate_func_head(self, func_name: str, state_var: str = 'y', return_var: str = 'dy', func_args: list = None,
+                           add_hist_func: bool = False):
 
         helper_funcs = tuple(self._helper_funcs)
         self._helper_funcs = []
-        fhead = super().generate_func_head(func_name, state_var, return_var, func_args)
+        fhead = super().generate_func_head(func_name, state_var, return_var, func_args, add_hist_func=add_hist_func)
         self._helper_funcs = list(helper_funcs)
         return fhead
 
@@ -116,14 +117,14 @@ class MatlabBackend(JuliaBackend):
         if to_file:
 
             # save rhs function to file
-            file = f'{self._fdir}/{self._fname}{self._fend}' if self._fdir else f"{self._fname}{self._fend}"
+            file = f'{self.fdir}/{self._fname}{self._fend}' if self.fdir else f"{self._fname}{self._fend}"
             with open(file, 'w') as f:
                 f.writelines(func_str)
                 f.close()
 
             # import function from file
-            if self._fdir:
-                self._matlab.addpath(self._fdir, nargout=0)
+            if self.fdir:
+                self._matlab.addpath(self.fdir, nargout=0)
             rhs_eval = eval(f"self._matlab.{self._fname}")
 
         else:
@@ -169,7 +170,8 @@ class MatlabBackend(JuliaBackend):
 
         else:
 
-            raise ValueError(f'Solver {solver} is not supported for this backend.')
+            # invalid option: call super method to raise exception
+            results = super()._solve(solver=solver, **kwargs)
 
         return results
 
