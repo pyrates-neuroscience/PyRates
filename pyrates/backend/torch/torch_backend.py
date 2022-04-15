@@ -86,7 +86,7 @@ class TorchBackend(BaseBackend):
             results = self._solve_euler(func, args, T, dt, dts, y0, int(t0))
             results = results.numpy()
 
-        else:
+        elif solver == 'scipy':
 
             # solve ivp via scipy methods (solvers of various orders with adaptive step-size)
             from scipy.integrate import solve_ivp
@@ -104,6 +104,11 @@ class TorchBackend(BaseBackend):
             # call scipy solver
             results = solve_ivp(fun=f, t_span=(t0, T), y0=y0, first_step=dt, **kwargs)
             results = results['y'].T
+
+        else:
+
+            # invalid option: call super method to raise exception
+            results = super()._solve(solver=solver, **kwargs)
 
         return results
 

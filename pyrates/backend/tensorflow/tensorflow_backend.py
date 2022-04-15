@@ -169,7 +169,7 @@ class TensorflowBackend(BaseBackend):
             self._solve_euler(func, args, steps, store_step, zero, state_rec, y0, t0, dt)
             results = state_rec.numpy()
 
-        else:
+        elif solver == 'scipy':
 
             # solve ivp via scipy methods (solvers of various orders with adaptive step-size)
             from scipy.integrate import solve_ivp
@@ -185,6 +185,11 @@ class TensorflowBackend(BaseBackend):
             # call scipy solver
             results = solve_ivp(fun=f, t_span=(t0.numpy(), T), y0=y0.numpy(), first_step=dt, **kwargs)
             results = results['y'].T
+
+        else:
+
+            # invalid option: call super method to raise exception
+            results = super()._solve(solver=solver, **kwargs)
 
         return results
 
