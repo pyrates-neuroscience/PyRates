@@ -244,6 +244,7 @@ class ComputeGraph(MultiDiGraph):
         self.var_updates = {'DEs': dict(), 'non-DEs': dict()}
         self._eq_nodes = []
         self._state_var_indices = dict()
+        self._state_var_hist = dict()
 
     @property
     def state_vars(self):
@@ -467,6 +468,18 @@ class ComputeGraph(MultiDiGraph):
             code_gen.add_var_update(lhs=self.get_var(var), rhs=f"y{rhs_idx}")
             rhs_indices_str.append(idx)
 
+        # extract state variable histories for delayed interactions
+        code_gen.add_linebreak()
+        for var, delays in self._state_var_hist.items():
+
+            # extract index of variable in state vector
+            idx = (self._state_var_indices[var],)
+
+            # extract state variable history from backend-specific buffer
+            rhs_idx, _ = code_gen.create_index_str(idx)
+            for delay, v_hist in delays.items():
+                code_gen.add_var_hist(lhs=v_hist, delay=delay, state_idx=rhs_idx)
+
         code_gen.add_linebreak()
 
         # get equation string and argument list for each non-DE node at the end of the compute graph hierarchy
@@ -676,7 +689,7 @@ class ComputeGraph(MultiDiGraph):
         if 'past(' in expr_str:
 
             # replace past calls with the delayed version of the backend variable
-            replacement = self.backend.get_var_hist(var=var, delay=self.get_var(expr.args[1].name))
+            replacement = self._get_var_hist(var=var, delay=self.get_var(expr.args[1].name))
             expr_str = self._process_func_call(expr=expr_str, func="past", replacement=replacement)
 
         # backend-specific function call adjustments
@@ -796,6 +809,17 @@ class ComputeGraph(MultiDiGraph):
             args.append(vlabel)
 
         return idx_str
+
+    def _get_var_hist(self, var: str, delay: ComputeVar):
+
+        if var not in self._state_var_hist:
+            self._state_var_hist[var] = dict()
+        if delay not in self._state_var_hist[var]:
+            var_hist = f'{var}_hist{len(self._state_var_hist[var])}'
+            self._state_var_hist[var][delay] = var_hist
+        else:
+            var_hist = self._state_var_hist[var][delay]
+        return var_hist
 
     def _prune(self):
 

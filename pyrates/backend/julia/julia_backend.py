@@ -103,6 +103,9 @@ class JuliaBackend(BaseBackend):
                 rhs = f"@. {rhs}"
             self.add_code_line(f"{lhs} = {rhs}")
 
+    def add_var_hist(self, lhs: str, delay: float, state_idx: str):
+        self.add_code_line(f"{lhs} = h((), t-{delay}; idxs={state_idx})")
+
     def create_index_str(self, idx: Union[str, int, tuple], separator: str = ',', apply: bool = True,
                          **kwargs) -> Tuple[str, dict]:
 

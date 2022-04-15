@@ -144,8 +144,6 @@ class BaseBackend(CodeGen):
         self._idx_right = kwargs.pop('idx_right', ']')
         self._start_idx = kwargs.pop('start_idx', 0)
         self._no_funcs = ["identity", "index_1d", "index_2d", "index_range", "index_axis"]
-        self._delays = dict()
-        self._hist_func = None
 
         # file-creation-related attributes
         fdir, fname = self.get_fname(kwargs.pop('file_name', 'pyrates_run'))
@@ -220,6 +218,11 @@ class BaseBackend(CodeGen):
             lhs = f"{lhs}{idx}"
         self.add_code_line(f"{lhs} = {rhs}")
 
+    def add_var_hist(self, lhs: str, delay: float, state_idx: str):
+        raise PyRatesException('The default backend does not allow for the implementation of delayed differential'
+                               'equations. Please choose a backend dedicated to DDEs or remove `past` calls from the '
+                               'system equations.')
+
     def create_index_str(self, idx: Union[str, int, tuple], separator: str = ',', apply: bool = True,
                          **kwargs) -> Tuple[str, dict]:
 
@@ -239,17 +242,6 @@ class BaseBackend(CodeGen):
         # case: single index
         idx = self._process_idx(idx, **kwargs)
         return f"{self._idx_left}{idx}{self._idx_right}" if apply else idx, dict()
-
-    def get_var_hist(self, var: str, delay: ComputeVar):
-
-        if var not in self._delays:
-            self._delays[var] = dict()
-        if delay not in self._delays[var]:
-            var_hist = f'{var}_hist{len(self._delays[var])}'
-            self._delays[var][delay] = var_hist
-        else:
-            var_hist = self._delays[var][delay]
-        return var_hist
 
     def get_fname(self, f: str) -> tuple:
 
@@ -294,9 +286,6 @@ class BaseBackend(CodeGen):
         self.add_linebreak()
         self._add_func_call(name=func_name, args=func_args, return_var=return_var)
         self.add_indent()
-
-        # extract delayed variables from delay buffers if any excist
-        self._add_hist_var_definitions()
 
         return func_args
 
@@ -428,12 +417,6 @@ class BaseBackend(CodeGen):
 
     def _add_func_call(self, name: str, args: Iterable, return_var: str = 'dy'):
         self.add_code_line(f"def {name}({','.join(args)}):")
-
-    def _add_hist_var_definitions(self):
-        if self._hist_func is None:
-            raise PyRatesException('Definition of delayed differential equation systems is not supported for this '
-                                   'backend. Please choose a different backend or remove `past` function calls from '
-                                   'the model definition.')
 
     @staticmethod
     def _solve_euler(func: Callable, args: tuple, T: float, dt: float, dts: float, y: np.ndarray, t0: np.ndarray):
