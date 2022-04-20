@@ -35,6 +35,7 @@ from warnings import filterwarnings
 from networkx import MultiDiGraph, DiGraph
 import numpy as np
 from copy import deepcopy
+from warnings import warn
 
 # pyrates-internal _imports
 from pyrates.backend import PyRatesException, PyRatesWarning
@@ -557,11 +558,25 @@ class NetworkGraph(AbstractBaseIR):
 
         else:
 
-            # TODO: Implement transformation of delayed edges into DDE systems here
-            raise PyRatesException('Delayed differential equations cannot be solved with adaptive step-size solvers '
-                                   'yet. Either translate your edge delays into gamma-kernel convolutions '
-                                   '(e.g. by providing the `spread` attributes for edges) or choose a solver with fixed'
-                                   ' integration step-size (e.g. `euler`).')
+            warn(PyRatesWarning(f'PyRates detected an edge definition that implies to represent the model as a '
+                                f'delayed differential equation system. PyRates will thus attempt to access the'
+                                f'history of the source variable {var} of operator {op} on node {node}.'
+                                f'Note that this requires {var} to be a state-variable, i.e. a variable defined by'
+                                f'a differential equation.'))
+
+            # create buffer variable definitions
+            var_dict = {f'{var}_buffered{buffer_id}': {'vtype': 'variable',
+                                                       'dtype': 'float',
+                                                       'shape': (len(delays),),
+                                                       'value': 0.}
+                        }
+
+            buffer_eqs = []
+            for i, (d, sidx) in enumerate(zip(delays, source_idx)):
+                if len(target_shape) < 1 or (len(target_shape) == 1 and target_shape[0] == 1):
+                    buffer_eqs.append(f"{var}_buffered{buffer_id} = past({var}, {d})")
+                else:
+                    buffer_eqs.append(f"index({var}_buffered{buffer_id}, {sidx}) = index(past({var}, {d}), {sidx})")
 
         # add buffer equations to node operator
         op_info = node_ir[op]

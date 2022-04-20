@@ -68,7 +68,7 @@ class MatlabBackend(JuliaBackend):
 
         # call parent method
         super(JuliaBackend, self).__init__(ops=julia_funcs, imports=imports, file_ending='.m', start_idx=1,
-                                           idx_left='(', idx_right=')', **kwargs)
+                                           idx_left='(', idx_right=')', add_hist_arg=True, **kwargs)
 
         # define matlab-specific imports
         self._imports.pop(0)
@@ -77,6 +77,8 @@ class MatlabBackend(JuliaBackend):
         import matlab.engine
         self._constr = matlab
         self._matlab = matlab.engine.start_matlab()
+
+        self._nlags = 1
 
     def add_var_update(self, lhs: ComputeVar, rhs: str, lhs_idx: Optional[str] = None, rhs_shape: Optional[tuple] = ()):
 
@@ -87,28 +89,24 @@ class MatlabBackend(JuliaBackend):
             rhs = self._matlab.vectorize(rhs)
         self.add_code_line(f"{lhs} = {rhs};")
 
-    def add_var_hist(self, lhs: str, delay: ComputeVar, state_idx: Union[int, tuple], **kwargs):
+    def add_var_hist(self, lhs: str, delay: Union[ComputeVar, float], state_idx: Union[int, tuple], **kwargs):
+        if type(delay) is ComputeVar:
+            delay = float(delay.value[0] if delay.shape else delay.value)
         if delay not in self.lags:
-            self.lags[delay] = 0 + self._start_idx
+            self.lags[delay] = self._nlags
+            self._nlags += 1
         delay_idx = self.lags[delay]
         if type(state_idx) is int:
             idx = state_idx + self._start_idx
         else:
             idx = tuple([i+self._start_idx for i in state_idx])
-        self.add_code_line(f"{lhs} = hist({idx}, {delay_idx})")
+        self.add_code_line(f"{lhs} = hist({idx}, {delay_idx});")
 
     def get_hist_func(self, y: np.ndarray):
-        self._jl.eval(f"y_init = {y.tolist()}")
-        hist = """
-        function yhist = get_yhist(idx, tau)
-            yhist = y_init[idx]
-        end
-        """
-        self._jl.eval(hist)
-        return self._jl.hist
+        return lambda t: y[:]
 
     def generate_func_head(self, func_name: str, state_var: str = 'y', return_var: str = 'dy', func_args: list = None,
-                           add_hist_func: bool = False):
+                           add_hist_func: bool = True):
 
         helper_funcs = tuple(self._helper_funcs)
         self._helper_funcs = []
@@ -159,6 +157,11 @@ class MatlabBackend(JuliaBackend):
             rhs_eval = decorator(rhs_eval, **decorator_kwargs)
 
         return rhs_eval
+
+    @staticmethod
+    def to_file(fn: str, **kwargs):
+        from scipy.io import savemat
+        savemat(f"{fn}.mat", mdict=kwargs)
 
     def _solve(self, solver: str, func: Callable, args: tuple, T: float, dt: float, dts: float, y0: np.ndarray,
                t0: np.ndarray, times: np.ndarray, **kwargs) -> np.ndarray:

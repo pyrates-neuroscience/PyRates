@@ -104,12 +104,12 @@ class JuliaBackend(BaseBackend):
                 rhs = f"@. {rhs}"
             self.add_code_line(f"{lhs} = {rhs}")
 
-    def add_var_hist(self, lhs: str, delay: ComputeVar, state_idx: Union[int, tuple], **kwargs):
+    def add_var_hist(self, lhs: str, delay: Union[ComputeVar, float], state_idx: Union[int, tuple], **kwargs):
         if type(state_idx) is int:
             idx = state_idx + self._start_idx
         else:
             idx = tuple([i+self._start_idx for i in state_idx])
-        delay_str = f"{delay}[{self._start_idx}]" if delay.shape else f"{delay}"
+        delay_str = f"{delay}[{self._start_idx}]" if type(delay) is ComputeVar and delay.shape else f"{delay}"
         self.add_code_line(f"{lhs} = hist((), t-{delay_str}; idxs={idx})")
 
     def get_hist_func(self, y: np.ndarray):

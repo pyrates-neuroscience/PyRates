@@ -222,7 +222,7 @@ class BaseBackend(CodeGen):
             lhs = f"{lhs}{idx}"
         self.add_code_line(f"{lhs} = {rhs}")
 
-    def add_var_hist(self, lhs: str, delay: ComputeVar, state_idx: str, **kwargs):
+    def add_var_hist(self, lhs: str, delay: Union[ComputeVar, float], state_idx: str, **kwargs):
         raise PyRatesException('The default backend does not allow for the implementation of delayed differential'
                                'equations. Please choose a backend dedicated to DDEs or remove `past` calls from the '
                                'system equations.')
@@ -377,6 +377,10 @@ class BaseBackend(CodeGen):
         # delete loaded modules from the system
         if self._fname in sys.modules:
             del sys.modules[self._fname]
+
+    @staticmethod
+    def to_file(fn: str, **kwargs):
+        np.savez(fn, **kwargs)
 
     @staticmethod
     def register_vars(variables: list):

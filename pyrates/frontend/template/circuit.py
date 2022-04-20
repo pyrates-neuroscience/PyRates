@@ -37,7 +37,7 @@ arguments. For more detailed descriptions, see the respective docstrings.
 import gc
 from typing import List, Union, Dict, Optional, Tuple, Callable
 from copy import deepcopy
-
+from warnings import warn
 import pandas as pd
 from pandas import DataFrame, MultiIndex
 import numpy as np
@@ -262,7 +262,7 @@ class CircuitTemplate(AbstractBaseTemplate):
             *node, op, var = key.split('/')
             target_nodes = self.get_nodes(node_identifier=node, var_identifier=(op, var))
             if not target_nodes:
-                raise PyRatesWarning(f'Variable {var} has not been found on operator {op} of node {node[0]}.')
+                warn(PyRatesWarning(f'Variable {var} has not been found on operator {op} of node {node[0]}.'))
             for n in target_nodes:
                 node_temp = deepcopy(self.get_node_template(n))
                 node_temp.update_var(op=op, var=var, val=val)
@@ -1305,12 +1305,12 @@ class CircuitTemplate(AbstractBaseTemplate):
             raise PyRatesException('You chose the Julia backend, which compiles Julia code via PyJulia. To do this, '
                                    'please provide the path to Julia executable via `julia_path`.')
         if run and backend in ['matlab']:
-            raise PyRatesWarning(
+            warn(PyRatesWarning(
                 "Running simulations via the Matlab backend is extremely slow point, since it requires "
                 "multiple transformations between numpy arrays and Matlab arrays at every simulation step. It is thus "
                 "only recommended to be used with `CirucitTemplate.generate_run_function()` at this point, but not "
                 "for usage with `CircuitTemplate.run()`."
-            )
+            ))
 
 
 def update_edges(base_edges: List[tuple], updates: List[Union[tuple, dict]]):

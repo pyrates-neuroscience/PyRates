@@ -431,9 +431,9 @@ class ComputeGraph(MultiDiGraph):
         if c_fn:
             arg_dict = {arg: self.get_var(arg).value for arg in func_args if arg != 'hist'}
             if code_gen.lags:
-                arg_dict['lags'] = code_gen.lags
+                arg_dict['lags'] = list(code_gen.lags.keys())
             fn = f'{self.backend.fdir}/{c_fn}' if self.backend.fdir else c_fn
-            np.savez(fn, **arg_dict)
+            code_gen.to_file(fn, **arg_dict)
 
         # finalize the function arguments
         fargs = []
@@ -647,18 +647,20 @@ class ComputeGraph(MultiDiGraph):
         # initializations
         index_args = []
         func = ""
-        var = str(expr.args[0]) if expr.args else ""
         idx = ""
 
         # ensure expression string exists
         if not expr_str:
             expr_str = str(expr)
 
-            # transform expression arguments into strings
-            for arg in expr.args:
-                expr_part, args, _, _ = self._expr_to_str(arg, **kwargs)
-                expr_str = expr_str.replace(str(arg), expr_part)
-                index_args.extend(args)
+        # transform expression arguments into strings
+        expr_args = []
+        for arg in expr.args:
+            expr_part, args, _, _ = self._expr_to_str(arg, **kwargs)
+            expr_str = expr_str.replace(str(arg), expr_part)
+            index_args.extend(args)
+            expr_args.append(expr_part)
+        var = str(expr_args[0]) if expr.args else ""
 
         # process indexing operations
         #############################
@@ -707,7 +709,11 @@ class ComputeGraph(MultiDiGraph):
         if 'past(' in expr_str:
 
             # replace past calls with the delayed version of the backend variable
-            replacement = self._get_var_hist(var=var, delay=self.get_var(expr.args[1].name))
+            try:
+                delay = self.get_var(expr.args[1].name)
+            except AttributeError:
+                delay = float(expr.args[1])
+            replacement = self._get_var_hist(var=var, delay=delay)
             expr_str = self._process_func_call(expr=expr_str, func="past", replacement=replacement)
 
         # backend-specific function call adjustments
@@ -828,12 +834,13 @@ class ComputeGraph(MultiDiGraph):
 
         return idx_str
 
-    def _get_var_hist(self, var: str, delay: ComputeVar):
+    def _get_var_hist(self, var: str, delay: Union[ComputeVar, float]):
 
         if var not in self._state_var_hist:
             self._state_var_hist[var] = dict()
         if delay not in self._state_var_hist[var]:
             var_hist = f'{var}_hist{len(self._state_var_hist[var])}'
+            self.add_var(var_hist, value=self.get_var(var).value, vtype='variable')
             self._state_var_hist[var][delay] = var_hist
         else:
             var_hist = self._state_var_hist[var][delay]
