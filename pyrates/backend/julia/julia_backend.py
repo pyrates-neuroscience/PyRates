@@ -104,7 +104,7 @@ class JuliaBackend(BaseBackend):
                 rhs = f"@. {rhs}"
             self.add_code_line(f"{lhs} = {rhs}")
 
-    def add_var_hist(self, lhs: str, delay: ComputeVar, state_idx: Union[int, tuple]):
+    def add_var_hist(self, lhs: str, delay: ComputeVar, state_idx: Union[int, tuple], **kwargs):
         if type(state_idx) is int:
             idx = state_idx + self._start_idx
         else:
@@ -239,9 +239,8 @@ class JuliaBackend(BaseBackend):
                 model = self._jl.ODEProblem(self._jl.julia_oderun, y0, [0.0, T], args[1:])
                 method = kwargs.pop('method', 'Tsit5')
                 solver = getattr(self._jl, method)
-                solver = self._jl.MethodOfSteps(solver())
                 atol, rtol = kwargs.pop('atol', 1e-6), kwargs.pop('rtol', 1e-3)
-                results = self._jl.solve(model, solver, saveat=times, atol=atol, rtol=rtol)
+                results = self._jl.solve(model, solver(), saveat=times, atol=atol, rtol=rtol)
 
             results = np.asarray(results).T
 

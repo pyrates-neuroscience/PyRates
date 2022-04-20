@@ -411,7 +411,7 @@ class ComputeGraph(MultiDiGraph):
                 if idx[1]-idx[0] < 2:
                     idx = idx[0]
             for delay, v_hist in delays.items():  # type: ComputeVar, str
-                code_gen.add_var_hist(lhs=v_hist, delay=delay, state_idx=idx)
+                code_gen.add_var_hist(lhs=v_hist, delay=delay, state_idx=idx, var=var)
 
         # add lines from function body after function head
         code_gen.add_linebreak()
@@ -430,6 +430,8 @@ class ComputeGraph(MultiDiGraph):
         c_fn = kwargs.pop('constants_file_name', None)
         if c_fn:
             arg_dict = {arg: self.get_var(arg).value for arg in func_args if arg != 'hist'}
+            if code_gen.lags:
+                arg_dict['lags'] = code_gen.lags
             fn = f'{self.backend.fdir}/{c_fn}' if self.backend.fdir else c_fn
             np.savez(fn, **arg_dict)
 

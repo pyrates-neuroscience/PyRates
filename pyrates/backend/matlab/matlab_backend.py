@@ -87,6 +87,26 @@ class MatlabBackend(JuliaBackend):
             rhs = self._matlab.vectorize(rhs)
         self.add_code_line(f"{lhs} = {rhs};")
 
+    def add_var_hist(self, lhs: str, delay: ComputeVar, state_idx: Union[int, tuple], **kwargs):
+        if delay not in self.lags:
+            self.lags[delay] = 0 + self._start_idx
+        delay_idx = self.lags[delay]
+        if type(state_idx) is int:
+            idx = state_idx + self._start_idx
+        else:
+            idx = tuple([i+self._start_idx for i in state_idx])
+        self.add_code_line(f"{lhs} = hist({idx}, {delay_idx})")
+
+    def get_hist_func(self, y: np.ndarray):
+        self._jl.eval(f"y_init = {y.tolist()}")
+        hist = """
+        function yhist = get_yhist(idx, tau)
+            yhist = y_init[idx]
+        end
+        """
+        self._jl.eval(hist)
+        return self._jl.hist
+
     def generate_func_head(self, func_name: str, state_var: str = 'y', return_var: str = 'dy', func_args: list = None,
                            add_hist_func: bool = False):
 

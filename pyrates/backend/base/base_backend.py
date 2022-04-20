@@ -138,6 +138,7 @@ class BaseBackend(CodeGen):
 
         # public attributes
         self.add_hist_arg = kwargs.pop('add_hist_arg', False)
+        self.lags = {}
 
         # private attributes
         self._float_precision = kwargs.pop('float_precision', 'float32')
@@ -221,7 +222,7 @@ class BaseBackend(CodeGen):
             lhs = f"{lhs}{idx}"
         self.add_code_line(f"{lhs} = {rhs}")
 
-    def add_var_hist(self, lhs: str, delay: ComputeVar, state_idx: str):
+    def add_var_hist(self, lhs: str, delay: ComputeVar, state_idx: str, **kwargs):
         raise PyRatesException('The default backend does not allow for the implementation of delayed differential'
                                'equations. Please choose a backend dedicated to DDEs or remove `past` calls from the '
                                'system equations.')
