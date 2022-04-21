@@ -90,20 +90,15 @@ class MatlabBackend(JuliaBackend):
         self.add_code_line(f"{lhs} = {rhs};")
 
     def add_var_hist(self, lhs: str, delay: Union[ComputeVar, float], state_idx: Union[int, tuple], **kwargs):
+        idx = self._process_idx(state_idx)
         if type(delay) is ComputeVar:
             delay = float(delay.value[0] if delay.shape else delay.value)
         if delay not in self.lags:
             self.lags[delay] = self._nlags
             self._nlags += 1
         delay_idx = self.lags[delay]
-        if type(state_idx) is int:
-            idx = state_idx + self._start_idx
-        else:
-            idx = tuple([i+self._start_idx for i in state_idx])
-        self.add_code_line(f"{lhs} = hist({idx}, {delay_idx});")
 
-    def get_hist_func(self, y: np.ndarray):
-        return lambda t: y[:]
+        self.add_code_line(f"{lhs} = hist({idx}, {delay_idx});")
 
     def generate_func_head(self, func_name: str, state_var: str = 'y', return_var: str = 'dy', func_args: list = None,
                            add_hist_func: bool = True):
@@ -162,6 +157,10 @@ class MatlabBackend(JuliaBackend):
     def to_file(fn: str, **kwargs):
         from scipy.io import savemat
         savemat(f"{fn}.mat", mdict=kwargs)
+
+    @staticmethod
+    def get_hist_func(y: np.ndarray):
+        return lambda t: y[:]
 
     def _solve(self, solver: str, func: Callable, args: tuple, T: float, dt: float, dts: float, y0: np.ndarray,
                t0: np.ndarray, times: np.ndarray, **kwargs) -> np.ndarray:

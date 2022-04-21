@@ -137,7 +137,7 @@ class BaseBackend(CodeGen):
                     self._imports.append(imp)
 
         # public attributes
-        self.add_hist_arg = kwargs.pop('add_hist_arg', False)
+        self.add_hist_arg = kwargs.pop('add_hist_arg', True)
         self.lags = {}
 
         # private attributes
@@ -223,14 +223,9 @@ class BaseBackend(CodeGen):
         self.add_code_line(f"{lhs} = {rhs}")
 
     def add_var_hist(self, lhs: str, delay: Union[ComputeVar, float], state_idx: str, **kwargs):
-        raise PyRatesException('The default backend does not allow for the implementation of delayed differential'
-                               'equations. Please choose a backend dedicated to DDEs or remove `past` calls from the '
-                               'system equations.')
-
-    def hist_func(self, y: np.ndarray):
-        raise PyRatesException('The default backend does not allow for the implementation of delayed differential'
-                               'equations. Please choose a backend dedicated to DDEs or remove `past` calls from the '
-                               'system equations.')
+        idx = self._process_idx(state_idx)
+        d = self._process_delay(delay)
+        self.add_code_line(f"{lhs} = hist({idx}, t-{d})")
 
     def create_index_str(self, idx: Union[str, int, tuple], separator: str = ',', apply: bool = True,
                          **kwargs) -> Tuple[str, dict]:
@@ -394,6 +389,10 @@ class BaseBackend(CodeGen):
     def expr_to_str(expr: str, args: tuple):
         return expr
 
+    @staticmethod
+    def get_hist_func(y: np.ndarray):
+        return lambda idx, t: y[idx]
+
     def _get_func_info(self, name: str, **kwargs):
         return self._funcs[name]
 
@@ -409,6 +408,9 @@ class BaseBackend(CodeGen):
             return self._process_idx(int(idx), **kwargs)
         except (TypeError, ValueError):
             return idx
+
+    def _process_delay(self, delay: Union[ComputeVar, float]) -> str:
+        return f"{delay}[{self._start_idx}]" if type(delay) is ComputeVar and delay.shape else f"{delay}"
 
     def _solve(self, solver: str, func: Callable, args: tuple, T: float, dt: float, dts: float, y0: np.ndarray,
                t0: np.ndarray, times: np.ndarray, **kwargs) -> np.ndarray:
