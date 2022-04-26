@@ -559,8 +559,8 @@ class NetworkGraph(AbstractBaseIR):
         else:
 
             warn(PyRatesWarning(f'PyRates detected an edge definition that implies to represent the model as a '
-                                f'delayed differential equation system. PyRates will thus attempt to access the'
-                                f'history of the source variable {var} of operator {op} on node {node}.'
+                                f'delayed differential equation system.\n PyRates will thus attempt to access the '
+                                f'history of the source variable {var} of operator {op} on node {node}. '
                                 f'Note that this requires {var} to be a state-variable, i.e. a variable defined by'
                                 f'a differential equation.'))
 

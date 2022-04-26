@@ -8,7 +8,7 @@ In its two-dimensional form, the Van der Pol oscillator is governed by the follo
 
 .. math::
         \\dot x &= z, \n
-        \\dot z &= \\mu (1-x^2) y - x,
+        \\dot z &= \\mu (1-x^2) z - x,
 
 with damping constant :math:`\mu`. Depending on the latter parameter, the periodic solutions of the Van der Pol oscillator change,
 with simple harmonic oscillations for :math:`\mu = 0` and non-harmonic limit cycle oscillations for :math:`\mu > 0`.

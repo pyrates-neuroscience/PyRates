@@ -225,7 +225,7 @@ class BaseBackend(CodeGen):
     def add_var_hist(self, lhs: str, delay: Union[ComputeVar, float], state_idx: str, **kwargs):
         idx = self._process_idx(state_idx)
         d = self._process_delay(delay)
-        self.add_code_line(f"{lhs} = hist({idx}, t-{d})")
+        self.add_code_line(f"{lhs} = hist(t-{d})[{idx}]")
 
     def create_index_str(self, idx: Union[str, int, tuple], separator: str = ',', apply: bool = True,
                          **kwargs) -> Tuple[str, dict]:
@@ -391,7 +391,7 @@ class BaseBackend(CodeGen):
 
     @staticmethod
     def get_hist_func(y: np.ndarray):
-        return lambda idx, t: y[idx]
+        return lambda t: y
 
     def _get_func_info(self, name: str, **kwargs):
         return self._funcs[name]

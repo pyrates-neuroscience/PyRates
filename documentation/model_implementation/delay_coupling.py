@@ -113,7 +113,11 @@ clear(net)
 # %%
 # It seems like the addition of discrete delays led to the emergence of a stable periodic solution, the
 # frequency of which differs from the driving frequency.
-# Note that the definition of DDEs does not permit the use of adaptive step-size solvers at the moment.
+# Note that the definition of DDEs does not permit the use of adaptive step-size solvers for most backends at the
+# moment. An exception is the Julia backend, which can be used in combination with the option `solver='julia_dde'` in
+# order to solve a DDE system via any adaptive step-size algorithm available via `DifferentialEquations.jl`.
+# Alternatively, it is possible to generate the run function for a DDE system via any backend and employ third-party
+# software packages to solve it. An example of that can be found in the model analysis gallery.
 #
 # Option 2: Using Distributed Delays
 # ==================================
