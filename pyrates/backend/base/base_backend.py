@@ -421,15 +421,14 @@ class BaseBackend(CodeGen):
             # solve ivp via forward euler method (fixed integration step-size)
             results = self._solve_euler(func, args, T, dt, dts, y0, t0)
 
+        elif solver == 'heun':
+
+            # solve ivp via forward Heun's method (fixed integration step-size)
+            results = self._solve_heun(func, args, T, dt, dts, y0, t0)
+
         elif solver == 'scipy':
 
-            # solve ivp via scipy methods (solvers of various orders with adaptive step-size)
-            from scipy.integrate import solve_ivp
-            kwargs['t_eval'] = times
-
-            # call scipy solver
-            results = solve_ivp(fun=func, t_span=(t0, T), y0=y0, first_step=dt, args=args, **kwargs)
-            results = results['y'].T
+            results = self._solve_scipy(func, args, T, dt, y0, t0, times, **kwargs)
 
         else:
 
@@ -460,3 +459,36 @@ class BaseBackend(CodeGen):
             y += dt * rhs
 
         return state_rec
+
+    @staticmethod
+    def _solve_heun(func: Callable, args: tuple, T: float, dt: float, dts: float, y: np.ndarray, t0: np.ndarray):
+
+        # preparations for fixed step-size integration
+        idx = 0
+        steps = int(np.round(T / dt))
+        store_steps = int(np.round(T / dts))
+        store_step = int(np.round(dts / dt))
+        state_rec = np.zeros((store_steps, y.shape[0]) if y.shape else (store_steps, 1), dtype=y.dtype)
+
+        # solve ivp for forward Euler method
+        for step in range(t0, steps + t0):
+            if step % store_step == t0:
+                state_rec[idx, :] = y
+                idx += 1
+            rhs = func(step, y, *args)
+            y_0 = y + dt * rhs
+            y += dt/2 * (rhs + func(step, y_0, *args))
+
+        return state_rec
+
+    @staticmethod
+    def _solve_scipy(func: Callable, args: tuple, T: float, dt: float, y: np.ndarray, t0: np.ndarray, times: np.ndarray,
+                     **kwargs):
+
+        # solve ivp via scipy methods (solvers of various orders with adaptive step-size)
+        from scipy.integrate import solve_ivp
+        kwargs['t_eval'] = times
+
+        # call scipy solver
+        results = solve_ivp(fun=func, t_span=(t0, T), y0=y, first_step=dt, args=args, **kwargs)
+        return results['y'].T

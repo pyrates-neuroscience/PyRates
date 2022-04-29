@@ -1339,7 +1339,7 @@ def update_dict(base_dict: dict, updates: dict):
 
 
 def is_integration_adaptive(solver: str, **solver_kwargs):
-    return solver != 'euler'
+    return solver not in ['euler', 'heun']
 
 
 # cache for input nodes

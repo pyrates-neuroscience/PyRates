@@ -151,48 +151,6 @@ class TensorflowBackend(BaseBackend):
             return f"gather_nd({var.name}, {idx_str})"
         return f"{var.name}{idx}"
 
-    def _solve(self, solver: str, func: Callable, args: tuple, T: float, dt: float, dts: float, y0: tf.Variable,
-               t0: tf.Variable, times: np.ndarray, **kwargs) -> np.ndarray:
-
-        # perform integration via scipy solver (mostly Runge-Kutta methods)
-        if solver == 'euler':
-
-            # preparations for fixed step-size integration
-            zero = tf.constant(0, dtype=tf.int32)
-            steps = tf.constant(int(np.round(T / dt)))
-            store_steps = int(np.round(T / dts))
-            store_step = tf.constant(int(np.round(dts / dt)))
-            state_rec = tf.Variable(np.zeros((store_steps, y0.shape[0])), dtype=y0.dtype)
-            dt = tf.constant(dt)
-
-            # solve ivp via forward euler method (fixed integration step-size)
-            self._solve_euler(func, args, steps, store_step, zero, state_rec, y0, t0, dt)
-            results = state_rec.numpy()
-
-        elif solver == 'scipy':
-
-            # solve ivp via scipy methods (solvers of various orders with adaptive step-size)
-            from scipy.integrate import solve_ivp
-            kwargs['t_eval'] = times
-            func = tf.function(func)
-            dtype = y0.dtype
-
-            # wrapper function to scipy solver
-            def f(t: float, y: np.ndarray):
-                rhs = func(tf.constant(t, dtype=dtype), tf.constant(y, dtype=dtype), *args)
-                return rhs.numpy()
-
-            # call scipy solver
-            results = solve_ivp(fun=f, t_span=(t0.numpy(), T), y0=y0.numpy(), first_step=dt, **kwargs)
-            results = results['y'].T
-
-        else:
-
-            # invalid option: call super method to raise exception
-            results = super()._solve(solver=solver, **kwargs)
-
-        return results
-
     def _process_idx(self, idx: Union[Tuple[int, int], int, str, ComputeVar], size: int = 1, scatter: bool = False
                      ) -> Union[str, list]:
 
@@ -255,10 +213,41 @@ class TensorflowBackend(BaseBackend):
 
         return new_idx, return_dict
 
+    def _solve_euler(self, func: Callable, args: tuple, T: float, dt: float, dts: float, y: np.ndarray, t0: np.ndarray):
+
+        # preparations for fixed step-size integration
+        zero = tf.constant(0, dtype=tf.int32)
+        steps = tf.constant(int(np.round(T / dt)))
+        store_steps = int(np.round(T / dts))
+        store_step = tf.constant(int(np.round(dts / dt)))
+        state_rec = tf.Variable(np.zeros((store_steps, y.shape[0])), dtype=y.dtype)
+        dt = tf.constant(dt)
+
+        return self._solve_euler_tf(func, args, steps, store_step, zero, state_rec, y, t0, dt).numpy()
+
+    @staticmethod
+    def _solve_scipy(func: Callable, args: tuple, T: float, dt: float, y: tf.Variable, t0: tf.Variable,
+                     times: np.ndarray, **kwargs):
+
+        # solve ivp via scipy methods (solvers of various orders with adaptive step-size)
+        from scipy.integrate import solve_ivp
+        kwargs['t_eval'] = times
+        func = tf.function(func)
+        dtype = y.dtype
+
+        # wrapper function to scipy solver
+        def f(t: float, y: np.ndarray):
+            rhs = func(tf.constant(t, dtype=dtype), tf.constant(y, dtype=dtype), *args)
+            return rhs.numpy()
+
+        # call scipy solver
+        results = solve_ivp(fun=f, t_span=(t0.numpy(), T), y0=y.numpy(), first_step=dt, **kwargs)
+        return results['y'].T
+
     @staticmethod
     @tf.function
-    def _solve_euler(func: Callable, args: tuple, steps: tf.constant, store_step: int, zero: tf.constant,
-                     state_rec: tf.Variable, y: tf.Variable, idx: tf.Variable, dt: tf.constant):
+    def _solve_euler_tf(func: Callable, args: tuple, steps: tf.constant, store_step: int, zero: tf.constant,
+                        state_rec: tf.Variable, y: tf.Variable, idx: tf.Variable, dt: tf.constant):
 
         for step in tf.range(steps):
 

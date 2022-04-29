@@ -14,8 +14,8 @@ Given an initial time :math:`t_0` and an initial state :math:`y_0`, this problem
 .. math::
     \\mathbf{y}(t) = \\int_{t_0}^{t} \\mathbf{f}(\\mathbf{y}, t') dt'.
 
-This is known as the initial value problem (IVP) and there exist various algorithms for approximating the solution to
-the IVP for systems where an analytic solution is intractable.
+This is known as the `initial value problem <https://en.wikipedia.org/wiki/Initial_value_problem>`_ (IVP) and there
+exist various algorithms for approximating the solution to the IVP for systems where an analytic solution is intractable.
 Many of these algorithms are available via PyRates, and we will demonstrate below how to use a sub-set of them.
 To this end, we will solve the IVP for the QIF mean-field model, for which a detailed model introduction exists in the
 model introduction gallery.
@@ -77,7 +77,7 @@ inp[start:stop] = -3.0
 
 # perform simulation
 res = qif.run(simulation_time=T, step_size=dt, sampling_step_size=dts, outputs={'r': 'p/qif_op/r'}, clear=True,
-              in_place=False, inputs={'p/qif_op/I_ext': inp})
+              in_place=False, inputs={'p/qif_op/I_ext': inp}, solver='heun')
 
 # visualize the model dynamics
 plt.plot(res)
@@ -85,9 +85,12 @@ plt.show()
 
 # %%
 # Further customizations of the numerical simulation procedure are possible regarding the solving algorithm. The default
-# method used above is the standard forward Euler method. More elaborate methods like Runge-Kutta algorithms with
-# automatic integration step-size adaptation are available via the scipy solver, a direct interface to the
-# :code:`scipy.integrate.solve_ivp` function. All keyword arguments available for that function can also be passed to
+# method used in the first two examples is the standard forward `Euler <https://en.wikipedia.org/wiki/Euler_method>`_
+# method, whereas the last example used `Heun's method <https://en.wikipedia.org/wiki/Heun%27s_method>`_ which adds a
+# second step to Euler's method. More elaborate methods like
+# `Runge-Kutta <https://en.wikipedia.org/wiki/Runge%E2%80%93Kutta_methods>`_ algorithms with automatic integration
+# step-size adaptation are available via the scipy solver, a direct interface to the :code:`scipy.integrate.solve_ivp`
+# function. All keyword arguments available for that function can also be passed to
 # the :code:`integrate` function or :code:`CircuitTemplate.run` method. One of these keyword arguments is :code:`method`
 # , which allows choosing between the different solving algorithms that are available via
 # :code:`scipy.integrate.solve_ivp`.
@@ -121,6 +124,7 @@ func, args = qif.get_run_func(func_name='f', file_name='qif_eval', step_size=dt,
 f = open('qif_eval.py', 'r')
 print('')
 print(f.read())
+f.close()
 
 # numerical simulation
 t0, y0, *func_args = args

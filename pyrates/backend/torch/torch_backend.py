@@ -76,44 +76,29 @@ class TorchBackend(BaseBackend):
     def get_var(self, v: ComputeVar):
         return torch.from_numpy(super().get_var(v))
 
-    def _solve(self, solver: str, func: Callable, args: tuple, T: float, dt: float, dts: float, y0: torch.Tensor,
-               t0: torch.tensor, times: np.ndarray, **kwargs) -> np.ndarray:
+    def _solve_scipy(self, func: Callable, args: tuple, T: float, dt: float, y: np.ndarray, t0: np.ndarray,
+                     times: np.ndarray, **kwargs):
 
-        # perform integration via scipy solver (mostly Runge-Kutta methods)
-        if solver == 'euler':
+        # solve ivp via scipy methods (solvers of various orders with adaptive step-size)
+        from scipy.integrate import solve_ivp
+        kwargs['t_eval'] = times
+        try:
+            dtype = getattr(torch, self._float_precision)
+        except AttributeError:
+            dtype = torch.get_default_dtype()
 
-            # solve ivp via forward euler method (fixed integration step-size)
-            results = self._solve_euler(func, args, T, dt, dts, y0, int(t0))
-            results = results.numpy()
+        # wrapper to rhs function
+        def f(t, y):
+            rhs = func(torch.tensor(t, dtype=dtype), torch.tensor(y, dtype=dtype), *args)
+            return rhs.numpy()
 
-        elif solver == 'scipy':
-
-            # solve ivp via scipy methods (solvers of various orders with adaptive step-size)
-            from scipy.integrate import solve_ivp
-            kwargs['t_eval'] = times
-            try:
-                dtype = getattr(torch, self._float_precision)
-            except AttributeError:
-                dtype = torch.get_default_dtype()
-
-            # wrapper to rhs function
-            def f(t, y):
-                rhs = func(torch.tensor(t, dtype=dtype), torch.tensor(y, dtype=dtype), *args)
-                return rhs.numpy()
-
-            # call scipy solver
-            results = solve_ivp(fun=f, t_span=(t0, T), y0=y0, first_step=dt, **kwargs)
-            results = results['y'].T
-
-        else:
-
-            # invalid option: call super method to raise exception
-            results = super()._solve(solver=solver, **kwargs)
-
-        return results
+        # call scipy solver
+        results = solve_ivp(fun=f, t_span=(t0, T), y0=y, first_step=dt, **kwargs)
+        return results['y'].T
 
     @staticmethod
-    def _solve_euler(func: Callable, args: tuple, T: float, dt: float, dts: float, y: torch.Tensor, idx: int) -> torch.Tensor:
+    def _solve_euler(func: Callable, args: tuple, T: float, dt: float, dts: float, y: torch.Tensor, idx: int
+                     ) -> torch.Tensor:
 
         # preparations for fixed step-size integration
         steps = int(np.round(T / dt))
@@ -122,11 +107,11 @@ class TorchBackend(BaseBackend):
         state_rec = torch.zeros((store_steps, y.shape[0]) if y.shape else (store_steps, 1), dtype=y.dtype)
 
         # solve ivp for forward Euler method
-        for step in torch.arange(idx, steps):
+        for step in torch.arange(int(idx), steps):
             if step % store_step == 0:
                 state_rec[idx, :] = y
                 idx += 1
             rhs = func(step, y, *args)
             y += dt * rhs
 
-        return state_rec
+        return state_rec.numpy()

@@ -174,28 +174,8 @@ class MatlabBackend(JuliaBackend):
             t_m = self._transform_to_mat(t)
             return np.asarray(func(t_m, y_m, *args_m)).squeeze()
 
-        # perform integration via scipy solver (mostly Runge-Kutta methods)
-        if solver == 'euler':
-
-            # solve ivp via forward euler method (fixed integration step-size)
-            results = self._solve_euler(func_mat, (), T, dt, dts, y0, t0)
-
-        elif solver == 'scipy':
-
-            # solve ivp via scipy methods (solvers of various orders with adaptive step-size)
-            from scipy.integrate import solve_ivp
-            kwargs['t_eval'] = times
-
-            # call scipy solver
-            results = solve_ivp(fun=func_mat, t_span=(t0, T), y0=y0, first_step=dt, **kwargs)
-            results = results['y'].T
-
-        else:
-
-            # invalid option: call super method to raise exception
-            results = super()._solve(solver=solver, **kwargs)
-
-        return results
+        return super()._solve(solver=solver, func=func_mat, args=(), T=T, dt=dt, dts=dts, y0=y0, t0=t0, times=times,
+                              **kwargs)
 
     def _add_func_call(self, name: str, args: Iterable, return_var: str = 'dy'):
         self.add_code_line(f"function {return_var} = {name}({','.join(args)})")

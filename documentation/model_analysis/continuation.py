@@ -89,6 +89,7 @@ print(f.read())
 f = open('c.ivp', 'r')
 print('')
 print(f.read())
+f.close()
 
 # %%
 # The default parameters written out by PyRates allow to solve the initial value problem, i.e. perform simple numerical

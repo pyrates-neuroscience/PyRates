@@ -184,24 +184,9 @@ class JuliaBackend(BaseBackend):
     def _solve(self, solver: str, func: Callable, args: tuple, T: float, dt: float, dts: float, y0: np.ndarray,
                t0: np.ndarray, times: np.ndarray, **kwargs) -> np.ndarray:
 
-        # perform integration via scipy solver (mostly Runge-Kutta methods)
-        if solver == 'euler':
+        if 'julia' in solver:
 
-            # solve ivp via forward euler method (fixed integration step-size)
-            results = self._solve_euler(func, args, T, dt, dts, y0, t0)
-
-        elif solver == 'scipy':
-
-            # solve ivp via scipy methods (solvers of various orders with adaptive step-size)
-            from scipy.integrate import solve_ivp
-            kwargs['t_eval'] = times
-
-            # call scipy solver
-            results = solve_ivp(fun=func, t_span=(t0, T), y0=y0, first_step=dt, args=args, **kwargs)
-            results = results['y'].T
-
-        elif 'julia' in solver:
-
+            # solve via DifferentialEquations.jl
             self._jl.eval('using DifferentialEquations')
 
             if 'dde' in solver:
@@ -243,8 +228,9 @@ class JuliaBackend(BaseBackend):
 
         else:
 
-            # invalid option: call super method to raise exception
-            results = super()._solve(solver=solver, **kwargs)
+            # non-julia solver
+            results = super()._solve(solver=solver, func=func, args=args, T=T, dt=dt, dts=dts, y0=y0, t0=t0,
+                                     times=times, **kwargs)
 
         return results
 

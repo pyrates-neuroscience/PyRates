@@ -361,7 +361,14 @@ def test_2_4_solver():
                        vectorize=False, step_size=dt, backend=b, solver='scipy', clear=True, file_name='scipy_solver',
                        sampling_step_size=dts)
 
+        # Heun's method (tested)
+        r3 = integrate("model_templates.test_resources.test_backend.net13", simulation_time=sim_time,
+                       outputs={'a1': 'p1/op9/a', 'a2': 'p2/op10/a'}, inputs={'p1/op9/I_ext': inp},
+                       vectorize=False, step_size=dt, backend=b, solver='heun', clear=True, file_name='heun_solver',
+                       sampling_step_size=dts)
+
         assert np.mean(r.loc[:, 'a2'].values - r2.loc[:, 'a2'].values) == pytest.approx(0., rel=accuracy, abs=accuracy)
+        assert np.mean(r.loc[:, 'a2'].values - r3.loc[:, 'a2'].values) == pytest.approx(0., rel=accuracy, abs=accuracy)
 
 
 def test_2_5_inputs_outputs():
