@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.14
+
+### 0.14.0
+
+- added Heun's method as a new differential equation solver method 
+- Heun's method was integrated with all backends
+- a test was added that ensures correct functionality of Heun's method
+- the usage of the method is demonstrated in the simulations gallery example
+- added hyperlinks to websites explaining the different numerical solvers in the gallery example
+- improved the backend implementation of choosing between different solvers (less code overlap between backends now)
+
 ## 0.13
 
 ### 0.13.0
