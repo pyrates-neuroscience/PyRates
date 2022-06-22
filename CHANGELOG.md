@@ -2,6 +2,15 @@
 
 ## 0.14
 
+### 0.14.2
+
+- updated changelog
+
+### 0.14.1
+
+- added different versions of the Izhikevich mean-field model (the dimensionless model, the biophysical model with distributed background currents, and the biophysical model with distributed spike thresholds)
+- improved documentation gallery examples (debugged equations, added images, added Izhikevich model references)
+
 ### 0.14.0
 
 - added Heun's method as a new differential equation solver method 
