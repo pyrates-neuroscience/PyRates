@@ -28,7 +28,7 @@ author = u'Richard Gast and Daniel Rose'
 version = u'0.14'
 
 # The full version, including alpha/beta/rc tags
-release = u'0.14.2-dev0'  # automatically managed with bumpversion, see .bumpversion.cfg
+release = u'0.14.2'  # automatically managed with bumpversion, see .bumpversion.cfg
 
 
 # -- General configuration ---------------------------------------------------
