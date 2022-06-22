@@ -11,7 +11,7 @@ The model equations are given by:
     \\tau \\dot r &= \\frac{\\Delta}{\\pi\\tau} +  r(2 v - \\alpha - g \\tau s), \n
     \\tau \\dot v &= v^2 - \\alpha v + \\bar\\eta + I(t) - u + g s \\tau (E-v) - (\\pi r \\tau)^2, \n
     \\dot u &= a(b v - u) + d r, \n
-    \\tau_s \\dot s &= \\frac{-s}{\\tau_s} + J r,
+    \\tau_s \\dot s &= -s + \\tau_s J r,
 
 where :math:`r` is the average firing rate, :math:`v` is the average membrane potential, :math:`u` is an average
 recovery variable, and :math:`s` is a post-synaptic current.
@@ -26,9 +26,11 @@ It is governed by the following parameters:
     - :math:`J` and :math:`\\tau_s` --> Strength and time constant of the post-synaptic current
 
 This mean-field model is a representation of the macroscopic dynamics of a spiking neural network consisting of
-Izhikevich neurons with Lorentzian distributed background excitabilities [2]_.
+dimensionless Izhikevich neurons with Lorentzian distributed background excitabilities [2]_.
 In the sections below, we will demonstrate how to load the model template into pyrates, perform
 simulations with it and visualize the results.
+Note that PyRates also provides model templates for the biophysical Izhikevich mean-field model with distributed
+spike-threshold heterogeneity as derived in [3]_. The model templates are available in the same YAML file.
 
 References
 ----------
@@ -37,6 +39,9 @@ References
 
 .. [2] L. Chen, S.A. Campbell (2022) *Exact mean-field models for spiking neural networks with adaptation.*
        arXiv:2203.08341v1, https://arxiv.org/abs/2203.08341.
+
+.. [3] R. Gast, S. A. Solla, A. Kennedy (2022) *Effects of Neural Heterogeneity on Spiking Neural Network Dynamics*
+       arXiv:2206.08813v1, https://arxiv.org/abs/2206.08813.
 
 """
 
@@ -75,8 +80,8 @@ I_ext = np.zeros((steps,)) + 0.15
 I_ext[int(start/step_size):int(stop/step_size)] -= 0.15
 
 # perform simulation
-results = integrate("model_templates.neural_mass_models.qif.ik", step_size=step_size, simulation_time=T,
-                    outputs={'r': 'p/ik_op/r'}, inputs={'p/ik_op/I_ext': I_ext}, solver='scipy', clear=True,
+results = integrate("model_templates.neural_mass_models.ik.ik_nodim", step_size=step_size, simulation_time=T,
+                    outputs={'r': 'p/ik_nodim_op/r'}, inputs={'p/ik_nodim_op/I_ext': I_ext}, solver='scipy', clear=True,
                     sampling_step_size=sampling)
 
 # %%
@@ -105,14 +110,14 @@ ax.set_ylabel('r')
 from pyrates import CircuitTemplate
 
 # load model template
-ik = CircuitTemplate.from_yaml("model_templates.neural_mass_models.qif.ik")
+ik = CircuitTemplate.from_yaml("model_templates.neural_mass_models.ik.ik_nodim")
 
 # change model parameters
-ik.update_var(node_vars={"p/ik_op/g": 1.5})
+ik.update_var(node_vars={"p/ik_nodim_op/g": 1.5})
 
 # perform simulation
-results2 = ik.run(simulation_time=T, step_size=step_size, outputs={'r': 'p/ik_op/r'},
-                  inputs={'p/ik_op/I_ext': I_ext}, solver='scipy', sampling_step_size=sampling, clear=True)
+results2 = ik.run(simulation_time=T, step_size=step_size, outputs={'r': 'p/ik_nodim_op/r'},
+                  inputs={'p/ik_nodim_op/I_ext': I_ext}, solver='scipy', sampling_step_size=sampling, clear=True)
 
 fig2, ax2 = plt.subplots()
 ax2.plot(results2)
@@ -122,6 +127,6 @@ plt.show()
 
 # %%
 # you can see, changing the synaptic conductance drove the Izhikevich model in an oscillating regime and the extrinsic
-# input now supresses these oscillations. Check out [2]_ if you would like to test out some different parameter regimes.
-# For a detailed introduction on how to handle model definitions via YAML files, have a look at the model definition
-# gallery.
+# input now suppresses these oscillations. Check out [2]_ if you would like to test out some different parameter
+# regimes. For a detailed introduction on how to handle model definitions via YAML files, have a look at the model
+# definition gallery.

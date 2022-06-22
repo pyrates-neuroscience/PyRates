@@ -150,16 +150,16 @@ def test_3_2_qif_theta():
         from pyrates import CircuitTemplate, clear
 
         # load IK neuron model
-        ik = CircuitTemplate.from_yaml("model_templates.neural_mass_models.qif.ik")
+        ik = CircuitTemplate.from_yaml("model_templates.neural_mass_models.ik.ik_nodim")
 
         # update IK parameters such that it should be equivalent to QIF model
-        ik.update_var(node_vars={'p/ik_op/alpha': 0.0, 'p/ik_op/d': 0.0, 'p/ik_op/b': 0.0,
-                                 'p/ik_op/tau': 1.0, 'p/ik_op/eta': -5.0, 'p/ik_op/Delta': 1.0,
-                                 'p/ik_op/tau_s': 2.0, 'p/ik_op/g': 5.0, 'p/ik_op/e_r': 1.0})
+        ik.update_var(node_vars={'p/ik_nodim_op/alpha': 0.0, 'p/ik_nodim_op/d': 0.0, 'p/ik_nodim_op/b': 0.0,
+                                 'p/ik_nodim_op/tau': 1.0, 'p/ik_nodim_op/eta': -5.0, 'p/ik_nodim_op/Delta': 1.0,
+                                 'p/ik_nodim_op/tau_s': 2.0, 'p/ik_nodim_op/g': 5.0, 'p/ik_nodim_op/e_r': 1.0})
 
         # simulate IK dynamics
         r5 = ik.run(simulation_time=T, step_size=dt, sampling_step_size=dts, solver='scipy',
-                    outputs={'r': 'p/ik_op/r'}, inputs={'p/ik_op/I_ext': inp})
+                    outputs={'r': 'p/ik_nodim_op/r'}, inputs={'p/ik_nodim_op/I_ext': inp})
         clear(ik)
 
         # load equivalent QIF model

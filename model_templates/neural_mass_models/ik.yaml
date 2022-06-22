@@ -1,0 +1,136 @@
+%YAML 1.2
+---
+
+# operator templates
+####################
+
+# dimensionless izhikevich model with distributed background input
+ik_nodim_op:
+  base: OperatorTemplate
+  equations:
+    - "r' = (Delta/(pi*tau) + r*(2.0*v - alpha - g*s*tau)) / tau"
+    - "v' = (v^2 - alpha*v + eta + I_ext - u + g*s*tau*(E_r - v) - (pi*tau*r)^2) / tau"
+    - "u' = a*(b*v - u) + d*r"
+    - "s' = -s/tau_s + r_in"
+  variables:
+    r: output(0.0)
+    v: variable(0.0)
+    u: variable(0.0)
+    s: variable(0.0)
+    Delta: 0.02
+    tau: 1.0
+    eta: 0.0
+    alpha: 0.6
+    g: 0.5
+    E_r: 1.0
+    b: -0.01
+    a: 0.008
+    d: 0.02
+    tau_s: 2.6
+    I_ext: input(0.0)
+    r_in: input(0.0)
+
+
+# biophysical izhikevich model with distributed background currents
+ik_eta_op:
+  base: OperatorTemplate
+  equations:
+    - "r' = (Delta*k^2/(pi*C) + r*(k*(2.0*v - v_r - v_t) - g*s)) / C"
+    - "v' = (k*v*(v - v_r - v_t) + k*v_r*v_t + I_ext - u + g*s*(E_r - v) - (pi*C*r)^2/k) / C"
+    - "u' = a*(b*v - u) + d*r"
+    - "s' = -s/tau_s + r_in"
+  variables:
+    r: output(0.0)
+    v: variable(-60.0)
+    u: variable(0.0)
+    s: variable(0.0)
+    Delta: 0.02
+    k: 1.0
+    C: 100.0
+    v_r: -70.0
+    v_t: -40.0
+    g: 0.5
+    E_r: 0.0
+    b: -0.01
+    a: 0.008
+    d: 10.0
+    tau_s: 5.0
+    I_ext: input(0.0)
+    r_in: input(0.0)
+
+# biophysical izhikevich model with distributed spike thresholds
+ik_theta_op:
+  base: OperatorTemplate
+  equations:
+    - "r' = (Delta*k^2*(v-v_r)/(pi*C) + r*(k*(2.0*v - v_r - v_t) - g*s)) / C"
+    - "v' = (k*v*(v - v_r - v_t) + k*v_r*v_t + I_ext - u + g*s*(E_r - v) - pi*C*r*(Delta + pi*C*r/k)) / C"
+    - "u' = a*(b*v - u) + d*r"
+    - "s' = -s/tau_s + r_in"
+  variables:
+    r: output(0.0)
+    v: variable(-60.0)
+    u: variable(0.0)
+    s: variable(0.0)
+    Delta: 0.02
+    k: 1.0
+    C: 100.0
+    v_r: -70.0
+    v_t: -40.0
+    g: 0.5
+    E_r: 0.0
+    b: -0.01
+    a: 0.008
+    d: 10.0
+    tau_s: 5.0
+    I_ext: input(0.0)
+    r_in: input(0.0)
+
+
+# node templates
+################
+
+# population of dimensionless izhikevich neurons with distributed background inputs
+ik_nodim_pop:
+  base: NodeTemplate
+  operators:
+    - ik_nodim_op
+
+# population of biophysical izhikevich neurons with distributed background inputs
+ik_eta_pop:
+  base: NodeTemplate
+  operators:
+    - ik_eta_op
+
+# population of biophysical izhikevich neurons with distributed spike thresholds
+ik_theta_pop:
+  base: NodeTemplate
+  operators:
+    - ik_theta_op
+
+
+# circuit templates
+###################
+
+# dimensionless izhikevich population with distributed background currents
+ik_nodim:
+  base: CircuitTemplate
+  nodes:
+    p: ik_nodim_pop
+  edges:
+    - [p/ik_nodim_op/r, p/ik_nodim_op/r_in, null, {weight: 1.0}]
+
+# biophysical izhikevich population with distributed background currents
+ik_eta:
+  base: CircuitTemplate
+  nodes:
+    p: ik_eta_pop
+  edges:
+    - [p/ik_eta_op/r, p/ik_eta_op/r_in, null, {weight: 1.0}]
+
+# biophysical izhikevich population with distributed background currents
+ik_theta:
+  base: CircuitTemplate
+  nodes:
+    p: ik_theta_pop
+  edges:
+    - [p/ik_theta_op/r, p/ik_theta_op/r_in, null, {weight: 1.0}]

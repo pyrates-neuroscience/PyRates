@@ -19,7 +19,7 @@ a pulse-like synaptic current centered around :math:`\\theta_i = \\pi`, these me
 .. math::
 
         \\dot z = \\frac{1}{2} [(i*(\\eta + s v_s) - \\Delta) (z+1)^2 - s(z^2-1) - i(z-1)^2], \\\\
-        s = \\frac{J (1-|z|)^2}{(1+z+\bar z+ |z|^2}.
+        s = \\frac{J (1-|z|)^2}{(1+z+\\bar z+ |z|^2}.
 
 They are governed by 3 parameters:
     - :math:`\\eta` --> the mean of a Lorenzian distribution over the neural excitability in the population

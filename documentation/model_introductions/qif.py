@@ -28,8 +28,8 @@ spike-frequency adaptation would be given by the following 3D system:
 .. math::
 
     \\tau \\dot r &= \\frac{\\Delta}{\\pi\\tau} + 2 r v, \n
-    \\tau \\dot v &= v^2 +\\bar\\eta + I(t) + J r \\tau - A - (\\pi r \\tau)^2, \n
-    \\tau_a \\dot a &= \\alpha r - \\frac{a}{\\tau_a},
+    \\tau \\dot v &= v^2 +\\bar\\eta + I(t) + J r \\tau - a - (\\pi r \\tau)^2, \n
+    \\tau_a \\dot a &= -a + \\alpha \\tau_a r,
 
 where the evolution equation for :math:`a` expresses a convolution of :math:`r` with a mono-exponential kernel, with
 adaptation strength :math:`\\alpha` and time constant :math:`\\tau_a`.
