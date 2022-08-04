@@ -2,6 +2,11 @@
 
 ## 0.14
 
+### 0.14.3
+
+- run-function generating method of ComputeGraph now returns the keys of the function arguments together with the arguments
+- implemented a method in CircuitTemplate that allows to get the indices of state variables within the system state vector
+
 ### 0.14.2
 
 - updated changelog
