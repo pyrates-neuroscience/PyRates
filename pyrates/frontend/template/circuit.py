@@ -440,12 +440,12 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         # create mapping between requested output variables and the current network variables
         if type(outputs) is dict:
-            output_map, outputs_ir = net._map_output_variables(outputs)
+            output_map, outputs_ir = net.get_variable_positions(outputs)
         else:
             output_map = {}
             outputs_ir = {}
             for output in outputs:
-                out_map_tmp, out_vars_tmp = net._map_output_variables(output)
+                out_map_tmp, out_vars_tmp = net.get_variable_positions(output)
                 output_map.update(out_map_tmp)
                 outputs_ir.update(out_vars_tmp)
 
@@ -499,7 +499,7 @@ class CircuitTemplate(AbstractBaseTemplate):
 
     def get_run_func(self, func_name: str, step_size: float, inputs: Optional[dict] = None, backend: str = None,
                      vectorize: bool = True, verbose: bool = True, clear: bool = False, in_place: bool = True, **kwargs
-                     ) -> Tuple[Callable, tuple]:
+                     ) -> Tuple[Callable, tuple, tuple]:
         """Generate a function that evaluates the vector field of the dynamical system represented by this
         `CircuitTemplate` instance.
 
@@ -540,8 +540,8 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         Returns
         -------
-        Tuple[Callable, tuple]
-            The vector field evaluation function and all its positional arguments.
+        Tuple[Callable, tuple, tuple]
+            The vector field evaluation function, all its positional arguments, and the argument keys.
 
         """
 
@@ -560,14 +560,14 @@ class CircuitTemplate(AbstractBaseTemplate):
                   vectorize=vectorize, **kwargs)
 
         # generate the run function
-        func, args = net._ir.get_run_func(func_name=func_name, step_size=step_size, **kwargs)
+        func, args, arg_names = net._ir.get_run_func(func_name=func_name, step_size=step_size, **kwargs)
 
         # clear the network temporary files
         if clear:
             net.clear()
         self._ir = net._ir
 
-        return func, args
+        return func, args, arg_names
 
     def apply(self, adaptive_steps: bool = None, label: str = None, node_values: dict = None, edge_values: dict = None,
               vectorize: bool = True, verbose: bool = True, **kwargs) -> None:
@@ -938,6 +938,69 @@ class CircuitTemplate(AbstractBaseTemplate):
             idx = 0
         return self._edge_map[(source, target, idx)]
 
+    def get_variable_positions(self, outputs: Union[dict, str]) -> tuple:
+        """Finds the indices of variables in the system state vector as well as the backend variables from which the
+        variables can be extracted via the indices.
+
+        Parameters
+        ----------
+        outputs
+            Either a simple variable name, or a dictionary where the keys define the keys of the return dictionaries,
+            whereas the values refer to variables in the network.
+
+        Returns
+        -------
+        tuple
+            two dictionaries: (1) containing the variable indices, (2) containing the backend variables.
+        """
+
+        out_map = {}
+        out_vars = {}
+        indices = self._vectorization_indices
+
+        if type(outputs) is dict:
+            for key, out in outputs.items():
+
+                *out_nodes, out_op, out_var = out.split('/')
+
+                # get all requested node variables
+                target_nodes = self.get_nodes(out_nodes, var_identifier=(out_op, out_var))
+
+                if len(target_nodes) == 1:
+
+                    # extract index for single output node
+                    backend_key = self._relabel_var(f"{target_nodes[0]}/{out_op}/{out_var}", self._vectorization_labels)
+                    idx = indices[target_nodes[0]]
+                    out_map[key] = [idx]
+                    out_vars[key] = backend_key
+
+                elif target_nodes:
+
+                    # extract index for multiple output nodes
+                    out_map[key] = {}
+                    for t in target_nodes:
+                        key2 = f"{t}/{out_op}/{out_var}"
+                        backend_key = self._relabel_var(key2, self._vectorization_labels)
+                        idx = indices[t]
+                        out_map[key][key2] = [idx]
+                        out_vars[key2] = backend_key
+
+        else:
+
+            outputs = self._relabel_var(outputs, self._vectorization_labels)
+            *out_nodes, out_op, out_var = outputs.split('/')
+            target_nodes = self.get_nodes(out_nodes, var_identifier=(out_op, out_var))
+
+            # extract index for single output node
+            for t in target_nodes:
+                key = f"{t}/{out_op}/{out_var}"
+                backend_key = self._relabel_var(key, self._vectorization_labels)
+                idx = indices[t]
+                out_map[key] = [idx]
+                out_vars[key] = backend_key
+
+        return out_map, out_vars
+
     def clear(self):
         """Removes all temporary files and directories that may have been created during simulations of that circuit.
         Also deletes operator template caches, _imports and path variables from working memory.
@@ -1094,55 +1157,6 @@ class CircuitTemplate(AbstractBaseTemplate):
             except IndexError as e:
                 raise e
         return final_nodes
-
-    def _map_output_variables(self, outputs: Union[dict, str]) -> tuple:
-
-        out_map = {}
-        out_vars = {}
-        indices = self._vectorization_indices
-
-        if type(outputs) is dict:
-            for key, out in outputs.items():
-
-                *out_nodes, out_op, out_var = out.split('/')
-
-                # get all requested node variables
-                target_nodes = self.get_nodes(out_nodes, var_identifier=(out_op, out_var))
-
-                if len(target_nodes) == 1:
-
-                    # extract index for single output node
-                    backend_key = self._relabel_var(f"{target_nodes[0]}/{out_op}/{out_var}", self._vectorization_labels)
-                    idx = indices[target_nodes[0]]
-                    out_map[key] = [idx]
-                    out_vars[key] = backend_key
-
-                elif target_nodes:
-
-                    # extract index for multiple output nodes
-                    out_map[key] = {}
-                    for t in target_nodes:
-                        key2 = f"{t}/{out_op}/{out_var}"
-                        backend_key = self._relabel_var(key2, self._vectorization_labels)
-                        idx = indices[t]
-                        out_map[key][key2] = [idx]
-                        out_vars[key2] = backend_key
-
-        else:
-
-            outputs = self._relabel_var(outputs, self._vectorization_labels)
-            *out_nodes, out_op, out_var = outputs.split('/')
-            target_nodes = self.get_nodes(out_nodes, var_identifier=(out_op, out_var))
-
-            # extract index for single output node
-            for t in target_nodes:
-                key = f"{t}/{out_op}/{out_var}"
-                backend_key = self._relabel_var(key, self._vectorization_labels)
-                idx = indices[t]
-                out_map[key] = [idx]
-                out_vars[key] = backend_key
-
-        return out_map, out_vars
 
     def _get_hierarchy_depth(self):
         circuit_lvls = 0

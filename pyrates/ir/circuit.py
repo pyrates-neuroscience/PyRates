@@ -1016,7 +1016,7 @@ class CircuitIR(AbstractBaseIR):
 
         # generate run function
         func_name = kwargs.pop('func_name', 'vector_field')
-        func, func_args = self.get_run_func(func_name, **kwargs)
+        func, func_args, _ = self.get_run_func(func_name, **kwargs)
 
         # extract backend variables that correspond to requested output variables
         if self._verbose:
