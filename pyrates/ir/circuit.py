@@ -219,16 +219,10 @@ class NetworkGraph(AbstractBaseIR):
                 # extract info from projections to input variable
                 op_name, var_name = in_var.split('/')
                 data = self._collect_from_edges(edges,
-                                                keys=['source_var', 'weight', 'delay', 'source_idx', 'target_idx'])
+                                                keys=['source_var', 'weight', 'source_idx', 'target_idx'])
 
                 # create the final equations for all edges that target the input variable
                 self._generate_edge_equation(tnode=node_name, top=op_name, tvar=var_name, inputs=data, **kwargs)
-
-        # create the final equations and variables for each edge
-        # for source, targets in self.graph.adjacency():
-        #     for target, edges in targets.items():
-        #         for idx, data in edges.items():
-        #             self._generate_edge_equation(source_node=source, target_node=target, data=data, **kwargs)
 
     def _sort_edges(self, edges: List[tuple], attr: str, data_included: bool = False) -> dict:
         """Sorts edges according to the given edge attribute.
@@ -332,7 +326,7 @@ class NetworkGraph(AbstractBaseIR):
             if source not in data:
                 data[source] = dict()
             for key in keys:
-                val = deepcopy(edge[key])
+                val = edge[key]  #deepcopy(edge[key])
                 try:
                     data[source][key].extend(val)
                 except AttributeError:
@@ -670,13 +664,27 @@ class NetworkGraph(AbstractBaseIR):
             if dot_edge:
 
                 # create weight matrix
-                weight_mat = np.zeros((tsize, ssize))
-                for row, col, w in zip(tidx, sidx, weight):
+                # OLD CODE:
+                # weight_mat = np.zeros((tsize, ssize))
+                # for row, col, w in zip(tidx, sidx, weight):
+                #     weight_mat[row, col] = w
+                #
+                # # define edge projection equation
+                # eq = f"{t_str} = matvec({w_str},{s_str})"
+                # args[w_str] = {'vtype': 'constant', 'value': weight_mat, 'dtype': 'float', 'shape': weight_mat.shape}
+                sidx_unique = np.unique(sidx)
+                tidx_unique = np.unique(tidx)
+                weight_mat = np.zeros((len(tidx_unique), len(sidx_unique)))
+                for t, s, w in zip(tidx, sidx, weight):
+                    row = np.argwhere(tidx_unique == t).squeeze()
+                    col = np.argwhere(sidx_unique == s).squeeze()
                     weight_mat[row, col] = w
 
                 # define edge projection equation
-                eq = f"{t_str} = matvec({w_str},{s_str})"
+                eq = f"index({t_str}, {tidx_str}) = matvec({w_str}, index({s_str}, {sidx_str}))"
                 args[w_str] = {'vtype': 'constant', 'value': weight_mat, 'dtype': 'float', 'shape': weight_mat.shape}
+                args[tidx_str] = {'vtype': 'constant', 'value': tidx_unique, 'dtype': 'int', 'shape': tidx_unique.shape}
+                args[sidx_str] = {'vtype': 'constant', 'value': sidx_unique, 'dtype': 'int', 'shape': sidx_unique.shape}
 
             # case II: realize edge projection via source and target indexing
             else:
@@ -722,7 +730,7 @@ class NetworkGraph(AbstractBaseIR):
             eqs.append(eq)
 
         # step 4: define target variable as operator output
-        args[tvar] = deepcopy(tval)
+        args[tvar] = tval  #deepcopy(tval)
         args[tvar]['vtype'] = 'variable'
 
         # step 5: add edge operator to target node
@@ -1135,7 +1143,8 @@ class CircuitIR(AbstractBaseIR):
                             [op for op in ops if op_identifier in op]
                     else:
                         ops_tmp = ops
-                    op_eqs, op_vars = self._collect_ops(ops_tmp, node_name=node_name, graph=net, compute_graph=cg)
+                    op_eqs, op_vars = self._collect_ops(ops_tmp, node_name=node_name, graph=net, compute_graph=cg,
+                                                        reduce=exclude)
 
                     # parse equations and variables into computegraph
                     variables = parse_equations(op_eqs, op_vars, cg=cg, def_shape=self._def_shape, **kwargs)
@@ -1149,7 +1158,8 @@ class CircuitIR(AbstractBaseIR):
                 g.remove_nodes_from(ops)
                 i += 1
 
-    def _collect_ops(self, ops: List[str], node_name: str, graph: NetworkGraph, compute_graph: ComputeGraph) -> tuple:
+    def _collect_ops(self, ops: List[str], node_name: str, graph: NetworkGraph, compute_graph: ComputeGraph,
+                     reduce: bool) -> tuple:
         """Adds a number of operations to the backend graph.
 
         Parameters
@@ -1160,6 +1170,7 @@ class CircuitIR(AbstractBaseIR):
             Name of the node that the operators belong to.
         graph
         compute_graph
+        reduce
 
         Returns
         -------
@@ -1244,9 +1255,27 @@ class CircuitIR(AbstractBaseIR):
                         variables[full_key] = self._front_to_back[full_key]
                     except KeyError:
                         # case IV: new variables
-                        variables[full_key] = var
+                        variables[full_key] = self._finalize_var_def(var, reduce)
 
         return equations, variables
+
+    @staticmethod
+    def _finalize_var_def(v: dict, reduce: bool):
+        if not reduce:
+            return v
+        if not v:
+            return v
+        if v['vtype'] != 'constant':
+            return v
+        if v['dtype'] != 'float':
+            return v
+        if 'shape' in v and len(v['shape']) > 1:
+            return v
+        if len(np.unique(v['value'])) > 1:
+            return v
+        v['value'] = v['value'][0]
+        v['shape'] = tuple()
+        return v
 
     @staticmethod
     def _map_multiple_inputs(inputs: dict, scope: str, tvar: str) -> tuple:

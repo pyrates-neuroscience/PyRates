@@ -190,7 +190,7 @@ def check_vname(v: str, vtype: str):
 
 
 def _update_variables(variables: dict, updates: dict):
-    updated = deepcopy(variables)
+    updated = variables.copy()
     updated.update(updates)
     # for var, val in updates.items():
     #     if var in updated:

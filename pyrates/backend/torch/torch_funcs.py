@@ -45,7 +45,7 @@ sigmoid = lambda x: 1./(1. + np.exp(-x))
 interp = """
 def interp(x_new, x, y):
     idx = argmin(abs(x-x_new))
-    if x[idx] > x_new:
+    if abs(x[idx]) > abs(x_new):
         i1, i2 = idx-1, idx
     else:
         i1, i2 = idx, idx+1

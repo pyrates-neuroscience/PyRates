@@ -76,16 +76,19 @@ class TorchBackend(BaseBackend):
     def get_var(self, v: ComputeVar):
         return torch.from_numpy(super().get_var(v))
 
-    def _solve_scipy(self, func: Callable, args: tuple, T: float, dt: float, y: np.ndarray, t0: np.ndarray,
-                     times: np.ndarray, **kwargs):
+    def _solve_scipy(self, func: Callable, args: tuple, T: float, dt: float, y: torch.Tensor, t0: torch.Tensor,
+                     times: torch.Tensor, **kwargs):
 
         # solve ivp via scipy methods (solvers of various orders with adaptive step-size)
         from scipy.integrate import solve_ivp
         kwargs['t_eval'] = times
-        try:
-            dtype = getattr(torch, self._float_precision)
-        except AttributeError:
-            dtype = torch.get_default_dtype()
+        if y.dtype.is_complex:
+            dtype = y.dtype
+        else:
+            try:
+                dtype = getattr(torch, self._float_precision)
+            except AttributeError:
+                dtype = torch.get_default_dtype()
 
         # wrapper to rhs function
         def f(t, y):

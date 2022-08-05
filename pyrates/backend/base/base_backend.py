@@ -139,11 +139,11 @@ class BaseBackend(CodeGen):
         # public attributes
         self.add_hist_arg = kwargs.pop('add_hist_arg', True)
         self.lags = {}
+        self.idx_dummy_var = "temporary_pyrates_var_index"
 
         # private attributes
         self._float_precision = kwargs.pop('float_precision', 'float32')
         self._int_precision = kwargs.pop('int_precision', 'int32')
-        self._complex_precision = kwargs.pop('complex_precision', 'complex64')
         self._idx_left = kwargs.pop('idx_left', '[')
         self._idx_right = kwargs.pop('idx_right', ']')
         self._start_idx = kwargs.pop('start_idx', 0)
@@ -160,10 +160,10 @@ class BaseBackend(CodeGen):
         self._fend = kwargs.pop('file_ending', '.py')
 
     def get_var(self, v: ComputeVar):
-        if v.is_float:
+        if v.is_float or v.is_complex:
             dtype = self._float_precision
-        elif v.is_complex:
-            dtype = self._complex_precision
+            if 'complex' in dtype and v.name in ['t', 'time']:
+                dtype = f'float{dtype[7:]}'
         else:
             dtype = self._int_precision
         return np.asarray(v.value, dtype=dtype)
@@ -174,7 +174,7 @@ class BaseBackend(CodeGen):
         func_info = self._get_func_info(name, **kwargs)
         func_name = func_info['call']
 
-        # add extrinsic function _imports if necessary
+        # add extrinsic function imports if necessary
         if 'imports' in func_info:
             for imp in func_info['imports']:
                 *in_path, in_func = imp.split('.')

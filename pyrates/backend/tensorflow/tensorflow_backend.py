@@ -204,7 +204,7 @@ class TensorflowBackend(BaseBackend):
         if len(new_idx) > max_length:
 
             # for many indices, create new indexing constant
-            idx = "temporary_pyrates_var_index"
+            idx = self.idx_dummy_var
             return_dict = {idx: new_idx}
 
         else:

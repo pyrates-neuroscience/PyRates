@@ -28,7 +28,6 @@
 # Richard Gast and Daniel Rose et. al. in preparation
 """
 """
-from copy import deepcopy
 from pyrates.frontend import CircuitTemplate, NodeTemplate, EdgeTemplate, OperatorTemplate
 from pyrates.backend.parser import get_unique_label
 from typing import Union
@@ -88,7 +87,7 @@ def from_operator(op: OperatorTemplate, updates: dict, return_dict: dict, base: 
     """
 
     # collect operator attributes
-    new_dict = {'base': base, 'equations': deepcopy(op.equations), 'variables': deepcopy(op.variables)}
+    new_dict = {'base': base, 'equations': op.equations, 'variables': op.variables}
     new_dict['variables'].update(updates)
 
     # add operator definition to the return dictionary

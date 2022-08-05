@@ -139,7 +139,7 @@ class CircuitTemplate(AbstractBaseTemplate):
         self._vectorization_indices = {}
 
     def to_yaml(self, path, **kwargs) -> None:
-        """Short hand to save the `CircuitTemplate` to a yaml file. After that call, either a new YAML file has been
+        """Shorthand to save the `CircuitTemplate` to a yaml file. After that call, either a new YAML file has been
         created including all template definitions required to reconstruct the `CircuitTemplate` instance, or additional
         operators have been added to the already existing YAML file.
 
@@ -633,7 +633,7 @@ class CircuitTemplate(AbstractBaseTemplate):
         edges = []
         for (source, target, template, _), values in edge_col.items():
 
-            values = deepcopy(values)
+            #values = deepcopy(values)
 
             # update edge template default values with passed edge values,
             if (source, target) in edge_values:

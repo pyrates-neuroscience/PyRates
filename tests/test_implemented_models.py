@@ -133,7 +133,7 @@ def test_3_2_qif_theta():
             # basic theta neuron population
             r4 = integrate("model_templates.neural_mass_models.theta.kmo_theta", simulation_time=T, sampling_step_size=dts,
                            inputs={"p/theta_op/I_ext": inp}, outputs={"z": "p/theta_op/z"}, backend=b,
-                           step_size=dt, clear=True, file_name='m1', vectorize=False, **kwargs)
+                           step_size=dt, clear=True, file_name='m1', vectorize=False, float_precision='complex64', **kwargs)
 
             # translate complex variable z into firing rate r
             z = r4["z"].values
@@ -254,7 +254,7 @@ def test_3_4_kuramoto():
         # assess correct response of kuramoto order parameter mean-field model
         ######################################################################
 
-        # backends that can't handle complex variables
+        # backends that can handle complex variables
         if c:
 
             # define oscillatory input
@@ -264,13 +264,14 @@ def test_3_4_kuramoto():
             # perform simulation
             r3 = integrate("model_templates.oscillators.kuramoto.kmo_mf_2coupled", simulation_time=T,
                            sampling_step_size=dts, outputs={"z1": "p1/kmo_op/z", "z2": "p2/kmo_op/z"}, backend=b,
-                           step_size=dt, solver='scipy', clear=True, file_name='km3', vectorize=v, **kwargs)
+                           step_size=dt, solver='scipy', clear=True, file_name='km3', vectorize=v,
+                           float_precision='complex64', **kwargs)
 
             # perform simulation
             r4 = integrate("model_templates.oscillators.kuramoto.kmo_mf_2coupled", simulation_time=T,
                            sampling_step_size=dts, outputs={"z1": "p1/kmo_op/z", "z2": "p2/kmo_op/z"}, backend=b,
-                           inputs={"p1/kmo_op/s_ext": inp}, step_size=dt,
-                           solver='scipy', clear=True, file_name='km4', vectorize=v, **kwargs)
+                           inputs={"p1/kmo_op/s_ext": inp}, step_size=dt, solver='scipy', clear=True, file_name='km4',
+                           vectorize=v, float_precision='complex64', **kwargs)
 
             # verify that the stimulated model shows stronger synchronization than un-stimulated model
             assert np.abs(r3.iloc[-1, 0]) < np.abs(r4.iloc[-1, 0])

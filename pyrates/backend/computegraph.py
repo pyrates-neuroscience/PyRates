@@ -72,7 +72,7 @@ class ComputeNode:
         self.shape = self._get_shape(shape, def_shape)
         self._value = np.zeros(self.shape)
         self.dtype = dtype
-        self._set_dtype()
+        self.set_dtype()
 
     def reshape(self, shape: tuple, **kwargs):
 
@@ -141,14 +141,17 @@ class ComputeNode:
         # case IV: just ensure the correct data type of the value array
         return np.asarray(value, dtype=dtype)
 
-    def _set_dtype(self):
-        if not self.dtype:
-            if 'float' in str(self.value.dtype):
-                self.dtype = 'float'
-            elif 'complex' in str(self.value.dtype):
-                self.dtype = 'complex'
-            else:
-                self.dtype = 'int'
+    def set_dtype(self, dtype: str = None):
+        if dtype is None:
+            if not self.dtype:
+                if 'float' in str(self.value.dtype):
+                    self.dtype = 'float'
+                elif 'complex' in str(self.value.dtype):
+                    self.dtype = 'complex'
+                else:
+                    self.dtype = 'int'
+        else:
+            self.dtype = dtype
 
     @staticmethod
     def _get_shape(s: Union[tuple, None], s_def: tuple):
@@ -593,7 +596,7 @@ class ComputeGraph(MultiDiGraph):
             for target_var, expr, idx, shape in zip(var_names, expressions, indices, rhs_shapes):
                 try:
                     idx = self.get_var(idx)
-                except (KeyError, AttributeError):
+                except (KeyError, AttributeError, TypeError):
                     pass
                 code_gen.add_var_update(lhs=self.get_var(target_var), rhs=expr, lhs_idx=idx, rhs_shape=shape)
 
@@ -754,7 +757,7 @@ class ComputeGraph(MultiDiGraph):
             if type(n) is ComputeVar:
                 node_names.append(node)
             else:
-                node_names.append(list(self._get_inputs(node))[0])
+                node_names.append(list(self._get_inputs(node))[-1])
             node_keys.append(node)
 
         keys, values, defined_vars, undefined_vars = [], [], [], []
@@ -763,7 +766,7 @@ class ComputeGraph(MultiDiGraph):
 
             for node, update in nodes.copy().items():
 
-                # go through node inputs and check whether other it depends on other equations to be evaluated first
+                # go through node inputs and check whether it depends on other equations to be evaluated first
                 dependent, inp = False, ""
                 for inp in self._get_inputs(update):
                     if inp in node_names:
@@ -828,9 +831,10 @@ class ComputeGraph(MultiDiGraph):
 
         # add new variables to graph and index arguments
         for key, v in new_vars.items():
-            vlabel, _ = self.add_var(label='index', value=v, vtype='constant')
-            idx_str = idx_str.replace(key, vlabel)
-            args.append(vlabel)
+            if key != self.backend.idx_dummy_var:
+                vlabel, _ = self.add_var(label='index', value=v, vtype='constant')
+                idx_str = idx_str.replace(key, vlabel)
+                args.append(vlabel)
 
         return idx_str
 

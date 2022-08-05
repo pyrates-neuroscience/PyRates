@@ -159,16 +159,16 @@ class VectorizedOperatorGraph(DiGraph):
                     op = data["operator"]
                 except KeyError:
                     # need to add this for the copy capability
-                    self.add_operator(op_key, **deepcopy(data))
+                    self.add_operator(op_key, **data)
                 else:
                     self.add_operator(op_key,
-                                      inputs=deepcopy(data["inputs"]),
+                                      inputs=data["inputs"],
                                       equations=list(op.equations),
-                                      variables=deepcopy(op.variables.to_dict()),
+                                      variables=op.variables.to_dict(),
                                       output=op.output)
 
                 # retrieve values from value dict and pass them into variable dictionary of operator
-                op_values = deepcopy(values[op_key])
+                op_values = values[op_key]  #deepcopy(values[op_key])
                 op_vars = self.operators[op_key]["variables"]
                 for var_key, value in op_values.items():
                     if op_vars[var_key]["vtype"] == "input_variable":
