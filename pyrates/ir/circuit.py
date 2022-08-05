@@ -664,14 +664,6 @@ class NetworkGraph(AbstractBaseIR):
             if dot_edge:
 
                 # create weight matrix
-                # OLD CODE:
-                # weight_mat = np.zeros((tsize, ssize))
-                # for row, col, w in zip(tidx, sidx, weight):
-                #     weight_mat[row, col] = w
-                #
-                # # define edge projection equation
-                # eq = f"{t_str} = matvec({w_str},{s_str})"
-                # args[w_str] = {'vtype': 'constant', 'value': weight_mat, 'dtype': 'float', 'shape': weight_mat.shape}
                 sidx_unique = np.unique(sidx)
                 tidx_unique = np.unique(tidx)
                 weight_mat = np.zeros((len(tidx_unique), len(sidx_unique)))
@@ -699,14 +691,17 @@ class NetworkGraph(AbstractBaseIR):
                     ssize = 0
                 else:
                     s_str_final = s_str
-                    ssize = len(weight)
+                    if len(np.unique(weight)) == 1:
+                        ssize = 1
+                    else:
+                        ssize = len(weight)
 
                 # check wether weighting of source variables is required
                 if all([abs(w-1) < weight_minimum for w in weight]):
                     weighting = ""
                 else:
                     weighting = f" * {w_str}"
-                    args[w_str] = {'vtype': 'constant', 'dtype': 'float', 'value': weight}
+                    args[w_str] = {'vtype': 'constant', 'dtype': 'float', 'value': weight if ssize > 1 else weight[0]}
 
                 # define edge equation
                 if n > 1:
@@ -1273,8 +1268,11 @@ class CircuitIR(AbstractBaseIR):
             return v
         if len(np.unique(v['value'])) > 1:
             return v
-        v['value'] = v['value'][0]
-        v['shape'] = tuple()
+        try:
+            v['value'] = v['value'][0]
+            v['shape'] = tuple()
+        except TypeError:
+            pass
         return v
 
     @staticmethod

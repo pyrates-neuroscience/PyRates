@@ -243,6 +243,7 @@ def _parse_defaults(expr: Union[str, int, float]) -> dict:
     variable type and default value of the variable."""
 
     value = 0.
+    shape = (1,)
     if isinstance(expr, int):
         vtype = "constant"
         value = expr
@@ -273,9 +274,9 @@ def _parse_defaults(expr: Union[str, int, float]) -> dict:
                 except ValueError:
                     raise ValueError(f"Unable to interpret variable type in default definition {expr}.")
 
-        dtype, value = _get_variable_info(expr, value)
+        dtype, value, shape = _get_variable_info(expr, value)
 
-    return {'vtype': vtype, 'dtype': dtype, 'value': value, 'shape': (1,)}
+    return {'vtype': vtype, 'dtype': dtype, 'value': value, 'shape': shape}
 
 
 def _separate_variables(variables: dict):
@@ -298,7 +299,8 @@ def _separate_variables(variables: dict):
 
 
 def _get_variable_info(expr: Union[str, int, float], value: Union[int, complex, float]) -> tuple:
-    # set dtype and value
+    # set dtype and value and shape
+    shape = (1,)
     if expr.endswith("(float)"):
         dtype = "float"
     elif expr.endswith("(complex)"):
@@ -307,7 +309,14 @@ def _get_variable_info(expr: Union[str, int, float], value: Union[int, complex, 
             value = complex(value, value)
     elif "(" in expr:
         expr = expr.split("(")[1][:-1]
-        dtype, value = _get_variable_info(expr, value)
+        if "," in expr:
+            expr, var_len = expr.split(",")
+            var_len = int(var_len)
+            dtype, value, _ = _get_variable_info(expr, value)
+            value = [value for _ in range(var_len)]
+            shape = (var_len,)
+        else:
+            dtype, value, shape = _get_variable_info(expr, value)
     else:
         try:
             value = float(expr)
@@ -319,4 +328,4 @@ def _get_variable_info(expr: Union[str, int, float], value: Union[int, complex, 
             except ValueError:
                 dtype = "float"  # base assumption
 
-    return dtype, value
+    return dtype, value, shape

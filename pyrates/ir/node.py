@@ -80,7 +80,7 @@ def cache_func(label: str, operators: dict, values: dict = None, template: str =
                             pass
 
         # extend cached node
-        node.extend(NodeIR(label, operators=op_graph, values=values, template=template), **kwargs)
+        var_ranges = node.extend(NodeIR(label, operators=op_graph, values=values, template=template), **kwargs)
 
     except KeyError:
 
@@ -91,8 +91,9 @@ def cache_func(label: str, operators: dict, values: dict = None, template: str =
         node = ir_class(label, operators=op_graph, values=values, template=template, **kwargs)
         node_cache[h] = node
         node_labels.append(label)
+        var_ranges = {key: (0, val) for key, val in node.op_graph.var_lengths.items()}
 
-    return node, changed_labels
+    return node, changed_labels, var_ranges
 
 
 class NodeIR(AbstractBaseIR):
@@ -127,7 +128,7 @@ class NodeIR(AbstractBaseIR):
 class VectorizedNodeIR(AbstractBaseIR):
     """Alternate version of NodeIR that takes a full NodeIR as input and creates a vectorized form of it."""
 
-    __slots__ = ["op_graph", "length"]
+    __slots__ = ["op_graph", "length", "_var_lengths"]
 
     def __init__(self, label: str, operators: OperatorGraph, values: dict = None, template: str = None):
 
@@ -154,7 +155,7 @@ class VectorizedNodeIR(AbstractBaseIR):
     def __hash__(self):
         raise NotImplementedError
 
-    def extend(self, node: NodeIR):
+    def extend(self, node: NodeIR) -> dict:
         """ Extend variables vectors by values from one additional node.
 
         Parameters
@@ -164,12 +165,14 @@ class VectorizedNodeIR(AbstractBaseIR):
 
         Returns
         -------
+        dict
+            Dictionary containing the indices of the appended variable values in the overall vectorized variables.
         """
 
         # add values to respective lists in collapsed node
-        self.op_graph.append_values(node.values)
-
+        var_ranges = self.op_graph.append_values(node.values)
         self.length += 1
+        return var_ranges
 
     def __len__(self):
         """Returns size of this vector node as recorded in self._length.

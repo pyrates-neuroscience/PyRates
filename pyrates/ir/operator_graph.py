@@ -224,7 +224,7 @@ class VectorizedOperatorGraph(DiGraph):
         # else:
         return self.nodes
 
-    def append_values(self, value_dict: dict):
+    def append_values(self, value_dict: dict) -> dict:
         """Append value along vector dimension of operators.
 
         Parameters
@@ -233,9 +233,10 @@ class VectorizedOperatorGraph(DiGraph):
 
         Returns
         -------
-
+        dict
+            Dictionary containing the indices of the appended variable values in the overall vectorized variables.
         """
-
+        var_ranges = {}
         for op_key, variables_updates in value_dict.items():
             original_variables = self.nodes[op_key]["variables"]
             for var_key, value in variables_updates.items():
@@ -255,4 +256,18 @@ class VectorizedOperatorGraph(DiGraph):
                     var["value"].extend(value)
 
                 # also recompute shape
+                old_shape = var["shape"]
                 var["shape"] = _np.shape(var["value"])
+                var_ranges[f"{op_key}/{var_key}"] = (old_shape[0], var['shape'][0])
+
+        return var_ranges
+
+    @property
+    def var_lengths(self) -> dict:
+        """Dictionary containing the length of each variable of each operator.
+        """
+        var_lengths = {}
+        for op in self.operators:
+            for var, data in self.nodes[op]['variables'].items():
+                var_lengths[f"{op}/{var}"] = data['shape'][0] if data['shape'] else 1
+        return var_lengths

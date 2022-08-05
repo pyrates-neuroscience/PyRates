@@ -969,9 +969,10 @@ class CircuitTemplate(AbstractBaseTemplate):
                 if len(target_nodes) == 1:
 
                     # extract index for single output node
-                    backend_key = self._relabel_var(f"{target_nodes[0]}/{out_op}/{out_var}", self._vectorization_labels)
-                    idx = indices[target_nodes[0]]
-                    out_map[key] = [idx]
+                    var_key = f"{target_nodes[0]}/{out_op}/{out_var}"
+                    backend_key = self._relabel_var(var_key, self._vectorization_labels)
+                    idx = indices[var_key]
+                    out_map[key] = idx
                     out_vars[key] = backend_key
 
                 elif target_nodes:
@@ -979,11 +980,11 @@ class CircuitTemplate(AbstractBaseTemplate):
                     # extract index for multiple output nodes
                     out_map[key] = {}
                     for t in target_nodes:
-                        key2 = f"{t}/{out_op}/{out_var}"
-                        backend_key = self._relabel_var(key2, self._vectorization_labels)
-                        idx = indices[t]
-                        out_map[key][key2] = [idx]
-                        out_vars[key2] = backend_key
+                        var_key = f"{t}/{out_op}/{out_var}"
+                        backend_key = self._relabel_var(var_key, self._vectorization_labels)
+                        idx = indices[var_key]
+                        out_map[key][var_key] = idx
+                        out_vars[var_key] = backend_key
 
         else:
 
@@ -995,8 +996,8 @@ class CircuitTemplate(AbstractBaseTemplate):
             for t in target_nodes:
                 key = f"{t}/{out_op}/{out_var}"
                 backend_key = self._relabel_var(key, self._vectorization_labels)
-                idx = indices[t]
-                out_map[key] = [idx]
+                idx = indices[key]
+                out_map[key] = idx
                 out_vars[key] = backend_key
 
         return out_map, out_vars
@@ -1030,9 +1031,10 @@ class CircuitTemplate(AbstractBaseTemplate):
         for node in node_keys:
             updates = values[node] if node in values else {}
             node_template = self.get_node_template(node)
-            node_ir, label_map_tmp = node_template.apply(values=updates, label=node, vectorize=vectorize)
+            node_ir, label_map_tmp, var_ranges = node_template.apply(values=updates, label=node, vectorize=vectorize)
             nodes[node_ir.label] = node_ir
-            indices[node] = node_ir.length - 1
+            for opvar, (start, stop) in var_ranges.items():
+                indices[f"{node}/{opvar}"] = list(np.arange(start, stop))
             for key, val in label_map_tmp.items():
                 label_map[f"{node}/{key}"] = f"{node_ir.label}/{val}"
             else:
@@ -1177,18 +1179,14 @@ class CircuitTemplate(AbstractBaseTemplate):
 
             edge_dict = deepcopy(edge_dict)
 
-            # extract variable info
-            *s_node, s_op, s_var = source.split('/')
-            *t_node, t_op, t_var = target.split('/')
-            s_node = '/'.join(s_node)
-            t_node = '/'.join(t_node)
-
             # relabel variables according to variable map (accounting for vectorization)
             source_new = self._relabel_var(source, label_map)
             target_new = self._relabel_var(target, label_map)
 
-            s_idx = indices[s_node]
-            t_idx = indices[t_node]
+            # extract indices of source and target variables in their respective vectors
+            s_idx = indices[source]
+            t_idx = indices[target]
+            edge_len = len(s_idx)
 
             # group edges that connect the same vectorized node variables via the same edge templates
             if (source_new, target_new, template, delayed) in edge_col:
@@ -1196,12 +1194,14 @@ class CircuitTemplate(AbstractBaseTemplate):
                 # extend edge dict by edge variables
                 base_dict = edge_col[(source_new, target_new, template, delayed)]
                 for key, val in edge_dict.items():
+                    if type(val) is not str:
+                        val = [val] * edge_len
                     try:
-                        base_dict[key].append(val)
+                        base_dict[key].extend(val)
                     except AttributeError:
-                        base_dict[key] = [base_dict[key], val]
-                base_dict['source_idx'].append(s_idx)
-                base_dict['target_idx'].append(t_idx)
+                        base_dict[key] = [base_dict[key]].extend(val)
+                base_dict['source_idx'].extend(s_idx)
+                base_dict['target_idx'].extend(t_idx)
 
             else:
 
@@ -1210,9 +1210,9 @@ class CircuitTemplate(AbstractBaseTemplate):
                     if type(val) is str:
                         edge_dict[key] = val
                     else:
-                        edge_dict[key] = [val]
-                edge_dict['source_idx'] = [s_idx]
-                edge_dict['target_idx'] = [t_idx]
+                        edge_dict[key] = [val]*edge_len
+                edge_dict['source_idx'] = s_idx
+                edge_dict['target_idx'] = t_idx
 
                 # add edge dict to edge collection
                 edge_col[(source_new, target_new, template, delayed)] = edge_dict
@@ -1246,16 +1246,15 @@ class CircuitTemplate(AbstractBaseTemplate):
                 else:
                     source_key = self._relabel_var(source, label_map)
                     try:
-                        *snode, _, _ = source.split('/')
-                        idx = indices['/'.join(snode)]
+                        idx = indices[source]
                     except KeyError:
-                        idx = 0
+                        idx = [0]
 
                 # add source variable information to dict
                 try:
-                    source_dict[source_key].append(idx)
+                    source_dict[source_key].extend(idx)
                 except KeyError:
-                    source_dict[source_key] = [idx]
+                    source_dict[source_key] = idx
 
             edge_sources[self._relabel_var(key, label_map)] = source_dict
 
@@ -1265,7 +1264,7 @@ class CircuitTemplate(AbstractBaseTemplate):
     def _apply_edge(edge: EdgeTemplate, values: dict, nodes: dict, label_map: dict, vectorize: bool = True):
 
         # apply edge template
-        edge_ir, label_map_tmp = edge.apply(values=values, vectorize=vectorize)  # type: EdgeIR, dict
+        edge_ir, label_map_tmp, _ = edge.apply(values=values, vectorize=vectorize)  # type: EdgeIR, dict
 
         # save edge ir references to dictionaries (treat it as a node)
         nodes[edge_ir.label] = edge_ir
