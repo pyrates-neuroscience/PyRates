@@ -971,8 +971,7 @@ class CircuitTemplate(AbstractBaseTemplate):
                     # extract index for single output node
                     var_key = f"{target_nodes[0]}/{out_op}/{out_var}"
                     backend_key = self._relabel_var(var_key, self._vectorization_labels)
-                    idx = indices[var_key]
-                    out_map[key] = idx
+                    out_map[key] = indices[var_key]
                     out_vars[key] = backend_key
 
                 elif target_nodes:
@@ -982,8 +981,7 @@ class CircuitTemplate(AbstractBaseTemplate):
                     for t in target_nodes:
                         var_key = f"{t}/{out_op}/{out_var}"
                         backend_key = self._relabel_var(var_key, self._vectorization_labels)
-                        idx = indices[var_key]
-                        out_map[key][var_key] = idx
+                        out_map[key][var_key] = indices[var_key]
                         out_vars[var_key] = backend_key
 
         else:
@@ -996,8 +994,7 @@ class CircuitTemplate(AbstractBaseTemplate):
             for t in target_nodes:
                 key = f"{t}/{out_op}/{out_var}"
                 backend_key = self._relabel_var(key, self._vectorization_labels)
-                idx = indices[key]
-                out_map[key] = idx
+                out_map[key] = indices[key]
                 out_vars[key] = backend_key
 
         return out_map, out_vars
@@ -1033,8 +1030,11 @@ class CircuitTemplate(AbstractBaseTemplate):
             node_template = self.get_node_template(node)
             node_ir, label_map_tmp, var_ranges = node_template.apply(values=updates, label=node, vectorize=vectorize)
             nodes[node_ir.label] = node_ir
-            for opvar, (start, stop) in var_ranges.items():
-                indices[f"{node}/{opvar}"] = list(np.arange(start, stop))
+            new_ops, orig_ops = list(label_map_tmp.values()), list(label_map_tmp.keys())
+            for (op, var), (start, stop) in var_ranges.items():
+                if op in new_ops:
+                    op = orig_ops[new_ops.index(op)]
+                indices[f"{node}/{op}/{var}"] = list(np.arange(start, stop))
             for key, val in label_map_tmp.items():
                 label_map[f"{node}/{key}"] = f"{node_ir.label}/{val}"
             else:
@@ -1196,10 +1196,7 @@ class CircuitTemplate(AbstractBaseTemplate):
                 for key, val in edge_dict.items():
                     if type(val) is not str:
                         val = [val] * edge_len
-                    try:
                         base_dict[key].extend(val)
-                    except AttributeError:
-                        base_dict[key] = [base_dict[key]].extend(val)
                 base_dict['source_idx'].extend(s_idx)
                 base_dict['target_idx'].extend(t_idx)
 
@@ -1211,8 +1208,8 @@ class CircuitTemplate(AbstractBaseTemplate):
                         edge_dict[key] = val
                     else:
                         edge_dict[key] = [val]*edge_len
-                edge_dict['source_idx'] = s_idx
-                edge_dict['target_idx'] = t_idx
+                edge_dict['source_idx'] = list(s_idx)
+                edge_dict['target_idx'] = list(t_idx)
 
                 # add edge dict to edge collection
                 edge_col[(source_new, target_new, template, delayed)] = edge_dict
@@ -1242,7 +1239,7 @@ class CircuitTemplate(AbstractBaseTemplate):
                 # add new mapping from edge source to edge input variable
                 if source == 'source':
                     source_key = orig_source
-                    idx = source_idx[i]
+                    idx = [source_idx[i]]
                 else:
                     source_key = self._relabel_var(source, label_map)
                     try:
@@ -1254,7 +1251,7 @@ class CircuitTemplate(AbstractBaseTemplate):
                 try:
                     source_dict[source_key].extend(idx)
                 except KeyError:
-                    source_dict[source_key] = idx
+                    source_dict[source_key] = list(idx)
 
             edge_sources[self._relabel_var(key, label_map)] = source_dict
 

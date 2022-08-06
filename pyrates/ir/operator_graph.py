@@ -258,7 +258,7 @@ class VectorizedOperatorGraph(DiGraph):
                 # also recompute shape
                 old_shape = var["shape"]
                 var["shape"] = _np.shape(var["value"])
-                var_ranges[f"{op_key}/{var_key}"] = (old_shape[0], var['shape'][0])
+                var_ranges[(op_key, var_key)] = (old_shape[0], var['shape'][0])
 
         return var_ranges
 
@@ -269,5 +269,5 @@ class VectorizedOperatorGraph(DiGraph):
         var_lengths = {}
         for op in self.operators:
             for var, data in self.nodes[op]['variables'].items():
-                var_lengths[f"{op}/{var}"] = data['shape'][0] if data['shape'] else 1
+                var_lengths[(op, var)] = data['shape'][0] if data['shape'] else 1
         return var_lengths

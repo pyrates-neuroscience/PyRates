@@ -34,6 +34,7 @@ __author__ = "Daniel Rose"
 __status__ = "Development"
 
 import pytest
+import numpy as np
 
 
 def setup_module():
@@ -144,8 +145,8 @@ def test_circuit_instantiation():
 
     # test whether calling apply translated the template into a proper intermediate representation
     assert type(ir.graph) is ComputeGraph
-    assert circuit._vectorization_indices['pc'] == 0
-    assert len(circuit._vectorization_indices) == 3
+    assert circuit._vectorization_indices['pc/pro/s'] == [0]
+    assert len(np.unique(list(circuit._vectorization_indices.values()))) == 2
     assert len(circuit._vectorization_labels) == 3
     assert type(ir._front_to_back['pc/pro/m']) is ComputeVar
 
