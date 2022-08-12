@@ -137,6 +137,7 @@ class CircuitTemplate(AbstractBaseTemplate):
         self._depth = self._get_hierarchy_depth()
         self._vectorization_labels = {}
         self._vectorization_indices = {}
+        self._state_var_indices = {}
 
     def to_yaml(self, path, **kwargs) -> None:
         """Shorthand to save the `CircuitTemplate` to a yaml file. After that call, either a new YAML file has been
@@ -263,9 +264,11 @@ class CircuitTemplate(AbstractBaseTemplate):
             target_nodes = self.get_nodes(node_identifier=node, var_identifier=(op, var))
             if not target_nodes:
                 warn(PyRatesWarning(f'Variable {var} has not been found on operator {op} of node {node[0]}.'))
-            for n in target_nodes:
+            n_nodes = len(target_nodes)
+            for i, n in enumerate(target_nodes):
                 node_temp = deepcopy(self.get_node_template(n))
-                node_temp.update_var(op=op, var=var, val=val)
+                val_tmp = val[i] if hasattr(val, 'shape') and val.shape[0] == n_nodes else val
+                node_temp.update_var(op=op, var=var, val=val_tmp)
                 self.add_node_template(n, template=node_temp)
 
         # updates to edge variable values
@@ -276,7 +279,7 @@ class CircuitTemplate(AbstractBaseTemplate):
         return self
 
     def add_edges_from_matrix(self, source_var: str, target_var: str, nodes: list, weight=None, template=None,
-                              edge_attr: dict = None) -> None:
+                              edge_attr: dict = None, min_weight: float = 1e-6) -> None:
         """Adds all possible edges between the `source_var` and `target_var` of all passed `nodes`. `Weight` and `Delay`
         need to be arrays containing scalars for each of those edges.
 
@@ -295,6 +298,8 @@ class CircuitTemplate(AbstractBaseTemplate):
             Can be link to edge template that should be used for each edge.
         edge_attr
             Additional edge attributes. Can either be N x N matrices or other scalars/objects.
+        min_weight
+            Minimum absolute value a weight needs to have in order to be implemented as an edge.
 
         Returns
         -------
@@ -310,7 +315,7 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         # weights and delays
         if weight is None:
-            weight = 1.0
+            weight = np.ones((len(nodes), len(nodes)))
         edge_attributes = {'weight': weight}
 
         # add rest of the attributes
@@ -330,23 +335,25 @@ class CircuitTemplate(AbstractBaseTemplate):
         for i, source in enumerate(nodes):
             for j, target in enumerate(nodes):
 
-                if source not in self.nodes:
-                    raise ValueError(f'Node {source} is not defined on this CircuitTemplate instance.')
-                if target not in self.nodes:
-                    raise ValueError(f'Node {target} is not defined on this CircuitTemplate instance.')
+                if np.abs(weight[j, i]) > min_weight:
 
-                edge_attributes_tmp = {}
+                    if source not in self.nodes:
+                        raise ValueError(f'Node {source} is not defined on this CircuitTemplate instance.')
+                    if target not in self.nodes:
+                        raise ValueError(f'Node {target} is not defined on this CircuitTemplate instance.')
 
-                # extract edge attribute value from matrices
-                for key, attr in matrix_attributes.items():
-                    edge_attributes_tmp[key] = attr[j, i]
+                    edge_attributes_tmp = {}
 
-                # add remaining attributes
-                edge_attributes_tmp.update(edge_attributes.copy())
+                    # extract edge attribute value from matrices
+                    for key, attr in matrix_attributes.items():
+                        edge_attributes_tmp[key] = attr[j, i]
 
-                # add edge to list
-                source_key, target_key = f"{source}/{source_var}", f"{target}/{target_var}"
-                edges.append((source_key, target_key, template, edge_attributes_tmp))
+                    # add remaining attributes
+                    edge_attributes_tmp.update(edge_attributes.copy())
+
+                    # add edge to list
+                    source_key, target_key = f"{source}/{source_var}", f"{target}/{target_var}"
+                    edges.append((source_key, target_key, template, edge_attributes_tmp))
 
         # add edges to network
         self.update_template(edges=edges, in_place=True)
@@ -499,7 +506,7 @@ class CircuitTemplate(AbstractBaseTemplate):
 
     def get_run_func(self, func_name: str, step_size: float, inputs: Optional[dict] = None, backend: str = None,
                      vectorize: bool = True, verbose: bool = True, clear: bool = False, in_place: bool = True, **kwargs
-                     ) -> Tuple[Callable, tuple, tuple]:
+                     ) -> Tuple[Callable, tuple, tuple, dict]:
         """Generate a function that evaluates the vector field of the dynamical system represented by this
         `CircuitTemplate` instance.
 
@@ -540,8 +547,9 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         Returns
         -------
-        Tuple[Callable, tuple, tuple]
-            The vector field evaluation function, all its positional arguments, and the argument keys.
+        Tuple[Callable, tuple, tuple, dict]
+            The vector field evaluation function, all its positional arguments, the argument keys, and the indices of
+            the different state variables in the state vector.
 
         """
 
@@ -560,14 +568,16 @@ class CircuitTemplate(AbstractBaseTemplate):
                   vectorize=vectorize, **kwargs)
 
         # generate the run function
-        func, args, arg_names = net._ir.get_run_func(func_name=func_name, step_size=step_size, **kwargs)
+        func, args, arg_names, state_var_indices = net._ir.get_run_func(func_name=func_name, step_size=step_size,
+                                                                        **kwargs)
+        self._state_var_indices = state_var_indices
 
         # clear the network temporary files
         if clear:
             net.clear()
         self._ir = net._ir
 
-        return func, args, arg_names
+        return func, args, arg_names, state_var_indices
 
     def apply(self, adaptive_steps: bool = None, label: str = None, node_values: dict = None, edge_values: dict = None,
               vectorize: bool = True, verbose: bool = True, **kwargs) -> None:
@@ -632,8 +642,6 @@ class CircuitTemplate(AbstractBaseTemplate):
         # create final set of vectorized edges
         edges = []
         for (source, target, template, _), values in edge_col.items():
-
-            #values = deepcopy(values)
 
             # update edge template default values with passed edge values,
             if (source, target) in edge_values:
@@ -938,6 +946,26 @@ class CircuitTemplate(AbstractBaseTemplate):
             idx = 0
         return self._edge_map[(source, target, idx)]
 
+    def get_var(self, var: str) -> tuple:
+        """
+
+        Parameters
+        ----------
+        var
+            Identifier of variable in the network.
+
+        Returns
+        -------
+        tuple
+            2-entry tuple: (1) Backend variable, (2) index of requested variable in the backend variable.
+        """
+
+        *node, op, var = var.split('/')
+        nodes = self.get_nodes(node, var_identifier=(op, var))
+        backend_var = self._ir.get_var(f"{nodes[0]}/{op}/{var}")
+        idx = [self._get_var_idx(f"{n}/{op}/{var}") for n in nodes]
+        return backend_var, idx
+
     def get_variable_positions(self, outputs: Union[dict, str]) -> tuple:
         """Finds the indices of variables in the system state vector as well as the backend variables from which the
         variables can be extracted via the indices.
@@ -956,7 +984,6 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         out_map = {}
         out_vars = {}
-        indices = self._vectorization_indices
 
         if type(outputs) is dict:
             for key, out in outputs.items():
@@ -971,7 +998,7 @@ class CircuitTemplate(AbstractBaseTemplate):
                     # extract index for single output node
                     var_key = f"{target_nodes[0]}/{out_op}/{out_var}"
                     backend_key = self._relabel_var(var_key, self._vectorization_labels)
-                    out_map[key] = indices[var_key]
+                    out_map[key] = self._get_var_idx(var_key)
                     out_vars[key] = backend_key
 
                 elif target_nodes:
@@ -981,7 +1008,7 @@ class CircuitTemplate(AbstractBaseTemplate):
                     for t in target_nodes:
                         var_key = f"{t}/{out_op}/{out_var}"
                         backend_key = self._relabel_var(var_key, self._vectorization_labels)
-                        out_map[key][var_key] = indices[var_key]
+                        out_map[key][var_key] = self._get_var_idx(var_key)
                         out_vars[var_key] = backend_key
 
         else:
@@ -994,7 +1021,7 @@ class CircuitTemplate(AbstractBaseTemplate):
             for t in target_nodes:
                 key = f"{t}/{out_op}/{out_var}"
                 backend_key = self._relabel_var(key, self._vectorization_labels)
-                out_map[key] = indices[key]
+                out_map[key] = self._get_var_idx(key)
                 out_vars[key] = backend_key
 
         return out_map, out_vars
@@ -1020,6 +1047,14 @@ class CircuitTemplate(AbstractBaseTemplate):
         """Instance of `pyrates.backend.computegraph.ComputeGraph` that contains a graph representation of all
         network equations that this `CircuitTemplate` contains."""
         return self._ir.graph
+
+    def _get_var_idx(self, var: str) -> list:
+        idx = self._vectorization_indices[var]
+        try:
+            *n, o, v = var.split('/')
+            return np.arange(*self._state_var_indices[v])[idx]
+        except KeyError:
+            return idx
 
     def _apply_nodes(self, node_keys: list, values: dict, vectorize: bool = True) -> dict:
         nodes = {}

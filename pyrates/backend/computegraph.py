@@ -451,7 +451,7 @@ class ComputeGraph(MultiDiGraph):
             else:
                 fargs.append(self.get_var(arg, from_backend=True))
 
-        return func, tuple(fargs), tuple(func_args)
+        return func, tuple(fargs), tuple(func_args), self._state_var_indices.copy()
 
     def run(self, func: Callable, func_args: tuple, T: float, dt: float, dts: Optional[float] = None,
             outputs: Optional[dict] = None, **kwargs):
