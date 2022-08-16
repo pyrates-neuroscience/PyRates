@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.15
+
+### 0.15.0
+
+- added support for models with vectorized state-variables
+- improved performance of edge operations
+- more detailed output about returned function arguments when calling `CircuitTemplate.get_run_func`
+- improved memory consumption during model initialization
+- complex-valued models use complex variable types for all variables and parameters now, to prevent type conversions
+- added a new method `CircuitTemplate.get_var` that allows users to access backend variables after calling `CircuitTemplate.get_run_func`
+- added automated reduction of vectorized constants, if all constants are identical
+- added possibility to pass iterables to `CircuitTemplate.update_var`, thus allowing to update vectorized variables in one go
+- updated `CircuitTemplate.add_edges_from_matrix` such that only edges with non-zero weights are added to the `CircuitTemplate` instance
+
 ## 0.14
 
 ### 0.14.3
