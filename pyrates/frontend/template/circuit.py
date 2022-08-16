@@ -28,7 +28,7 @@
 """Basic neural mass backend class plus derivations of it.
 
 This module includes the base circuit class that manages the set-up and simulation of population networks. Additionally,
-it features various sub-classes that act as circuit constructors and allow to build circuits based on different input
+it features various subclasses that act as circuit constructors and allow to build circuits based on different input
 arguments. For more detailed descriptions, see the respective docstrings.
 
 """
