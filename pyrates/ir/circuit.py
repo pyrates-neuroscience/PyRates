@@ -433,7 +433,7 @@ class NetworkGraph(AbstractBaseIR):
                                                           'shape': (len(source_idx_tmp[idx]),),
                                                           'value': source_idx_tmp[idx]}
                 elif i != 0 and idx_apply:
-                    var_prev_idx = get_indexed_var_str(var_prev, idx_str, var_length=len(rates_tmp))
+                    var_prev_idx = _get_indexed_var_str(var_prev, idx_str, var_length=len(rates_tmp))
                 else:
                     var_prev_idx = var_prev
 
@@ -492,8 +492,8 @@ class NetworkGraph(AbstractBaseIR):
             # create edge buffer variable
             buffer_length = len(delays)
             for i, idx_l, idx_r in final_idx:
-                lhs = get_indexed_var_str(f"{var}_buffered{buffer_id}", idx_l, var_length=buffer_length)
-                rhs = get_indexed_var_str(f"{var}_d{i}{buffer_id}" if i != 0 else var, idx_r, var_length=buffer_length)
+                lhs = _get_indexed_var_str(f"{var}_buffered{buffer_id}", idx_l, var_length=buffer_length)
+                rhs = _get_indexed_var_str(f"{var}_d{i}{buffer_id}" if i != 0 else var, idx_r, var_length=buffer_length)
                 buffer_eqs.append(f"{lhs} = {rhs}")
             var_dict[f"{var}_buffered{buffer_id}"] = {'vtype': 'variable',
                                                       'dtype': 'float',
@@ -673,28 +673,13 @@ class NetworkGraph(AbstractBaseIR):
                     weight_mat[row, col] = w
 
                 # define edge projection equation
-                eq = f"index({t_str}, {tidx_str}) = matvec({w_str}, index({s_str}, {sidx_str}))"
+                s_str_final = _get_indexed_var_str(s_str, sidx_unique, ssize, idx_str=sidx_str, arg_dict=args)
+                t_str_final = _get_indexed_var_str(t_str, tidx_unique, tsize, idx_str=tidx_str, arg_dict=args)
+                eq = f"{t_str_final} = matvec({w_str}, {s_str_final})"
                 args[w_str] = {'vtype': 'constant', 'value': weight_mat, 'dtype': 'float', 'shape': weight_mat.shape}
-                args[tidx_str] = {'vtype': 'constant', 'value': tidx_unique, 'dtype': 'int', 'shape': tidx_unique.shape}
-                args[sidx_str] = {'vtype': 'constant', 'value': sidx_unique, 'dtype': 'int', 'shape': sidx_unique.shape}
 
             # case II: realize edge projection via source and target indexing
             else:
-
-                # check whether source variable requires indexing
-                if m > 1 or (ssize > 1 and m):
-                    ssize = len(sidx)
-                    s_str_final = f"index({s_str},{sidx_str})"
-                    args[sidx_str] = {'vtype': 'constant', 'value': sidx, 'dtype': 'int', 'shape': (ssize,)}
-                elif m == 1 and tsize > 1 and n == 1:
-                    s_str_final = f"index({s_str},{sidx[0]})"
-                    ssize = 0
-                else:
-                    s_str_final = s_str
-                    if len(np.unique(weight)) == 1:
-                        ssize = 1
-                    else:
-                        ssize = len(weight)
 
                 # check wether weighting of source variables is required
                 if all([abs(w-1) < weight_minimum for w in weight]):
@@ -703,14 +688,14 @@ class NetworkGraph(AbstractBaseIR):
                     weighting = f" * {w_str}"
                     args[w_str] = {'vtype': 'constant', 'dtype': 'float', 'value': weight if ssize > 1 else weight[0]}
 
+                # get final source and target strings
+                s_str_final = _get_indexed_var_str(s_str, sidx, ssize, reduce=m == 1 and tsize > 1 and n == 1,
+                                                   idx_str=sidx_str, arg_dict=args)
+                t_str_final = _get_indexed_var_str(t_str, tidx, tsize, reduce=tsize > 1 or ssize < tsize,
+                                                   idx_str=sidx_str, arg_dict=args)
+
                 # define edge equation
-                if n > 1:
-                    eq = f"index({t_str}, {tidx_str}) = {s_str_final}{weighting}"
-                    args[tidx_str] = {'vtype': 'constant', 'dtype': 'int', 'value': tidx, 'shape': (len(tidx),)}
-                elif tsize > 1 or ssize < tsize:
-                    eq = f"index({t_str}, {tidx[0]}) = {s_str_final}{weighting}"
-                else:
-                    eq = f"{t_str} = {s_str_final}{weighting}"
+                eq = f"{t_str_final} = {s_str_final}{weighting}"
 
             # add equation and source information
             eqs.append(eq)
@@ -1333,15 +1318,39 @@ class CircuitIR(AbstractBaseIR):
         return self.graph.edges
 
 
-def get_indexed_var_str(var: str, idx: Union[tuple, str], var_length: int = None):
+def _get_indexed_var_str(var: str, idx: Union[tuple, str, list], var_length: int = None, reduce: bool = False,
+                         idx_str: str = None, arg_dict: dict = None):
     if type(idx) is tuple:
         if var_length and int(idx[1]) - int(idx[0]) == var_length:
             return var
         elif not var_length:
             var = f"reshape({var}, 1)"
         return f"index_range({var}, {idx[0]}, {idx[1]})"
-    if idx:
+    if type(idx) is str and len(idx) > 0:
         if not var_length:
             var = f"reshape({var}, 1)"
         return f"index({var}, {idx})"
+    if len(idx) > 0:
+        if len(idx) == var_length:
+            identical = True
+            for i1, i2 in zip(idx, list(np.arange(0, var_length))):
+                if i1 != i2:
+                    identical = False
+                    break
+            if identical:
+                return var
+        if idx_str:
+            arg_dict[idx_str] = {'vtype': 'constant', 'value': idx, 'dtype': 'int', 'shape': (len(idx),)}
+            return f"index({var}, {idx_str})"
+        return f"index({var}, {idx})"
+    if reduce:
+        return f"index({var}, {idx[0]})"
     return var
+
+
+def _get_source_str():
+    pass
+
+
+def _get_target_str():
+    pass
