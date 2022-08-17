@@ -2,6 +2,10 @@
 
 ## 0.15
 
+### 0.15.1
+
+- added generic method for state variable indexing to circuit.py that is used for all edge-related indexing operations now (replacing multiple, slightly different implementations at various places in circuit.py)
+
 ### 0.15.0
 
 - added support for models with vectorized state-variables
