@@ -133,8 +133,7 @@ class BaseBackend(CodeGen):
         self._imports = ["from numpy import pi, sqrt"]
         if imports:
             for imp in imports:
-                if imp not in self._imports:
-                    self._imports.append(imp)
+                self.add_import(imp)
 
         # public attributes
         self.add_hist_arg = kwargs.pop('add_hist_arg', True)
@@ -178,9 +177,7 @@ class BaseBackend(CodeGen):
         if 'imports' in func_info:
             for imp in func_info['imports']:
                 *in_path, in_func = imp.split('.')
-                import_line = f"from {'.'.join(in_path)} import {in_func}"
-                if import_line not in self._imports:
-                    self._imports.append(import_line)
+                self.add_import(f"from {'.'.join(in_path)} import {in_func}")
 
         if 'def' in func_info:
 
@@ -226,6 +223,10 @@ class BaseBackend(CodeGen):
         idx = self._process_idx(state_idx)
         d = self._process_delay(delay)
         self.add_code_line(f"{lhs} = hist(t-{d})[{idx}]")
+
+    def add_import(self, line: str):
+        if line not in self._imports:
+            self._imports.append(line)
 
     def create_index_str(self, idx: Union[str, int, tuple], separator: str = ',', apply: bool = True,
                          **kwargs) -> Tuple[str, dict]:

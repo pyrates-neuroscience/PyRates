@@ -82,4 +82,5 @@ torch_funcs = {
     'conj': {'call': 'conj', 'func': np.conjugate, 'imports': ['torch.conj']},
     'absv': {'call': 'abs', 'func': np.abs, 'imports': ['torch.abs']},
     'log': {'call': 'log', 'func': np.log, 'imports': ['torch.log']},
+    'concatenate': {'call': 'concat', 'func': np.concatenate, 'imports': ['torch.concat']}
 }

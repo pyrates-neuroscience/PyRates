@@ -58,6 +58,12 @@ function z = matmul(x,y)
 end
 """
 
+concat = """
+function z = concatenate(x,dim)
+    z = cat(dim,x{:});
+end
+"""
+
 # dictionary for backend import
 ###############################
 
@@ -71,4 +77,5 @@ matlab_funcs = {
     'sigmoid': {'call': 'sigmoid', 'func': sigmoid_func, 'def': sigmoid_def, 'imports': []},
     'interp': {'call': 'interp', 'func': np.interp, 'def': interp, 'imports': []},
     'conj': {'call': 'conj', 'func': np.conjugate, 'imports': []},
+    'concatenate': {'call': 'concatenate', 'func': np.concatenate, 'def': concat}
 }

@@ -30,7 +30,7 @@
 """
 
 # external _imports
-from typing import Any, Callable, Union, Iterable, Optional, Dict
+from typing import Any, Callable, Union, Iterable, Optional
 from networkx import MultiDiGraph
 from sympy import Symbol, Expr, Function
 import numpy as np
@@ -383,7 +383,7 @@ class ComputeGraph(MultiDiGraph):
             state_vec = np.asarray(variables)
         dtype = 'complex' if 'complex' in state_vec.dtype.name else 'float'
         state_var_key, y = self.add_var(label='y', vtype='state_var', value=state_vec, dtype=dtype)
-        rhs_var_key, dy = self.add_var(label='dy', vtype='state_var', value=np.zeros_like(state_vec), dtype=dtype)
+        rhs_var_key = self._generate_vecfield_var(state_vec, dtype)
         try:
             t = self.get_var('t')
         except KeyError:
@@ -422,7 +422,7 @@ class ComputeGraph(MultiDiGraph):
         code_gen.add_linebreak()
 
         # generate function tail
-        code_gen.generate_func_tail(rhs_var=rhs_var_key)
+        self._generate_func_tail(code_gen, rhs_var_key)
 
         # generate the function (and write to file, optionally)
         func_args_tmp = func_args[4:] if add_hist_calls else func_args[3:]
@@ -576,13 +576,8 @@ class ComputeGraph(MultiDiGraph):
                 raise ValueError('State variables need to be stored in a single state vector, for which the indices '
                                  'have to be passed to this method.')
 
-            # DE updates stored in a state-vector
-            dy = self.get_var("dy")
-            for idx, expr, shape in zip(indices, expressions, rhs_shapes):
-                code_gen.add_var_update(lhs=dy, rhs=expr, lhs_idx=idx, rhs_shape=shape)
-
-            # add rhs var to function arguments
-            func_args = ['dy'] + func_args
+            add_args = self._generate_vecfield(code_gen, indices, expressions, rhs_shapes, var_names)
+            func_args = add_args + func_args
 
         else:
 
@@ -601,6 +596,23 @@ class ComputeGraph(MultiDiGraph):
                 code_gen.add_var_update(lhs=self.get_var(target_var), rhs=expr, lhs_idx=idx, rhs_shape=shape)
 
         return func_args, def_vars
+
+    def _generate_vecfield(self, code_gen, indices: list, expressions: list, rhs_shapes: list, lhs_vars: list) -> list:
+
+        # DE updates stored in a state-vector
+        dy = self.get_var("dy")
+        for idx, expr, shape in zip(indices, expressions, rhs_shapes):
+            code_gen.add_var_update(lhs=dy, rhs=expr, lhs_idx=idx, rhs_shape=shape)
+
+        # add rhs var to function arguments
+        return ['dy']
+
+    def _generate_vecfield_var(self, state_vec: np.ndarray, dtype: str) -> str:
+        key, _ = self.add_var(label='dy', vtype='state_var', value=np.zeros_like(state_vec), dtype=dtype)
+        return key
+
+    def _generate_func_tail(self, code_gen, vecfield_key: str):
+        code_gen.generate_func_tail(rhs_var=vecfield_key)
 
     def _node_to_expr(self, n: str, **kwargs) -> tuple:
 
@@ -883,3 +895,30 @@ class ComputeGraph(MultiDiGraph):
 
         # replace part in expression string
         return expr.replace(expr[start:start + end], replacement)
+
+
+class ComputeGraphBackProp(ComputeGraph):
+
+    def __init__(self, backend: str, **kwargs):
+
+        super().__init__(backend, **kwargs)
+        self._vecfield_vars = []
+        self._vecfield_var_str = ""
+
+    def _generate_vecfield_var(self, state_vec: np.ndarray, dtype: str):
+        return ""
+
+    def _generate_func_tail(self, code_gen, vecfield_key: str):
+        code_gen.generate_func_tail(rhs_var=self._vecfield_var_str)
+
+    def _generate_vecfield(self, code_gen, indices: list, expressions: list, rhs_shapes: list, lhs_vars: list) -> list:
+        for lhs, expr in zip(lhs_vars, expressions):
+            lhs_var = f"delta_{lhs}"
+            code_gen.add_code_line(f"{lhs_var} = {expr}")
+            self._vecfield_vars.append(lhs_var)
+        if len(self._vecfield_vars) > 1:
+            op_dict = self.backend.get_op("concatenate")
+            self._vecfield_var_str = f"{op_dict['call']}([{','.join(v for v in self._vecfield_vars)}], 0)"
+        else:
+            self._vecfield_var_str = self._vecfield_vars.pop()
+        return []

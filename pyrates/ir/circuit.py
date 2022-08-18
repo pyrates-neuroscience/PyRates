@@ -42,8 +42,8 @@ from pyrates.backend import PyRatesException, PyRatesWarning
 from pyrates.ir.node import NodeIR
 from pyrates.ir.edge import EdgeIR
 from pyrates.ir.abc import AbstractBaseIR
-from pyrates.backend.parser import parse_equations, replace, get_unique_label
-from pyrates.backend.computegraph import ComputeGraph, ComputeVar
+from pyrates.backend.parser import parse_equations, get_unique_label
+from pyrates.backend.computegraph import ComputeGraph, ComputeVar, ComputeGraphBackProp
 
 __author__ = "Daniel Rose, Richard Gast"
 __status__ = "Development"
@@ -1052,10 +1052,10 @@ class CircuitIR(AbstractBaseIR):
             file_name = f"pyrates_func"
         return self.graph.to_func(func_name=func_name, file_name=file_name, dt_adapt=self._dt_adapt, **kwargs)
 
-    def network_to_computegraph(self, graph: NetworkGraph, **kwargs):
+    def network_to_computegraph(self, graph: NetworkGraph, inplace_vectorfield: bool = True, **kwargs):
 
         # initialize compute graph
-        cg = ComputeGraph(**kwargs)
+        cg = ComputeGraph(**kwargs) if inplace_vectorfield else ComputeGraphBackProp(**kwargs)
 
         # add global time variable to compute graph
         cg.add_var(label="t", vtype="state_var", value=0.0 if self._dt_adapt else 0, shape=(),

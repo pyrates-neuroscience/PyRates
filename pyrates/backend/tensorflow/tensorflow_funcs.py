@@ -80,5 +80,6 @@ tf_funcs = {
     'imag': {'call': 'imag', 'func': np.imag, 'imports': ['tensorflow.math.imag']},
     'conj': {'call': 'conj', 'func': np.conjugate, 'imports': ['tensorflow.math.conj']},
     'absv': {'call': 'abs', 'func': np.abs, 'imports': ['tensorflow.abs']},
-    'log': {'call': 'log', 'func': np.log, 'imports': ['tesnorflow.math.log']},
+    'log': {'call': 'log', 'func': np.log, 'imports': ['tensorflow.math.log']},
+    'concatenate': {'call': 'concat', 'func': np.concatenate, 'imports': ['tensorflow.concat']}
 }

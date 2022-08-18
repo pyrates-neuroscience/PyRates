@@ -5,6 +5,10 @@
 ### 0.15.1
 
 - added generic method for state variable indexing to circuit.py that is used for all edge-related indexing operations now (replacing multiple, slightly different implementations at various places in circuit.py)
+- added an alternative compute graph class that can be used to generate function files that do not perform in-place manipulations of the vectorfield `dy` but instead just create a new variable. This is relevant for gradient-based optimization.
+- improved the modularity of the `ComputeGraph`
+- added a method `add_import` to the backend that allows adding import statements to the top of a function file
+- added a backend function `concatenate` that can be used in equation strings now in order to combine vectorized variables
 
 ### 0.15.0
 
