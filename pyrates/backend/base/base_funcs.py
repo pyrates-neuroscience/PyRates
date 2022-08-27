@@ -107,5 +107,6 @@ base_funcs = {
     'conj': {'call': 'conjugate', 'func': np.conjugate, 'imports': ['numpy.conjugate']},
     'absv': {'call': 'abs', 'func': np.abs, 'imports': ['numpy.abs']},
     'log': {'call': 'log', 'func': np.log, 'imports': ['numpy.log']},
-    'past': {'call': 'past', 'func': past}
+    'past': {'call': 'past', 'func': past},
+    'concatenate': {'call': 'concatenate', 'func': np.concatenate, 'imports': ['numpy.concatenate']}
 }

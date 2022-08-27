@@ -88,4 +88,5 @@ julia_funcs = {
     'conj': {'call': 'conj', 'func': np.conjugate, 'imports': []},
     'absv': {'call': 'abs', 'func': np.abs, 'imports': []},
     'log': {'call': 'log', 'func': np.log, 'imports': []},
+    'concatenate': {'call': 'cat', 'func': np.concatenate, 'imports': []}
 }
