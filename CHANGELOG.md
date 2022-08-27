@@ -2,6 +2,10 @@
 
 ## 0.15
 
+### 0.15.1
+
+- removed a bug where calling `clear_frontend_caches` did not properly clean up all caches of the IR
+
 ### 0.15.0
 
 - added support for models with vectorized state-variables

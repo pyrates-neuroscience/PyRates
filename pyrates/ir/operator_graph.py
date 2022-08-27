@@ -27,7 +27,6 @@
 # Richard Gast and Daniel Rose et. al. in preparation
 """
 """
-from copy import deepcopy, copy
 from typing import Iterator, Dict, List
 
 import numpy as _np

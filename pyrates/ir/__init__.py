@@ -36,5 +36,6 @@ __author__ = "Daniel Rose"
 __status__ = "Development"
 
 from .circuit import CircuitIR
+from .node import clear_ir_caches
 
 _unique_objects = dict()

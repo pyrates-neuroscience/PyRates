@@ -33,17 +33,14 @@ __author__ = "Christoph Salomon, Richard Gast"
 __status__ = "development"
 
 # external imports
-from typing import Union, Optional, Tuple, Dict
+from typing import Union, Optional
 import pandas as pd
 import numpy as np
 from copy import deepcopy
-import json
-from inspect import getsource
-from pandas import DataFrame
-import pickle
 
 # pyrates imports
-from pyrates.frontend import CircuitTemplate, NodeTemplate, OperatorTemplate, EdgeTemplate, template
+from pyrates.frontend import CircuitTemplate, OperatorTemplate, template
+from pyrates.ir import clear_ir_caches
 
 
 #####################################
@@ -68,21 +65,22 @@ def clear(model: CircuitTemplate, **kwargs):
     clear_frontend_caches(**kwargs)
 
 
-def clear_frontend_caches(clear_template_cache=True, clear_operator_cache=True):
+def clear_frontend_caches(clear_template_cache=True, clear_ir_cache=True):
     """Utility to clear caches in the frontend.
 
     Parameters
     ----------
     clear_template_cache
         toggles whether or not to clear the template_cache that contains all previously loaded templates
-    clear_operator_cache
+    clear_ir_cache
         toggles whether or not to clear the cache of unique OperatorIR instances
     """
     if clear_template_cache:
         template.clear_cache()
 
-    if clear_operator_cache:
+    if clear_ir_cache:
         OperatorTemplate.cache.clear()
+        clear_ir_caches()
 
 
 ########################
