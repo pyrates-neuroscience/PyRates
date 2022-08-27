@@ -9,6 +9,7 @@
 - improved the modularity of the `ComputeGraph`
 - added a method `add_import` to the backend that allows adding import statements to the top of a function file
 - added a backend function `concatenate` that can be used in equation strings now in order to combine vectorized variables
+- removed a bug where calling `clear_frontend_caches` did not clear all IR caches properly
 
 ### 0.15.0
 
