@@ -219,9 +219,8 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
     Returns
     -------
     tuple
-        Simulation results stored in a multi-index data frame, the mapping between the data frame column names and the
-        parameter grid, the simulation time, and the memory consumption.
-
+        Simulation results stored in a multi-index data frame, and the mapping between the data frame column names and
+        the parameter grid.
     """
 
     # argument pre-processing
@@ -272,19 +271,186 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
                           vectorization=vectorization,
                           **kwargs)    # type: pd.DataFrame
 
-    # create dataframe that maps between output names and parameter sets
-    data, index = [], []
-    for key in results.keys():
-        param_key = key[1].split('/')[0]
-        data.append(param_grid.loc[param_key, :].values)
-    param_map = pd.DataFrame(data=np.asarray(data).T, columns=results.columns, index=param_grid.columns)
+    # # create dataframe that maps between output names and parameter sets
+    # data, index = [], []
+    # for key in results.keys():
+    #     param_key = key[1].split('/')[0]
+    #     data.append(param_grid.loc[param_key, :].values)
+    # param_map = pd.DataFrame(data=np.asarray(data).T, columns=results.columns, index=param_grid.columns)
 
     # return results
-    if 'profile' in kwargs:
-        results, duration = results
-        return results, param_map, duration
-    return results, param_map
+    return results, param_grid
 
+
+class Interactive2DParamPlot(object):
+    def __init__(self, data_map: np.array, data_series: pd.DataFrame, x_values: np.array, y_values: np.array,
+                 x_key: str, y_key: str, param_map: pd.DataFrame, tmin=0., title=None, **kwargs):
+        """Creates an interactive 2D plot that allows visualization of time series using button press events
+
+        Derive child class and change get_data() respectively to utilize this plotting method
+
+        Parameters
+        ----------
+        data_map
+            2D ndarray containing a value based on each column data_series, respectively.
+        data_series
+            DataFrame containing all data series used to create the data map
+        x_values
+            ndarray containing values of data-map columns.
+        y_values
+            ndarray containing values of data-map rows.
+        x_key
+        y_key
+        param_map
+            Dataframe containing the mapping between data-series columns (index) and x/y value pairs (columns)
+            (as returned by `grid_search`).
+        tmin
+            Starting point for time-series plots in time units (float).
+        title
+            Title of 2D plot.
+        kwargs
+            Additional information to access a column in data_series if necessary
+
+        Returns
+        -------
+
+        """
+
+        import matplotlib.pyplot as plt
+
+        dt = kwargs.pop('step_size', data_series.index[1] - data_series.index[0])
+        state_var = kwargs.pop('state_var', '')
+        tmin = int(tmin/dt)
+        self.data = data_series.iloc[tmin:, :]
+        self.x_values = x_values
+        self.y_values = y_values
+
+        # set up param map matrix
+        self.map = pd.DataFrame(columns=self.x_values, index=self.y_values)
+        for key in param_map.index:
+            x, y = param_map.loc[key, x_key], param_map.loc[key, y_key]
+            x_idx = np.argmin(np.abs(self.x_values - x))
+            y_idx = np.argmin(np.abs(self.y_values - y))
+            self.map.iloc[y_idx, x_idx] = key
+
+        # Create canvas
+        if 'subplots' in kwargs:
+            self.fig, self.ax = kwargs.pop('subplots')
+        else:
+            skwargs = {}
+            for key in ["figsize", "gridspec"]:
+                if key in kwargs:
+                    skwargs[key] = kwargs.pop(key)
+            self.fig, self.ax = plt.subplots(ncols=2, nrows=1, **skwargs)
+
+        # plot signals into right subplot
+        cmap = kwargs.pop("cmap_lines", "magma")
+        self.line_colors = plt.get_cmap(cmap, lut=self.data[self.map.iloc[0, 0]].shape[-1]).colors
+        self.update_lineplot(0, 0)
+
+        # Initiate marker
+        self.marker = self.ax[0].plot(0, 0, 'x', color='white', markersize='10')
+
+        # Plot 2D data in left subplot
+        num_x_ticks = kwargs.pop('num_x_ticks', len(x_values))
+        num_y_ticks = kwargs.pop('num_y_ticks', len(y_values))
+        shrink = kwargs.pop('cbar_shrink', 0.5)
+        im = self.ax[0].imshow(data_map, **kwargs)
+        set_num_axis_ticks(ax=self.ax[0], num_x_ticks=num_x_ticks, num_y_ticks=num_y_ticks)
+        self.ax[0].set_xlabel(x_key)
+        self.ax[0].set_ylabel(y_key)
+        self.ax[0].set_xticklabels([""] + list(np.round(x_values, decimals=2)))
+        self.ax[0].set_yticklabels([""] + list(np.round(y_values, decimals=2)))
+        if title:
+            self.ax[0].set_title(title)
+        plt.colorbar(im, ax=self.ax[0], shrink=shrink)
+
+        # Call Interactive2DPlot class instance when mouse button is pressed inside the 2D plot
+        self.fig.canvas.mpl_connect('button_press_event', self)
+
+    def __call__(self, event):
+        """Try to access a column in data_series using x and y values based on cursor position
+
+        Is called on mouse button press event. Converts the current cursor coordinates inside the plot into x and y
+        values based on the data in x_values and y_values. x and y values are used to access a column in data_series.
+        Access of data_series can be customized in self.get_data().
+
+        :param event:
+        :return:
+        """
+
+        # Only allow button press events in the (left) 2D overview plot
+        if event.inaxes != self.ax[0]:
+            return
+
+        # Reset axes
+        self.marker[0].remove()
+
+        # Transform cursor coordinates in x and y values
+        x_sample = event.xdata
+        y_sample = event.ydata
+
+        # Add marker at event coordinates
+        self.marker = self.ax[0].plot(x_sample, y_sample, 'x', color='white', markersize='10')
+
+        # Update serial plot
+        self.update_lineplot(int(np.round(x_sample, decimals=0)), int(np.round(y_sample, decimals=0)))
+
+        # redraw figure
+        self.fig.canvas.draw()
+        self.fig.canvas.flush_events()
+
+    def update_lineplot(self, x, y):
+
+        data = self.get_data(x, y)
+        lines = self.ax[1].get_lines()
+        if lines:
+            for line, key in zip(self.ax[1].get_lines(), data.keys()):
+                line.set_data(data.index, data[key].values)
+        else:
+            for i, key in enumerate(data.keys()):
+                self.ax[1].plot(data.index, data[key].values, c=self.line_colors[i])
+        self.ax[1].set_title(
+            f'x: {np.round(self.x_values[x], decimals=2)}, y: {np.round(self.y_values[y], decimals=2)}')
+        ymin, ymax = np.min(data.values), np.max(data.values)
+        margin = (ymax - ymin)*0.02
+        self.ax[1].set_ylim([ymin-margin, ymax+margin])
+
+    def set_map_xlabel(self, label):
+        self.ax[0].set_xlabel(label)
+
+    def set_map_ylabel(self, label):
+        self.ax[0].set_ylabel(label)
+
+    def set_map_title(self, title):
+        self.ax[0].set_title(title)
+
+    def set_series_xlabel(self, label):
+        self.ax[1].set_xlabel(label)
+
+    def set_series_ylabel(self, label):
+        self.ax[1].set_ylabel(label)
+
+    def get_data(self, x, y):
+        return self.data[self.map.iloc[y, x]]
+
+
+def set_num_axis_ticks(ax, num_x_ticks=10, num_y_ticks=10):
+    """Set the number of x and y ticks of a plot axis
+
+    Parameters
+    ----------
+    ax
+    num_x_ticks
+    num_y_ticks
+
+    Returns
+    -------
+
+    """
+    from matplotlib.ticker import MaxNLocator
+    ax.xaxis.set_major_locator(MaxNLocator(num_x_ticks))
+    ax.yaxis.set_major_locator(MaxNLocator(num_y_ticks))
 
 ##########################
 # file storage functions #

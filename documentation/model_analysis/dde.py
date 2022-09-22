@@ -98,8 +98,8 @@ plt.show()
 from ddeint import ddeint
 
 # generate DDE function
-func, args = vdp.get_run_func(func_name='vdp_dde_run', file_name='vdp_dde', solver='scipy', step_size=step_size,
-                              vectorize=False, backend='default', in_place=False)
+func, args, _, _ = vdp.get_run_func(func_name='vdp_dde_run', file_name='vdp_dde', solver='scipy', step_size=step_size,
+                                    vectorize=False, backend='default', in_place=False)
 
 # define ddeint wrapper function
 t, y, hist, *fargs = args

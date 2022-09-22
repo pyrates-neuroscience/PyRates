@@ -267,7 +267,7 @@ class CircuitTemplate(AbstractBaseTemplate):
             n_nodes = len(target_nodes)
             for i, n in enumerate(target_nodes):
                 node_temp = deepcopy(self.get_node_template(n))
-                val_tmp = val[i] if hasattr(val, 'shape') and val.shape[0] == n_nodes else val
+                val_tmp = val[i] if hasattr(val, 'shape') and sum(val.shape) == n_nodes else val
                 node_temp.update_var(op=op, var=var, val=val_tmp)
                 self.add_node_template(n, template=node_temp)
 
@@ -489,7 +489,8 @@ class CircuitTemplate(AbstractBaseTemplate):
             if type(out) is dict:
                 multi_index = True
                 for key2, v in out.items():
-                    columns.append((key, key2))
+                    *nodes, op, var = key2.split("/")
+                    columns.append((key,) + tuple(nodes) + ("/".join([op, var]),))
                     data.append(v)
             else:
                 columns.append(key)

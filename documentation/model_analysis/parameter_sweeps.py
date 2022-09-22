@@ -99,17 +99,17 @@ results, results_map = grid_search(circuit_template="model_templates.neural_mass
 #
 # Now, lets visualize the results of this parameter sweep for each value of :math:`C`:
 
-fig, axes = plt.subplots(nrows=results_map['V_pce'].shape[1], figsize=(8, 12))
+fig, axes = plt.subplots(nrows=results_map.shape[0], figsize=(8, 12))
 
 # sort the results map via the values of C
-results_map.sort_values('C', inplace=True, axis=1)
+results_map.sort_values('C', inplace=True, axis=0)
 
 # plot the raw output variable for each condition
-for ax, key_e, key_i in zip(axes, results_map['V_pce'].columns, results_map['V_pci'].columns):
-    psp_e = results['V_pce'].loc[:, key_e]
-    psp_i = results['V_pci'].loc[:, key_i]
+for ax, key in zip(axes, results_map.index):
+    psp_e = results['V_pce'][key].iloc[:, 0]
+    psp_i = results['V_pci'][key].iloc[:, 0]
     ax.plot(psp_e - psp_i)
-    ax.legend([f"C = {results_map['V_pce'].at['C', key_e]}"], loc='upper right')
+    ax.legend([f"C = {results_map.at[key, 'C']}"], loc='upper right')
     ax.set_ylabel(r'$V = V_{pce} - V_{pci}$')
 axes[-1].set_xlabel('time')
 plt.tight_layout()

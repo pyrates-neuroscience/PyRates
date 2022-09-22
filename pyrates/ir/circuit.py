@@ -555,7 +555,7 @@ class NetworkGraph(AbstractBaseIR):
             warn(PyRatesWarning(f'PyRates detected an edge definition that implies to represent the model as a '
                                 f'delayed differential equation system.\n PyRates will thus attempt to access the '
                                 f'history of the source variable {var} of operator {op} on node {node}. '
-                                f'Note that this requires {var} to be a state-variable, i.e. a variable defined by'
+                                f'Note that this requires {var} to be a state-variable, i.e. a variable defined by '
                                 f'a differential equation.'))
 
             # create buffer variable definitions
@@ -692,7 +692,7 @@ class NetworkGraph(AbstractBaseIR):
                 s_str_final = _get_indexed_var_str(s_str, sidx, ssize, reduce=m == 1 and tsize > 1 and n == 1,
                                                    idx_str=sidx_str, arg_dict=args)
                 t_str_final = _get_indexed_var_str(t_str, tidx, tsize, reduce=tsize > 1 or ssize < tsize,
-                                                   idx_str=sidx_str, arg_dict=args)
+                                                   idx_str=tidx_str, arg_dict=args)
 
                 # define edge equation
                 eq = f"{t_str_final} = {s_str_final}{weighting}"
@@ -963,7 +963,7 @@ class CircuitIR(AbstractBaseIR):
             sampling_step_size: Optional[float] = None,
             solver: str = 'euler',
             **kwargs
-            ) -> Union[dict, Tuple[dict, float]]:
+            ) -> dict:
         """Simulate the backend behavior over time via a tensorflow session.
 
         Parameters
@@ -985,11 +985,8 @@ class CircuitIR(AbstractBaseIR):
 
         Returns
         -------
-        Union[DataFrame, Tuple[DataFrame, float]]
-            First entry of the tuple contains the output variables in a pandas dataframe, the second contains the
-            simulation time in seconds. If profiling was not chosen during call of the function, only the dataframe
-            will be returned.
-
+        dict
+            Output variables in a dictionary.
         """
 
         filterwarnings("ignore", category=FutureWarning)

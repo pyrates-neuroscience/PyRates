@@ -117,8 +117,8 @@ from scipy.integrate import solve_ivp
 clear_frontend_caches()
 
 # generate the vector-field evaluation function file
-func, args = qif.get_run_func(func_name='f', file_name='qif_eval', step_size=dt, inputs={'p/qif_op/I_ext': inp},
-                              backend='default', solver='scipy', clear=False, in_place=True)
+func, args, _, _ = qif.get_run_func(func_name='f', file_name='qif_eval', step_size=dt, inputs={'p/qif_op/I_ext': inp},
+                                    backend='default', solver='scipy', clear=False, in_place=True)
 
 # read out function file
 f = open('qif_eval.py', 'r')

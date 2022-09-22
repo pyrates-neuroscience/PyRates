@@ -146,17 +146,17 @@ print(f.read())
 
 # calculate and store coherences
 coherences = np.zeros((n_J, n_om))
-for key1, key2 in zip(res_map['VPO'].columns, res_map['KO'].columns):
+for key in res_map.index:
 
     # extract parameter set
-    omega = res_map['KO'].at['omega', key2]
-    J = res_map['KO'].at['J', key2]
+    omega = res_map.at[key, 'omega']
+    J = res_map.at[key, 'J']
 
     # collect phases
     tf = np.maximum(0.01, freq[np.argmin(np.abs(omegas - omega))])
-    p1 = np.sin(get_phase(results['VPO'].loc[:, key1].squeeze(), N=10,
+    p1 = np.sin(get_phase(results['VPO'][key].squeeze(), N=10,
                           freqs=(tf-0.3*tf, tf+0.3*tf), fs=1/dts))
-    p2 = np.sin(2 * np.pi * results['KO'].loc[:, key2].squeeze())
+    p2 = np.sin(2 * np.pi * results['KO'][key].squeeze())
 
     # calculate coherence
     freq, coh = coherence(p1, p2, fs=1/dts, nperseg=nps, window=window)

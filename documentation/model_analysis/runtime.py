@@ -43,8 +43,8 @@ net.add_edges_from_matrix(source_var="tanh_op/m", target_var="li_op/m_in", nodes
 # Next, we will generate the run function for that model using the default backend and no vectorization of the model
 # equations.
 
-func, args = net.get_run_func(func_name="li_eval", file_name="li_novec", step_size=1e-3, in_place=False,
-                              vectorize=False)
+func, args, _, _ = net.get_run_func(func_name="li_eval", file_name="li_novec", step_size=1e-3, in_place=False,
+                                    vectorize=False)
 
 # %%
 # Now, lets define a function that allows us to calculate the average evaluation time of the generated function:
@@ -74,8 +74,8 @@ clear(net)
 # Let's compare this against the evaluation time for the vectorized model:
 
 # generate the function
-func, args = net.get_run_func(func_name="li_eval", file_name="li_vec", step_size=1e-3, in_place=False,
-                              vectorize=True)
+func, args, _, _ = net.get_run_func(func_name="li_eval", file_name="li_vec", step_size=1e-3, in_place=False,
+                                    vectorize=True)
 
 # calculate average evaluation time
 T1 = eval_time(func, args)
@@ -90,16 +90,16 @@ clear(net)
 # Let's see, how this helps with our vectorized and our non-vectorized models:
 
 # njit optimization of non-vectorized model
-func, args = net.get_run_func(func_name="li_eval", file_name="li_novec_numba", step_size=1e-3, in_place=False,
-                              vectorize=False, decorator=njit)
+func, args, _, _ = net.get_run_func(func_name="li_eval", file_name="li_novec_numba", step_size=1e-3, in_place=False,
+                                    vectorize=False, decorator=njit)
 func(*args)
 T2 = eval_time(func, args)
 print(f"Average evaluation time of numba-optimized model without vectorization: T = {T2} s.")
 clear(net)
 
 # njit optimization of non-vectorized model
-func, args = net.get_run_func(func_name="li_eval", file_name="li_vec_numba", step_size=1e-3, in_place=False,
-                              vectorize=True, decorator=njit)
+func, args, _, _ = net.get_run_func(func_name="li_eval", file_name="li_vec_numba", step_size=1e-3, in_place=False,
+                                    vectorize=True, decorator=njit)
 func(*args)
 T3 = eval_time(func, args)
 print(f"Average evaluation time of numba-optimized model without vectorization: T = {T3} s.")

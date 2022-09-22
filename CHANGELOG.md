@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.16
+
+### 0.16.0
+
+- added class for interactive grid search results visualization to utility
+- changed organization of the pandas DataFrames that `grid-search` returns: Each different parameterization of the model appears only once in the `param_grid.index` and the `results` DataFrame uses a full hierarchical column organization.
+- The pandas DataFrame returned by `CircuitTemplate.run` uses a fully hierarchical column organization now: Every node hierarchy level is a separate level in the column index hierarchy.
+- minor docstring improvements
+- fixed bug in edge equation setup where a wrong index was provided to the target variable sometimes
+- fixed bug in variable updating that occurred for `numpy.ndarray` variables where the `shape` attribute was an empty tuple
+- applied all changed to the gallery examples in the documentation
+
 ## 0.15
 
 ### 0.15.1
