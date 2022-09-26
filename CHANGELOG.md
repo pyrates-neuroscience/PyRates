@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.17
+
+### 0.17.0
+
+- added `__getitem__` methods on all frontend template classes that allow for a less convoluted examination of the major properties of the template classes
+- added pytests that test these new features
+- users can now quickly access each node on `CircuitTemplate`, each operator on `NodeTemplate` and `EdgeTemplate`, and each variable on `OperatorTemplate`
+
 ## 0.16
 
 ### 0.16.0

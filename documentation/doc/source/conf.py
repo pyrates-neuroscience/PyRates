@@ -25,7 +25,7 @@ copyright = u'2022, Richard Gast and Daniel Rose'
 author = u'Richard Gast and Daniel Rose'
 
 # The short X.Y version
-version = u'0.16'
+version = u'0.17'
 
 # The full version, including alpha/beta/rc tags
 release = u'0.16.0'  # automatically managed with bumpversion, see .bumpversion.cfg

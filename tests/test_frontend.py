@@ -65,7 +65,8 @@ def test_import_operator_templates(operator):
     assert template is cached_template
     assert template.path == cached_template.path
     assert template.equations == cached_template.equations
-    assert repr(template) == repr(cached_template) == f"<OperatorTemplate '{operator}'>"
+    assert template.variables == cached_template.variables
+    assert repr(template) == repr(cached_template) == f"<OperatorTemplate '{operator.split('.')[-1]}'>"
 
 
 def test_full_jansen_rit_circuit_template_load():
@@ -95,6 +96,12 @@ def test_full_jansen_rit_circuit_template_load():
         for op in template.nodes[key].operators:
             assert op.path in template_cache
             assert isinstance(op, OperatorTemplate)
+
+    # test that all item views work correctly
+    for key, value in nodes.items():
+        assert template[key] is template_cache[value]
+        assert type(template[key]["pro"]) is OperatorTemplate
+        assert "input" in template[key]["pro"]["v"]
 
 
 def test_edge_definition_via_matrix():

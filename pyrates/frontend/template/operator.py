@@ -29,9 +29,10 @@
 from copy import deepcopy
 from sys import intern
 from typing import Union
+from warnings import warn
 
 # pyrates internal _imports
-from pyrates.ir.circuit import PyRatesException
+from pyrates.ir.circuit import PyRatesException, PyRatesWarning
 from pyrates.frontend.template.abc import AbstractBaseTemplate
 from pyrates.backend.parser import replace as eq_replace
 
@@ -61,6 +62,15 @@ class OperatorTemplate(AbstractBaseTemplate):
         else:
             self.equations = [intern(eq) for eq in equations]
         self.variables = variables
+
+    def __getitem__(self, item):
+        """Attempts to return the variable with name `item`.
+        """
+        try:
+            return self.variables[item]
+        except KeyError:
+            warn(PyRatesWarning(f"Variable with name {item} was not found on {self.name}."))
+            return
 
     def update_template(self, name: str = None, path: str = None, equations: Union[str, list, dict] = None,
                         variables: dict = None, description: str = None):

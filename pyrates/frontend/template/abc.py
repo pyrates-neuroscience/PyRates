@@ -48,7 +48,10 @@ class AbstractBaseTemplate:
     def __repr__(self):
         """Defines how an instance identifies itself when called with `str()` or `repr()`, e.g. when shown in an
         interactive terminal. Shows Class name and path that was used to construct the class."""
-        return f"<{self.__class__.__name__} '{self.path}'>"
+        return f"<{self.__class__.__name__} '{self.name}'>"
+
+    def __getitem__(self, item):
+        raise NotImplementedError
 
     @classmethod
     def from_yaml(cls, path):

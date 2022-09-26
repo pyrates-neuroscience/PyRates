@@ -139,6 +139,15 @@ class CircuitTemplate(AbstractBaseTemplate):
         self._vectorization_indices = {}
         self._state_var_indices = {}
 
+    def __getitem__(self, item):
+        """Attempts to return the node with name `item`.
+        """
+        try:
+            return self.nodes[item]
+        except KeyError:
+            warn(PyRatesWarning(f"Node with name {item} was not found on {self.name}."))
+            return
+
     def to_yaml(self, path, **kwargs) -> None:
         """Shorthand to save the `CircuitTemplate` to a yaml file. After that call, either a new YAML file has been
         created including all template definitions required to reconstruct the `CircuitTemplate` instance, or additional

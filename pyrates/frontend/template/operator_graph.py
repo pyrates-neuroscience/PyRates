@@ -27,8 +27,9 @@
 # 
 # Richard Gast and Daniel Rose et. al. in preparation
 from typing import Union, List, Type, Dict
+from warnings import warn
 
-from pyrates.ir.circuit import PyRatesException
+from pyrates.ir.circuit import PyRatesException, PyRatesWarning
 from pyrates.frontend.template import _complete_template_path
 from pyrates.frontend.template.abc import AbstractBaseTemplate
 from pyrates.frontend.template.operator import OperatorTemplate
@@ -64,6 +65,15 @@ class OperatorGraphTemplate(AbstractBaseTemplate):
                     operator_template = op
                 self.operators[operator_template] = variations
                 self._op_map[operator_template.name] = operator_template
+
+    def __getitem__(self, item):
+        """Attempts to return the operator with name `item`.
+        """
+        try:
+            return self._op_map[item]
+        except KeyError:
+            warn(PyRatesWarning(f"Operator with name {item} was not found on {self.name}."))
+            return
 
     def update_template(self, name: str = None, path: str = None, operators: Union[str, List[str], dict] = None,
                         description: str = None):
@@ -148,6 +158,8 @@ class OperatorGraphTemplate(AbstractBaseTemplate):
 
     def _load_operator_template(self, path: str) -> OperatorTemplate:
         """Load an operator template based on a path"""
+        if type(path) is not str:
+            raise TypeError(f"Operator paths have to be strings. Instead, {type(path)} was provided.")
         path = _complete_template_path(path, self.path)
         return OperatorTemplate.from_yaml(path)
 
