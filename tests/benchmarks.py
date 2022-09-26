@@ -8,11 +8,11 @@ def benchmark_single_jr_circuit(n_runs=10):
     """
 
     import time
-    from pyrates.frontend.template.circuit import CircuitTemplate
-    from pyrates.frontend import clear_frontend_caches
+    from pyrates import CircuitTemplate
+    from pyrates import clear
     import numpy as np
 
-    path = "model_templates.jansen_rit.circuit.JansenRitCircuit"
+    path = "model_templates.neural_mass_models.jansenrit.JRC"
 
     timer_dict = dict(template_load=[],
                       template_apply=[],
@@ -20,6 +20,7 @@ def benchmark_single_jr_circuit(n_runs=10):
                       )
 
     for i in range(n_runs):
+
         # time template loading
         tic = time.perf_counter()
         template = CircuitTemplate.from_yaml(path)
@@ -28,17 +29,11 @@ def benchmark_single_jr_circuit(n_runs=10):
 
         # time template application to circuit IR
         tic = time.perf_counter()
-        circuit = template.apply()
+        template.apply(verbose=False)
         toc = time.perf_counter()
         timer_dict["template_apply"].append(toc - tic)
 
-        # time circuit compilation (probably irrelevant in this case
-        # tic = time.perf_counter()
-        # circuit.compile()
-        # toc = time.perf_counter()
-        # timer_dict["circuit_compile"].append(toc-tic)
-
-        clear_frontend_caches()
+        clear(template)
 
     print("Benchmark results:")
     for key, times in timer_dict.items():

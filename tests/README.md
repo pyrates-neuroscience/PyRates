@@ -30,6 +30,6 @@ Usage:
 
 #### Structure of the tests folder
 
-- benchmarks: scripts to be run to collect benchmark information (WIP)
-- core: tests for corresponding `core` source code
-- resources: represents data that is used in the tests (configuration or target data)
+- `benchmarks.py`: scripts to be run to collect benchmark information (WIP)
+- `resources` folder: represents data that is used in the tests (configuration or target data)
+- scripts that contain tests for pyrates core code

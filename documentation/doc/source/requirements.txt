@@ -1,5 +1,6 @@
 sphinx
 sphinx-gallery
+sphinx_rtd_theme
 pillow
 numpy
 matplotlib
