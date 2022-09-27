@@ -6,6 +6,16 @@ Changelog
 
 .. _section-1:
 
+0.17.1
+~~~~~~
+
+- changed the theme of the readthedocs documentation website
+- added documentation for all supported backend functions
+- added documentation for dependencies and requirements
+- added documentation for YAML template structure to the documentation website
+- added documentation for mathematical syntax
+- added the changelog to the documentation website
+
 0.17.0
 ~~~~~~
 

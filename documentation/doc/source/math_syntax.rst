@@ -117,6 +117,38 @@ The following function calls can be used for model definitions in `PyRates`:
 - :code:`index_range`: Slices into the first dimension of a variable, i.e. :code:`index_range(x, 1, 5)` corresponds to :code:`x[1:5]`.
 - :code:`index_axis`: Indexes into a given dimension of a variable, i.e. :code:`index_axis(x, 1, 1)` corresponds to :code:`x[:, 1]`, where the third argument to :code:`index_axis` indicates the dimension where the index (second argument) should be applied.
 
+Supported Constants
+-------------------
+
+The following constants can be used within `PyRates` equations:
+
+- :code:`pi`: Will be recognized as :math:`\pi`
+- :code:`E`: Will be recognized as Euler's number :math:`e`
+- :code:`I`: Will be recognized as the imaginary unit :math:`\sqrt{-1}`.
+
+These conventions follow the conventions of `sympy <https://github.com/sympy/sympy>`_ (and will also change with them).
+Note that a different convention for complex values is used for the definition of a complex numeric value of a variable or constant that is part of an equation.
+In this case, follow standard `Python` syntax, where :code:`j` will be recognized as the imaginary unit :math:`\sqrt{-1}`, i.e. :code:`1+2j` defines the imaginary value :math:`1+2i = 1+2\sqrt{-1}`.
+
+Prohibited Variable Names
+-------------------------
+
+The following variable names cannot be used in `PyRates` equations, since they are blocked for internal variables:
+
+- :code:`y`: Used as the name of the combined state-vector of the system
+- :code:`dy`: Used as the name of the combined vector-field of the system
+- :code:`source_idx`: Used for automatically generated index variables.
+- :code:`target_idx`: Used for automatically generated index variables.
+
+Also, the names of the above listed constants (:code:`pi`, :code:`E`, :code:`I`) cannot be used as variable names.
+Finally, the following strings are not allowed as part of variable names:
+
+- :code:`_buffer`: Used to implement buffer variables for delayed DE systems.
+- :code:`_delays`: Used to implement delayed DE systems.
+- :code:`maxdelay`: Used to implement buffer variables for delayed DE systems.
+- :code:`_idx`: Used for automatically generated index variables.
+- :code:`_hist`: Used to implement delayed DE systems.
+
 References
 ^^^^^^^^^^
 
