@@ -74,6 +74,10 @@ vdp = CircuitTemplate.from_yaml("model_templates.oscillators.vanderpol.vdp")
 vdp.update_template(edges=[('p/vdp_op/x', 'p/vdp_op/inp', None, {'weight': k, 'delay': tau})], in_place=True)
 
 # %%
+#
+# Step 2: DDE simulation
+# ----------------------
+#
 # We can perform a simple simulation using a forward Euler algorithm to solve the DDE as follows:
 
 # define simulation time
@@ -89,7 +93,7 @@ plt.plot(results)
 plt.show()
 
 # %%
-# To use a different solver, for example a Runge-Kutta algorithm with autmatic step-size adaptation, you would either
+# To use a different solver, for example a Runge-Kutta algorithm with automatic step-size adaptation, you would either
 # have to use :code:`backend='julia'` and :code:`solver='julia_dde'` as options to the :code:`run` method, or you could
 # generate the run function instead and use any DDE solver available in the backend of your choice. Below, we
 # demonstrate how to solve the DDE via the `ddeint` Python package. The latter is not part of the PyRates prerequisites

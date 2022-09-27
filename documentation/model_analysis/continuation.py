@@ -29,7 +29,7 @@ al. For parts (2) and (3) of the tutorial, it is required that you have
 `PyAuto <https://github.com/pyrates-neuroscience/PyAuto>`_ installed in the Python environment you are using.
 
 References
-----------
+^^^^^^^^^^
 .. [1] E. Montbrió, D. Pazó, A. Roxin (2015) *Macroscopic description for networks of spiking neurons.* Physical
        Review X, 5:021028, https://doi.org/10.1103/PhysRevX.5.021028.
 .. [2] E.J. Doedel, T.F. Fairgrieve, B. Sandstede, A.R. Champneys, Y.A. Kuznetsov and W. Xianjun (2007) *Auto-07p:
@@ -48,14 +48,14 @@ auto_dir = path if type(path) is str and ".py" not in path else "~/PycharmProjec
 
 # %%
 # Part 1: Creating a PyAuto Instance
-# ==================================
+# ----------------------------------
 #
 # In this first part, we will be concerned with how to create a model representation that is compatible with auto-07p,
 # which is the software that is used for parameter continuations and bifurcation analysis in PyRates [2]_.
 
 # %%
 # Step 1: Load the model into PyRates
-# -----------------------------------
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
 # As a first step, we have to load the model into PyRates. This is done the usual way. If you are not familiar with
 # this, check out the example galleries for model definitions.
@@ -64,7 +64,7 @@ qif = CircuitTemplate.from_yaml("model_templates.neural_mass_models.qif.qif")
 
 # %%
 # Step 2: Generate the Fortran routines required by Auto-07p
-# ----------------------------------------------------------
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
 # In the next step, we will translate our model into a Fortran file containing all subroutines required by
 # :code:`auto-07p`. In short, :code:`auto-07p` requires a fortran file with the model equations and initial values [2]_.
@@ -98,7 +98,7 @@ f.close()
 
 # %%
 # Step 3: Generate a PyAuto instance
-# ----------------------------------
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
 # Now that the model equations are compiled, we can generate an instance of :code:`pyauto.PyAuto`, a Python
 # `tool <https://github.com/pyrates-neuroscience/PyAuto>`_ that provides and interface to :code:`auto-07p`.
@@ -111,14 +111,14 @@ qif_auto = PyAuto(working_dir=None, auto_dir=auto_dir)
 
 # %%
 # Part 2: Performing Parameter Continuations
-# ==========================================
+# ------------------------------------------
 #
 # In this part, we will demonstrate how to perform simple 1D parameter continuations via the :code:`PyAuto.run()`
 # method.
 
 # %%
 # Step 1: Time continuation
-# -------------------------
+# ^^^^^^^^^^^^^^^^^^^^^^^^^
 #
 # In parameter continuations, it is required that you start continuing the parameters from an
 # `equilibrium <http://www.scholarpedia.org/article/Equilibrium>`_ or
@@ -168,7 +168,7 @@ plt.show()
 
 # %%
 # Step 2: Continuation of :math:`\bar \eta`
-# -----------------------------------------
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
 # If you look at the auto-07p output in the terminal, you will see that the values for :code:`U(1)` and :code:`U(2)`
 # converged to certain values. These two values represent the current values of our state variables :math:`r` and

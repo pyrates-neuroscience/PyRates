@@ -1,5 +1,4 @@
 """
-
 The Van der Pol Oscillator
 ==========================
 
@@ -24,10 +23,10 @@ DOI: 10.4249/scholarpedia.2202.
 
 # %%
 # Van der Pol oscillator dynamics
-# ===============================
+# -------------------------------
 #
 # Step 1: Numerical simulation of the model dynamics for :math:`\\mu = 0`
-# -----------------------------------------------------------------------
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
 # First, we will load a :code:`CircuitTemplate` instance via the path to the model definition.
 # We will the use the :code:`CircuitTemplate.run` method to solve the initial value problem of the above defined
@@ -61,7 +60,7 @@ clear(model)
 # %%
 #
 # Step 2: Numerical simulation of the model dynamics for :math:`\\mu = 5`
-# -----------------------------------------------------------------------
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
 # As expected, we found harmonical oscillations for :math:`\mu = 0`.
 # Now, we will repeat the procedure for :math:`\mu = 5`.

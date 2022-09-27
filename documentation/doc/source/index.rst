@@ -38,7 +38,7 @@ Content
    changelog
 
 .. toctree::
-    :maxdepth: 2
+    :maxdepth: 4
     :numbered:
     :caption: Use Examples
     :hidden:
@@ -48,7 +48,7 @@ Content
     model_analysis
 
 .. toctree::
-    :maxdepth: 3
+    :maxdepth: 5
     :numbered:
     :caption: API
     :hidden:

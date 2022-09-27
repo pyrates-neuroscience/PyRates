@@ -33,7 +33,7 @@ Below, we will demonstrate ow to load the mhodel template into pyrates, perform 
 results.
 
 References
-----------
+^^^^^^^^^^
 
 .. [1] G.B. Ermentrout and N. Kopell (1986) *Parabolic bursting in an excitable system coupled with a slow oscillation.* SIAM-J.-Appl.-Math 46: 233-253.
 

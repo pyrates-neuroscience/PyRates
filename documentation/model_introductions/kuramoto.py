@@ -1,5 +1,4 @@
 """
-
 The Kuramoto Oscillator
 =======================
 
@@ -34,7 +33,7 @@ References
 
 # %%
 # 2 Coupled Kuramoto Oscillators
-# ==============================
+# ------------------------------
 #
 # Here, we use the :code:`integrate` function imported from PyRates. As a first argument to this function, either a path
 # to a YAML-based model definition or a :code:`CircuitTemplate` instance can be provided. The function will then compile
@@ -72,7 +71,7 @@ plt.show()
 
 # %%
 # Kuramoto Order Parameter Dynamics
-# =================================
+# ---------------------------------
 #
 # The Kuramoto order parameter :math:`z` of a system of coupled phase oscillators is given by
 #

@@ -1,5 +1,4 @@
 """
-
 The Jansen-Rit Neural Mass Model
 ================================
 

@@ -1,5 +1,4 @@
 """
-
 YAML-Based Model Definitions
 ============================
 

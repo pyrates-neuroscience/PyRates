@@ -14,7 +14,7 @@ This model does not include any delays in the coupling yet.
 Below, we will go through the two main options for introducing delay-coupling to this model.
 
 References
-----------
+^^^^^^^^^^
 .. [1] H. Smith. (2011) *An Introduction to Delay Differential Equations with Applications to the Life Sciences.*
        Springer, New York.
 .. [2] R. Gast, R. Gong, H. Schmidt, H.G.E. Meijer, T.R. Knoesche (2021) *On the Role of Arkypallidal and Prototypical
@@ -76,7 +76,7 @@ clear(net)
 # introduction of delays.
 #
 # Option 1: Using Delayed Differential Equations
-# ==============================================
+# ----------------------------------------------
 #
 # PyRates allows for the implementation of delayed differential equation (DDE) systems. In the case of our exemplary
 # model, we would like to implement a leaky integrator system with the following evolution equations:
@@ -120,7 +120,7 @@ clear(net)
 # software packages to solve it. An example of that can be found in the model analysis gallery.
 #
 # Option 2: Using Distributed Delays
-# ==================================
+# ----------------------------------
 #
 # As an alternative, you can define distributed delays in PyRates as convolutions of the source variable of an edge with
 # a gamma kernel. This procedure is explained in detail in [1]_ and has been applied to a system of coupled QIF neurons

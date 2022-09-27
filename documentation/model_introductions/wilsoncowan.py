@@ -1,5 +1,4 @@
 """
-
 The Wilson-Cowan Neural Mass Model
 ================================
 

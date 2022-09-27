@@ -33,7 +33,7 @@ Note that PyRates also provides model templates for the biophysical Izhikevich m
 spike-threshold heterogeneity as derived in [3]_. The model templates are available in the same YAML file.
 
 References
-----------
+^^^^^^^^^^
 
 .. [1] E. Izhikevich (2007) *Dynamical Systems in Neuroscience: The Geometry of Excitability and Bursting.* MIT Press.
 
