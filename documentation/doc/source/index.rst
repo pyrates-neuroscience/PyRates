@@ -34,6 +34,7 @@ Content
    installation
    simple_example
    math_syntax
+   template_specification
    changelog
 
 .. toctree::

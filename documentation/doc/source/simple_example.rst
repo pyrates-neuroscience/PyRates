@@ -7,8 +7,8 @@ based on a pre-implemented model.
 It is taken from a `jupyter notebook <https://github.com/pyrates-neuroscience/PyRates/blob/master/documentation/Tutorial_PyRates_Basics.ipynb>`_, which provides detailed insight
 into the model and how to implement it and use it in `PyRates`.
 
-The following code performs a numerical integration of the evolution equations of the Jansen-Rit model over a time
-interval of 2 s.
+The following code performs a numerical integration of the evolution equations of the Jansen-Rit neural mass model
+over a time interval of 2 s.
 
 .. code-block::
 
