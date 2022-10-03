@@ -587,7 +587,18 @@ class CircuitTemplate(AbstractBaseTemplate):
             net.clear()
         self._ir = net._ir
 
-        return func, args, arg_names, state_var_indices
+        # map the backend variable names to the frontend variable names
+        state_var_map = {}
+        for v, idx in state_var_indices.items():
+            v_new = net._ir.get_frontend_varname(v)
+            state_var_map[v_new] = idx
+        args_mapped = []
+        for arg in arg_names:
+            try:
+                args_mapped.append(net._ir.get_frontend_varname(arg))
+            except ValueError:
+                args_mapped.append(arg)
+        return func, args, tuple(args_mapped), state_var_map
 
     def apply(self, adaptive_steps: bool = None, label: str = None, node_values: dict = None, edge_values: dict = None,
               vectorize: bool = True, verbose: bool = True, **kwargs) -> None:

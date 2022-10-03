@@ -957,6 +957,26 @@ class CircuitIR(AbstractBaseIR):
             v = self._front_to_back[var]
         return v.name if get_key else v
 
+    def get_frontend_varname(self, var: str) -> str:
+        """Returns the original frontend variable name given the backend variable name `var`.
+
+        Parameters
+        ----------
+
+        var
+            Name of the backend variable.
+
+        Returns
+        -------
+        str
+            Name of the frontend variable
+        """
+        v = self.get_var(var)
+        front_vars = list(self._front_to_back.keys())
+        back_vars = list(self._front_to_back.values())
+        idx = back_vars.index(v)
+        return front_vars[idx]
+
     def run(self,
             simulation_time: float,
             outputs: Optional[dict] = None,
@@ -1036,11 +1056,8 @@ class CircuitIR(AbstractBaseIR):
 
         # else, find the frontend variable names of the returned results and create a new results dict to return
         for key in results.copy():
-            v = self.get_var(key)
-            front_keys = list(self._front_to_back.keys())
-            front_vs = list(self._front_to_back.values())
-            idx = front_vs.index(v)
-            results[front_keys[idx]] = results.pop(key)
+            front_key = self.get_frontend_varname(key)
+            results[front_key] = results.pop(key)
         return results
 
     def get_run_func(self, func_name: str, file_name: Optional[str] = None, **kwargs) -> tuple:

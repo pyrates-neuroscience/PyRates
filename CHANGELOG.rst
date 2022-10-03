@@ -4,7 +4,11 @@ Changelog
 0.17
 ----
 
-.. _section-1:
+0.17.2
+~~~~~~
+
+- the state variable indices and parameter names returned as the fourth and third return values of `CircuitTemplate.get_run_func`, respectively, now use the frontend variable names instead of the backend variable names
+- implemented a method `CircuitIR.get_frontend_varname` that returns the frontend variable name given a backend variable name
 
 0.17.1
 ~~~~~~
@@ -27,12 +31,8 @@ Changelog
    operator on ``NodeTemplate`` and ``EdgeTemplate``, and each variable
    on ``OperatorTemplate``
 
-.. _section-2:
-
 0.16
 ----
-
-.. _section-3:
 
 0.16.0
 ~~~~~~
@@ -53,12 +53,8 @@ Changelog
    variables where the ``shape`` attribute was an empty tuple
 -  applied all changed to the gallery examples in the documentation
 
-.. _section-4:
-
 0.15
 ----
-
-.. _section-5:
 
 0.15.1
 ~~~~~~
@@ -78,8 +74,6 @@ Changelog
    strings now in order to combine vectorized variables
 -  removed a bug where calling ``clear_frontend_caches`` did not clear
    all IR caches properly
-
-.. _section-6:
 
 0.15.0
 ~~~~~~
@@ -103,12 +97,8 @@ Changelog
    edges with non-zero weights are added to the ``CircuitTemplate``
    instance
 
-.. _section-7:
-
 0.14
 ----
-
-.. _section-8:
 
 0.14.3
 ~~~~~~
@@ -118,14 +108,10 @@ Changelog
 -  implemented a method in CircuitTemplate that allows to get the
    indices of state variables within the system state vector
 
-.. _section-9:
-
 0.14.2
 ~~~~~~
 
 -  updated changelog
-
-.. _section-10:
 
 0.14.1
 ~~~~~~
@@ -136,8 +122,6 @@ Changelog
    thresholds)
 -  improved documentation gallery examples (debugged equations, added
    images, added Izhikevich model references)
-
-.. _section-11:
 
 0.14.0
 ~~~~~~
@@ -152,12 +136,8 @@ Changelog
 -  improved the backend implementation of choosing between different
    solvers (less code overlap between backends now)
 
-.. _section-12:
-
 0.13
 ----
-
-.. _section-13:
 
 0.13.0
 ~~~~~~
@@ -172,12 +152,8 @@ Changelog
 -  the Julia backend received support for performing DDE simulations
    from within PyRates via its interface to ``DifferentialEquations.jl``
 
-.. _section-14:
-
 0.12
 ----
-
-.. _section-15:
 
 0.12.2
 ~~~~~~
@@ -190,8 +166,6 @@ Changelog
 -  added a new QIF model template that includes conductance-based
    synapses
 
-.. _section-16:
-
 0.12.1
 ~~~~~~
 
@@ -199,8 +173,6 @@ Changelog
 -  updated readme
 -  updated changelog
 -  updated default parameterization of the izhikevich model
-
-.. _section-17:
 
 0.12.0
 ~~~~~~
@@ -218,12 +190,8 @@ Changelog
 
 -  added the natural logarithm ‘log’ as backend function
 
-.. _section-18:
-
 0.11
 ----
-
-.. _section-19:
 
 0.11.1
 ~~~~~~
@@ -236,8 +204,6 @@ Changelog
    delays to models
 -  added a new gallery example demonstrating the different options to
    optimize run times of numerical simulations
-
-.. _section-20:
 
 0.11.0
 ~~~~~~
@@ -258,19 +224,13 @@ Changelog
 -  deleted old, deprecated code fragments
 -  removed the dependecy on pyparsing
 
-.. _section-21:
-
 0.10
 ----
-
-.. _section-22:
 
 0.10.1
 ~~~~~~
 
 -  updates to changelog and setup.py
-
-.. _section-23:
 
 0.10.0
 ~~~~~~
@@ -307,12 +267,8 @@ Changelog
       -  new example galleries and jupyter notebooks with hands-on use
          examples
 
-.. _section-24:
-
 0.9
 ---
-
-.. _section-25:
 
 0.9.6
 ~~~~~
@@ -327,8 +283,6 @@ Changelog
    -  removed unnecessary copying/indexing operations of original edge
       source variable
 
-.. _section-26:
-
 0.9.5
 ~~~~~
 
@@ -342,8 +296,6 @@ Changelog
 
    -  zero-weight edges are now removed much earlier in the compilation
       process, thus reducing compilation time.
-
-.. _section-27:
 
 0.9.4
 ~~~~~
@@ -360,8 +312,6 @@ Changelog
       zero-weight edges are removed during the vectorization, even if
       they have a delay defined on them (previously, defining a delay on
       a zero-weight edge kept that edge in the graph).
-
-.. _section-28:
 
 0.9.3
 ~~~~~
@@ -397,8 +347,6 @@ Changelog
       ``pyrates.utility.visualization.Interactive2DParamPlot``. A title
       for the 2D plot can now be passed, a colorbar is added, and the
       location of the axis ticks of the 2D plot was improved
-
-.. _section-29:
 
 0.9.2
 ~~~~~
@@ -550,8 +498,6 @@ Changelog
       ``pyrates.ir.circuit.CircuitIR.run()`` to the backend run
       function. Now all printed output of PyRates can be muted.
 
-.. _section-30:
-
 0.9.1
 ~~~~~
 
@@ -582,8 +528,6 @@ Changelog
    already supported by all other parts of the hierarchy, only circuits
    missed out until now.
 
-.. _section-31:
-
 0.9.0
 ~~~~~
 
@@ -599,8 +543,6 @@ Changelog
    convoluted Gamma-Kernels based on differential equation using a mean
    and spread parameter for the delay
 -  various performance improvements
-
-.. _section-32:
 
 0.8
 ---
@@ -624,8 +566,6 @@ Changelog
 -  New feature: model optimization with genetic algorithms, available
    under ``pyrates.utility.genetic_algorithm``
 -  Miscellaneous bug fixes
-
-.. _section-33:
 
 0.8.0
 ~~~~~
