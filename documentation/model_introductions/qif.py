@@ -13,11 +13,11 @@ coupled QIF neurons in [1]_. The model equations are given by:
 where :math:`r` is the average firing rate and :math:`v` is the average membrane potential of the QIF population [1]_.
 It is governed by 4 parameters:
     - :math:`\\tau` --> the population time constant
-    - :math:`\\bar \\eta` --> the mean of a Lorenzian distribution over the neural excitability in the population
-    - :math:`\\Delta` --> the half-width at half maximum of the Lorenzian distribution over the neural excitability
+    - :math:`\\bar \\eta` --> the mean of a Cauchy distribution over the neural excitability in the population
+    - :math:`\\Delta` --> the half-width at half maximum of the Cauchy distribution over the neural excitability
     - :math:`J` --> the strength of the recurrent coupling inside the population
 This mean-field model is an exact representation of the macroscopic firing rate and membrane potential dynamics of a
-spiking neural network consisting of QIF neurons with Lorentzian distributed background excitabilities.
+spiking neural network consisting of QIF neurons with `Cauchy <https://en.wikipedia.org/wiki/Cauchy_distribution>`_ distributed background excitabilities.
 While the mean-field derivation is mathematically only valid for all-to-all coupled populations of infinite size,
 it has been shown that there is a close correspondence between the mean-field model and neural populations with
 sparse coupling and population sizes of a few thousand neurons [2]_. In the same work, it has been demonstrated how to
@@ -44,7 +44,7 @@ References
        Review X, 5:021028, https://doi.org/10.1103/PhysRevX.5.021028.
 
 .. [2] R. Gast, H. Schmidt, T.R. Knösche (2020) *A Mean-Field Description of Bursting Dynamics in Spiking Neural
-       Networks with Short-Term Adaptation.* Neural Computation 32 (9): 1615-1634.
+       Networks with Short-Term Adaptation.* Neural Computation 32 (9): 1615-1634, https://doi.org/10.1162/neco_a_01300.
 
 """
 
@@ -67,7 +67,7 @@ References
 # the backend, starting with a defined step-size. Here, we use the default backend and solver. Furthermore,
 # we provide a step-function extrinsic input that excites all QIF neurons in a time window from :code:`start` to
 # :code:`stop`. This input is defined on a time vector with fixed time steps of size :code:`step_size`.
-# Check out the arguments of the code:`CircuitTemplate.run()` method for a detailed explanation of the
+# Check out the arguments of the :code:`CircuitTemplate.run()` method for a detailed explanation of the
 # arguments that you can use to adjust this numerical procedure.
 
 from pyrates import integrate
@@ -127,4 +127,4 @@ plt.show()
 # kind of model behavior to expect if you make changes to the adaptation parameters. To change the parameters, you need
 # to derive a new operator template from the given operator template in a yaml file and simply set the parameter you
 # would like to change. For a detailed introduction on how to handle model definitions via YAML files, have a look at
-# the model definition gallery.
+# the `model definition use example <https://pyrates.readthedocs.io/en/latest/auto_implementations/yaml_definitions.html>`_.

@@ -12,7 +12,8 @@ In cartesian coordinates, the evolution equations of the Stuart Landau oscillato
 with intrinsic angular frequency :math:`\omega`. It can be used as the generating model of a harmonic oscillation with
 frequency :math:`\omega` and is thus useful to incorporate periodic forcing into dynamical systems models.
 Below, we provide an example where we apply periodic forcing to a Van der Pol oscillator (for a detailed description of
-the latter, see the corresponding gallery example in the section `Model introductions`).
+the latter, see the corresponding `use example <https://pyrates.readthedocs.io/en/latest/auto_introductions/vanderpol.html>`
+in the use example section `Model introductions`).
 
 References
 ^^^^^^^^^^
@@ -34,7 +35,7 @@ References
 # differential equations for a time interval from 0 to the given simulation time.
 # This solution will be calculated numerically by a differential equation solver in the backend, starting with a
 # defined step-size. Here, we use the default backend and a Runge-Kutta 2(3) solver.
-# Check out the arguments of the code:`CircuitTemplate.run()` method for a detailed explanation of the
+# Check out the arguments of the :code:`CircuitTemplate.run()` method for a detailed explanation of the
 # arguments that you can use to adjust this numerical procedure.
 
 from pyrates import CircuitTemplate, clear

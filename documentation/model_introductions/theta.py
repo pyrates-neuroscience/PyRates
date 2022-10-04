@@ -3,7 +3,7 @@ Theta Neuron Mean-Field Model
 =============================
 
 Here, we will introduce the mean-field model of a network of all-to-all coupled theta neurons. The theta neuron model
-is also known as the `Ermentrout-Kopell <http://www.scholarpedia.org/article/Ermentrout-Kopell_canonical_model>_` model
+is also known as the `Ermentrout-Kopell <http://www.scholarpedia.org/article/Ermentrout-Kopell_canonical_model>`_ model
 and takes the form
 
 .. math::

@@ -16,8 +16,7 @@ In this gallery, we will simulate and visualize the model dynamics for :math:`\m
 References
 ^^^^^^^^^^
 
-.. [1] T. Kanamaru (2007) *Van der Pol oscillator* Scholarpedia 2(1): 2202.
-DOI: 10.4249/scholarpedia.2202.
+.. [1] T. Kanamaru (2007) *Van der Pol oscillator* Scholarpedia 2(1): 2202. DOI: 10.4249/scholarpedia.2202.
 
 """
 
@@ -25,7 +24,7 @@ DOI: 10.4249/scholarpedia.2202.
 # Van der Pol oscillator dynamics
 # -------------------------------
 #
-# Step 1: Numerical simulation of the model dynamics for :math:`\\mu = 0`
+# Step 1: Numerical simulation of the model dynamics for :math:`\mu = 0`
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
 # First, we will load a :code:`CircuitTemplate` instance via the path to the model definition.
@@ -33,7 +32,7 @@ DOI: 10.4249/scholarpedia.2202.
 # differential equations for a time interval from 0 to the given simulation time.
 # This solution will be calculated numerically by a differential equation solver in the backend, starting with a
 # defined step-size. Here, we use the default backend and a Runge-Kutta 2(3) solver.
-# Check out the arguments of the code:`CircuitTemplate.run()` method for a detailed explanation of the
+# Check out the arguments of the :code:`CircuitTemplate.run()` method for a detailed explanation of the
 # arguments that you can use to adjust this numerical procedure.
 
 from pyrates import CircuitTemplate, clear
@@ -59,8 +58,8 @@ clear(model)
 
 # %%
 #
-# Step 2: Numerical simulation of the model dynamics for :math:`\\mu = 5`
-# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+# Step 2: Numerical simulation of the model dynamics for :math:`\mu = 5`
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
 # As expected, we found harmonical oscillations for :math:`\mu = 0`.
 # Now, we will repeat the procedure for :math:`\mu = 5`.
@@ -78,4 +77,5 @@ plt.show()
 
 # %%
 # We find a much less harmonical waveform of the oscillations. For investigations of the Van der Pol oscillator driven
-# by a periodic input signal, see the `entrainment` example in the gallery section `Model analysis`.
+# by a periodic input signal, see the `entrainment example <https://pyrates.readthedocs.io/en/latest/auto_analysis/entrainment.html>`_
+# in the use examples section `Model analysis`.

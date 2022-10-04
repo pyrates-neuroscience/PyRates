@@ -3,10 +3,7 @@ The Wilson-Cowan Neural Mass Model
 ================================
 
 Here, we will introduce the Wilson-Cowan model, a popular neural mass model of the dynamic interactions between
-2 populations:
-
-    - excitatory projection neurons (E)
-    - inhibitory interneurons (I)
+2 populations: excitatory projection neurons (E), and inhibitory interneurons (I).
 
 The model is of phenomenological nature, but captures well the steady-states in average firing rate of populations of
 leaky integrate-and-fire neurons [1]_. It is probably the most-used existing neural mass model and has been applied to
@@ -38,7 +35,7 @@ References
 ^^^^^^^^^^
 
 .. [1] H.R. Wilson and J.D. Cowan (1972) *Excitatory and Inhibitory Interactions in Localized Populations of Model
-Neurons.* Biophysical Journal 12.
+       Neurons.* Biophysical Journal 12.
 
 """
 

@@ -2,7 +2,8 @@
 The Kuramoto Oscillator
 =======================
 
-Here, we will introduce the Kuramoto model, a generic phase oscillator model with a wide range of applications [1]_.
+Here, we will introduce the `Kuramoto model <https://en.wikipedia.org/wiki/Kuramoto_model>`_,
+a generic phase oscillator model with a wide range of applications [1]_.
 In its simplest form, each Kuramoto oscillator is governed by a non-linear, 1st order ODE:
 
 .. math::
@@ -42,7 +43,7 @@ References
 # the backend, starting with a defined step-size. Here, we use the default backend and solver. Furthermore,
 # we provide a step-function extrinsic input to one of the Kuramoto oscillators in a time window from :code:`start` to
 # :code:`stop`. This input is defined on a time vector with fixed time steps of size :code:`step_size`.
-# Check out the arguments of the code:`CircuitTemplate.run()` method for a detailed explanation of the
+# Check out the arguments of the :code:`CircuitTemplate.run()` method for a detailed explanation of the
 # arguments that you can use to adjust this numerical procedure.
 
 from pyrates import integrate
@@ -73,7 +74,8 @@ plt.show()
 # Kuramoto Order Parameter Dynamics
 # ---------------------------------
 #
-# The Kuramoto order parameter :math:`z` of a system of coupled phase oscillators is given by
+# The `Kuramoto order parameter <https://mathinsight.org/applet/kuramoto_order_parameters>`_ :math:`z` of a system of
+# coupled phase oscillators is given by
 #
 # .. math::
 #         z = \sigma e^{i\phi} = \frac{1}{N} \sum_{j=1}^N e^{i \theta_j},

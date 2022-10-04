@@ -31,8 +31,8 @@ dendritic tree to the soma [3]_. The convolution operation can be expressed via 
         \\dot V &= I, \n
         \\dot I &= \\frac{H}{\\tau} m_{in} - \\frac{2 I}{\\tau} - \\frac{V}{\\tau^2},
 
-where :math:`V` represents the average post-synaptic potential and :math:`H` and :math:`\tau` are the efficacy and
-the time-scale of the synapse, respectively. As a second operator, the translation of the average membrane potential
+where :math:`V` represents the average post-synaptic potential and :math:`H` and :math:`\\tau` are the efficacy and
+the timescale of the synapse, respectively. As a second operator, the translation of the average membrane potential
 deflection at the soma to the average firing of the population is given by a sigmoidal function:
 
 .. math::

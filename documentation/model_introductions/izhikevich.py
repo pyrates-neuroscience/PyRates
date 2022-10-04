@@ -128,5 +128,5 @@ plt.show()
 # %%
 # you can see, changing the synaptic conductance drove the Izhikevich model in an oscillating regime and the extrinsic
 # input now suppresses these oscillations. Check out [2]_ if you would like to test out some different parameter
-# regimes. For a detailed introduction on how to handle model definitions via YAML files, have a look at the model
-# definition gallery.
+# regimes. For a detailed introduction on how to handle model definitions via YAML files, have a look at
+# the `model definition use example <https://pyrates.readthedocs.io/en/latest/auto_implementations/yaml_definitions.html>`_.

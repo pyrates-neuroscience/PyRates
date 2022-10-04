@@ -4,6 +4,11 @@ Changelog
 0.17
 ----
 
+0.17.3
+~~~~~~
+
+- minor debugging of the model introduction use examples
+
 0.17.2
 ~~~~~~
 
