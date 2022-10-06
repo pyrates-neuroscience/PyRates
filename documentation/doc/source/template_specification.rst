@@ -21,17 +21,14 @@ Operator template
      base: OperatorTemplate  # reference to the Python object that is used as basis
      label: "..." # (optional) alternative name for display
      equations: # single equation string or list of equation strings
-     variables: # further information to define aspects of variables
-       var_name:  # must be the same as used in the equation
-         description: "..." # (optional) explanation
-         unit: "..." # (optional) unit of the variable (only as additional info, not used) 
-         default:  # defines data type, variable type and/or default value
-           # can be any of the following:
-           # - `float` or `int` with default value in brackets, e.g. `float(1.2)`
-           # - plain default value, e.g. `0.37`
-           # - `input` or `output`
-           # if a value is given, the variable will be treated as a constant, without as 
-           # state variable
+     variables: # further information to define aspects of equation variables
+       var_name: ... # must be the same as used in the equation
+       var_name2: value # values can be any of the following:
+           # - plain value, e.g. `0.37`
+           # - `input` or `output` or `variable` (in that case, parentheses can be used to provide
+           #   initial values, e.g. `variable(0.1+0.4j)` for a complex variable)
+           # If a value is given, the variable will be treated as a constant,
+           # else as a variable that can change over time.
 
 Node template
 -------------
@@ -75,8 +72,8 @@ Circuit template
 Template inheritance
 --------------------
 
-Template can inherit from other templates. To do this, the parent
-template needs to be specified as ``base``. All other + information
+Templates can inherit from other templates. To do this, the parent
+template needs to be specified as ``base``. All other information
 given in the new template will be considered as changes to the parent
 template. For example:
 
@@ -84,9 +81,14 @@ template. For example:
 
    MyOperator:
        base: OperatorTemplateName
+       equations:
+         add: # add additional equations
+         replace: # replace parts of the equation strings
+            old1: new1
+         remove: # remove parts of the equation strings
+            - old2
        variables:
-         var_name:
-           default: 2
+         var_name: 2
 
 Adapting templates when called
 ------------------------------
@@ -100,7 +102,7 @@ changed on-the-fly.
      operators:
        MyOperator:
          variables:
-           var_name: 3  # this way the default will be overwritten (but you could also explicitly say "default")
+           var_name: 3
 
 Template paths and YAML aliases
 -------------------------------
