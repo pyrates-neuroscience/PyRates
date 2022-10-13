@@ -149,14 +149,14 @@ class BaseBackend(CodeGen):
         self._no_funcs = ["identity", "index_1d", "index_2d", "index_range", "index_axis"]
 
         # file-creation-related attributes
-        fdir, fname = self.get_fname(kwargs.pop('file_name', 'pyrates_run'))
+        fdir, *fname = self.get_fname(kwargs.pop('file_name', 'pyrates_run'))
         if fdir:
             sys.path.append(fdir)
         else:
             sys.path.append(os.getcwd())
         self.fdir = fdir
-        self._fname = fname
-        self._fend = kwargs.pop('file_ending', '.py')
+        self._fname = fname[0]
+        self._fend = f".{fname[1]}" if len(fname) > 1 else kwargs.pop('file_ending', '.py')
 
     def get_var(self, v: ComputeVar):
         if v.is_float or v.is_complex:

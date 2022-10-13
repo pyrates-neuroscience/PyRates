@@ -9,6 +9,7 @@ Changelog
 
 - minor debugging of the model introduction use examples
 - adjustments of the template cheat sheet `template_specification.rst`
+- debugged issue in base backend, where file names specified by the users that contained a file ending wre not handled properly
 
 0.17.2
 ~~~~~~
