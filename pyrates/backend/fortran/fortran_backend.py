@@ -370,7 +370,7 @@ class FortranBackend(BaseBackend):
 
         auto_constants['NDIM'] = len(state_vars)
         auto_constants['NPAR'] = len(func_args)
-        for key in kwargs:
+        for key in list(kwargs.keys()):
             if key in auto_constants:
                 auto_constants[key] = kwargs.pop(key)
 

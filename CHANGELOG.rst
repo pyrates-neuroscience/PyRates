@@ -10,6 +10,8 @@ Changelog
 - minor debugging of the model introduction use examples
 - adjustments of the template cheat sheet `template_specification.rst`
 - debugged issue in base backend, where file names specified by the users that contained a file ending wre not handled properly
+- debugged issue with fortran backend where file names that contained a directory path were not handled properly for module imports
+- debugged issue with fortran backend where adjustments of the default auto meta parameters were not applied correctly
 
 0.17.2
 ~~~~~~

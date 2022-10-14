@@ -21,7 +21,7 @@ Dependencies
 - `sympy`
 - `scipy`
 
-Following the installation isntructions below, these packages will be installed automatically, if not already installed within the `Python` environment you are using.
+Following the installation instructions below, these packages will be installed automatically, if not already installed within the `Python` environment you are using.
 In addition, `PyRates` has soft dependencies, that are not necessarily installed automatically, but are required to make use of all functionalities of `PyRates`.
 These are:
 
@@ -37,7 +37,7 @@ These are:
 Installation
 ------------
 
-PyRates can be installed via the `pip` command.  and then simply run the following line from a terminal with the
+`PyRates` can be installed via the `pip` command.  Simply run the following line from a terminal with the target Python
 environment being activated:
 
 .. code-block:: bash
