@@ -4,6 +4,11 @@ Changelog
 0.17
 ----
 
+0.17.4
+~~~~~~
+
+- added sign function to the backend that returns the sign of its input (1 or -1)
+
 0.17.3
 ~~~~~~
 

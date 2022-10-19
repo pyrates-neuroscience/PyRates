@@ -106,6 +106,7 @@ base_funcs = {
     'imag': {'call': 'imag', 'func': np.imag, 'imports': ['numpy.imag']},
     'conj': {'call': 'conjugate', 'func': np.conjugate, 'imports': ['numpy.conjugate']},
     'absv': {'call': 'abs', 'func': np.abs, 'imports': ['numpy.abs']},
+    'sign': {'call': 'sign', 'func': np.sign, 'imports': ['numpy.sign']},
     'log': {'call': 'log', 'func': np.log, 'imports': ['numpy.log']},
     'past': {'call': 'past', 'func': past},
     'concatenate': {'call': 'concatenate', 'func': np.concatenate, 'imports': ['numpy.concatenate']}

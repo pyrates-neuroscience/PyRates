@@ -101,6 +101,31 @@ end function {fname}
     return fname, func
 
 
+# wrapper function for interpolating a 1d-array
+def get_sign_def(idx: int, out_shape: Union[tuple, str] = '', dtype: str = 'real') -> tuple:
+    isarray = len(out_shape) > 0
+    fname = f"fsign_{idx}"
+    sign_n = f"s = size(x)\ndo n=1,s\n  {fname}(n) = sign(a,x(n))\nend do"
+    sign_0 = f"{fname} = sign(a,x)"
+
+    func = f"""
+function {fname}(x)
+
+implicit none
+
+{dtype} :: {fname}{out_shape if isarray else ''}
+{dtype} :: x{out_shape if isarray else ''}
+{dtype} :: a
+{"integer :: n, s" if isarray else ""}
+
+a = 1.0
+{sign_n if isarray else sign_0}
+
+end function {fname}
+    """
+    return fname, func
+
+
 # dictionary for backend import
 ###############################
 
@@ -128,5 +153,6 @@ fortran_funcs = {
     'imag': {'call': 'imagpart', 'func': np.imag},
     'conj': {'call': 'conjg', 'func': np.conjugate},
     'absv': {'call': 'abs', 'func': np.abs},
+    'sign': {'call': get_sign_def, 'func': np.sign},
     'log': {'call': 'log', 'func': np.log},
 }
