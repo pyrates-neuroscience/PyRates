@@ -37,7 +37,7 @@ References
 
 """
 
-# %%
+#%%
 # What is a YAML template file?
 # -----------------------------
 #
@@ -57,7 +57,7 @@ References
 # simulation, in Python, this is also possible in PyRates. Check out the Python-based model definition tutorial for
 # this.
 
-# %%
+#%%
 # Part 1: Operator Templates
 # --------------------------
 #
@@ -67,7 +67,7 @@ References
 # operator templates in PyRates, these operators just have to be defined once and can then be used to define different
 # parts of a model. We will now go through the 2 major operators that the Jansen-Rit model can be decomposed into.
 
-# %%
+#%%
 # Operator template for the PRO
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
@@ -77,7 +77,7 @@ References
 #
 # .. math::
 #
-#       m_{out} = \\frac{m_{max}}{1 + e^{(r (V_{thr} - V))}}.
+#       m_{out} = \frac{m_{max}}{1 + e^{(r (V_{thr} - V))}}.
 #
 # In this equation, :math:`m_{out}` and :math:`V` represent the average firing rate and membrane potential,
 # respectively, while :math:`m_{max}`, :math:`r` and :math:`V_{thr}` are constants defining the maximum firing rate,
@@ -99,7 +99,7 @@ References
 # As can be seen, this operator takes a membrane potential :math:`V` as input, and returns a firing rate
 # :math:`m_{out}` as output. Its typical, sigmoidal shape can be seen in :ref:`fig1` C.
 
-# %%
+#%%
 # Operator template structure:
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
@@ -137,7 +137,7 @@ References
 #     operations.
 #
 
-# %%
+#%%
 # Operator template for the RPO
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
@@ -186,7 +186,7 @@ References
 # Note, that we only re-defined the constants that needed to be changed, whereas everything else will be inherited from
 # :code:`RPO_e`.
 
-# %%
+#%%
 # Part 2: Node Templates
 # ----------------------
 #
@@ -196,7 +196,7 @@ References
 # As shown in :ref:`fig1` B, there exist 3 of those: pyramidal cells (PCs), excitatory interneurons (EINs) and
 # inhibitory interneurons (IINs). We will now define separate node templates for each population.
 
-# %%
+#%%
 # Node template for the EIN population
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
@@ -216,7 +216,7 @@ References
 #               - RPO_e
 #               - PRO
 
-# %%
+#%%
 # Node template structure
 # ^^^^^^^^^^^^^^^^^^^^^^^
 #
@@ -241,7 +241,7 @@ References
 #   - thus, an output variable on one operator, that should connect to the input variable of another operator, needs to
 #     have the same name as this input variable
 
-# %%
+#%%
 # Node template for the IIN population
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
@@ -258,7 +258,7 @@ References
 #               - RPO_e
 #               - PRO
 
-# %%
+#%%
 # Node template for the PC population
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
@@ -284,7 +284,7 @@ References
 # the PC population will be calculated as :math:`m_{in} = V_e + V_i` where :math:`V_e` and :math:`V_i` refer to the
 # output variables of the :code:`RPO_e` and :code:`RPO_i` operators, respectively.
 
-# %%
+#%%
 # Part 3: Edge Templates
 # ----------------------
 #
@@ -296,13 +296,13 @@ References
 # templates are required for this model. A detailed tutorial for how to implement different forms of edge operations
 # such as delays, convolutions etc., will be provided by the *edge definitions* example in this gallery.
 
-# %%
+#%%
 # Part 4: Circuit Templates
 # -------------------------
 #
 # A circuit template is what is used in PyRates to combine a set of nodes and edges to a full network model.
 
-# %%
+#%%
 # A circuit template for the Jansen-Rit model
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
@@ -324,7 +324,7 @@ References
 #               - [IIN/PRO/m_out, PC/RPO_i/m_in, null, {weight: 33.75}]
 #
 
-# %%
+#%%
 # Circuit template structure
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
