@@ -32,7 +32,7 @@ extensions = [
     'sphinx.ext.extlinks',
     'sphinx.ext.githubpages',
     'sphinx.ext.napoleon',
-    'sphinx.ext.imgmath',
+    #'sphinx.ext.imgmath',
     'matplotlib.sphinxext.plot_directive',
     'sphinx_gallery.gen_gallery'
 ]

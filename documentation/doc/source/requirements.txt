@@ -1,5 +1,5 @@
-sphinx
-sphinx-gallery
+sphinx >= 6.1.3
+sphinx-gallery >= 0.11.1
 sphinx_rtd_theme
 sphinxcontrib-httpdomain
 pillow

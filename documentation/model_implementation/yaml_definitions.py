@@ -1,4 +1,4 @@
-"""
+r"""
 YAML-Based Model Definitions
 ============================
 

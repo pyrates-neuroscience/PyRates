@@ -1,4 +1,4 @@
-"""
+r"""
 Izhikevich Neuron Mean-Field Model
 ==================================
 
@@ -8,10 +8,10 @@ The model equations are given by:
 
 .. math::
 
-    \\tau \\dot r &= \\frac{\\Delta}{\\pi\\tau} +  r(2 v - \\alpha - g \\tau s), \n
-    \\tau \\dot v &= v^2 - \\alpha v + \\bar\\eta + I(t) - u + g s \\tau (E-v) - (\\pi r \\tau)^2, \n
-    \\dot u &= a(b v - u) + d r, \n
-    \\tau_s \\dot s &= -s + \\tau_s J r,
+    \tau \dot r &= \frac{\Delta}{\pi\tau} +  r(2 v - \\alpha - g \\tau s), \n
+    \tau \dot v &= v^2 - \alpha v + \bar\\eta + I(t) - u + g s \\tau (E-v) - (\\pi r \\tau)^2, \n
+    \dot u &= a(b v - u) + d r, \n
+    \tau_s \dot s &= -s + \\tau_s J r,
 
 where :math:`r` is the average firing rate, :math:`v` is the average membrane potential, :math:`u` is an average
 recovery variable, and :math:`s` is a post-synaptic current.

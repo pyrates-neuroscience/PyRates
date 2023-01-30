@@ -1,4 +1,4 @@
-"""
+r"""
 Delay Coupling
 ==============
 
@@ -7,9 +7,9 @@ PyRates. As an example, we will use a model of :math:`N = 2` interconnected leak
 equations of which are given by
 
 .. math::
-        \\dot x_i = - \\frac{x_i}{\\tau} + \\sum_{j=1}^N J_{ij} \\tanh(x_j),
+        \dot x_i = - \frac{x_i}{\tau} + \sum_{j=1}^N J_{ij} \tanh(x_j),
 
-with individual rates :math:`x_i`, a global time scale :math:`\\tau` and coupling weights :math:`J_{ij}`.
+with individual rates :math:`x_i`, a global time scale :math:`\tau` and coupling weights :math:`J_{ij}`.
 This model does not include any delays in the coupling yet.
 Below, we will go through the two main options for introducing delay-coupling to this model.
 
