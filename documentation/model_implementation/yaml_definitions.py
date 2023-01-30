@@ -76,7 +76,8 @@ References
 # within a population into an average firing rate. It is defined by the following instantaneous, sigmoidal transform:
 #
 # .. math::
-#       m_{out} = \frac{m_{max}}{1 + e^{(r (V_{thr} - V))}}.
+#
+#       m_{out} = \\frac{m_{max}}{1 + e^{(r (V_{thr} - V))}}.
 #
 # In this equation, :math:`m_{out}` and :math:`V` represent the average firing rate and membrane potential,
 # respectively, while :math:`m_{max}`, :math:`r` and :math:`V_{thr}` are constants defining the maximum firing rate,
