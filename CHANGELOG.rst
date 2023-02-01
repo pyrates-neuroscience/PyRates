@@ -1,6 +1,19 @@
 Changelog
 =========
 
+1.0
+---
+
+1.0.0
+-----
+
+This official release is a combination of all the bug fixes and improvements in the
+pre 1.0 versions.
+
+Minor improvements since 0.17.4:
+
+- removed typos in documentation
+
 0.17
 ----
 

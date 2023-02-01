@@ -56,7 +56,7 @@ tanh_net = CircuitTemplate(name="tanh_net", nodes={"li1": li, "li2": li},
 # %%
 # This circuit contains a single edge from node `li1` to node `li2`, which uses the `tanh_edge` as its coupling
 # function. To make sure the edge works, lets perform a numerical simulation, where we ramp up the extrinsic input
-# :math:`u(t)`to `li1`. We would expect (1) the input to continuously increase :math:`r_1`, (2) that increases in
+# :math:`u(t)` to `li1`. We would expect (1) the input to continuously increase :math:`r_1`, (2) that increases in
 # :math:`r_1` lead to an increase in :math:`r_2` due to the coupling, and (3) that increases in :math:`r_2` will
 # eventually hit a ceiling due to the hyperbolic tangent being the coupling function. Let's see if our expectations are
 # met:
@@ -83,17 +83,15 @@ plt.show()
 # with an impulse response function (or response kernel).
 # Here, we choose a convolution with an alpha kernel by defining
 #
-# ..math::
-#
-#        f(r, t) = \int_0^{t} = \frac{t-t'}{\tau_{\alpha}^2} \exp(\frac{t-t'}{\tau_{\alpha}}) r(t') dt',
+# .. math::
+#       f(r, t) = \int_0^{t} = \frac{t-t'}{\tau_{\alpha}^2} \exp(\frac{t-t'}{\tau_{\alpha}}) r(t') dt',
 #
 # with alpha kernel time constant :math:`\tau_{\alpha}`.
 # This convolution integral can be solved analytically, yielding the following set of coupled differential equations:
 #
-# ..math::
-#
-#        \tau_{\alpha} \dot x = y, \\
-#        \tau_{\alpha} \dot y = -2y - x + \tau_{\alpha} r.
+# .. math::
+#       \tau_{\alpha} \dot x = y, \\
+#       \tau_{\alpha} \dot y = -2y - x + \tau_{\alpha} r.
 #
 # Thus, we can implement the alpha kernel convolution via an operator governed by these two differential equations:
 
