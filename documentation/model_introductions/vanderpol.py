@@ -13,19 +13,16 @@ with damping constant :math:`\mu`. Depending on the latter parameter, the period
 with simple harmonic oscillations for :math:`\mu = 0` and non-harmonic limit cycle oscillations for :math:`\mu > 0`.
 In this gallery, we will simulate and visualize the model dynamics for :math:`\mu = 0` and :math:`\mu = 0`.
 
-References
-^^^^^^^^^^
+**References**
 
 .. [1] T. Kanamaru (2007) *Van der Pol oscillator* Scholarpedia 2(1): 2202. DOI: 10.4249/scholarpedia.2202.
 
 """
 
 # %%
-# Van der Pol oscillator dynamics
-# -------------------------------
 #
 # Step 1: Numerical simulation of the model dynamics for :math:`\mu = 0`
-# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
 # First, we will load a :code:`CircuitTemplate` instance via the path to the model definition.
 # We will the use the :code:`CircuitTemplate.run` method to solve the initial value problem of the above defined

@@ -36,7 +36,7 @@ import matplotlib.pyplot as plt
 # %%
 #
 # Step 1: DDE definition
-# ----------------------
+# ^^^^^^^^^^^^^^^^^^^^^^
 #
 # DDEs can be defined in two different ways in PyRates. The first way would be the usage of the `past(y, tau)` function
 # call that indicates to PyRates that :math:`y(t-tau)` should be evaluated instead of :math:`y(t)`. An example of how to
@@ -76,7 +76,7 @@ vdp.update_template(edges=[('p/vdp_op/x', 'p/vdp_op/inp', None, {'weight': k, 'd
 # %%
 #
 # Step 2: DDE simulation
-# ----------------------
+# ^^^^^^^^^^^^^^^^^^^^^^
 #
 # We can perform a simple simulation using a forward Euler algorithm to solve the DDE as follows:
 

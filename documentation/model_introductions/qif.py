@@ -37,8 +37,7 @@ adaptation strength :math:`\\alpha` and time constant :math:`\\tau_a`.
 In the sections below, we will demonstrate for each model how to load the model template into pyrates, perform
 simulations with it and visualize the results.
 
-References
-^^^^^^^^^^
+**References**
 
 .. [1] E. Montbrió, D. Pazó, A. Roxin (2015) *Macroscopic description for networks of spiking neurons.* Physical
        Review X, 5:021028, https://doi.org/10.1103/PhysRevX.5.021028.
@@ -50,7 +49,7 @@ References
 
 # %%
 # Basic QIF Model
-# ---------------
+# ^^^^^^^^^^^^^^^
 #
 # We will start out by a tutorial of how to use the QIF model without adaptation. To this end, we will use the
 # high-level interfaces from PyRates which allow to perform model loading and simulation in a single step.
@@ -58,7 +57,7 @@ References
 
 # %%
 # Step 1: Numerical simulation of a the model behavior in time
-# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+# ------------------------------------------------------------
 #
 # Here, we use the :code:`integrate` function imported from PyRates. As a first argument to this function, either a path
 # to a YAML-based model definition or a :code:`CircuitTemplate` instance can be provided. The function will then compile
@@ -90,7 +89,7 @@ results = integrate("model_templates.neural_mass_models.qif.qif", step_size=step
 
 # %%
 # Step 2: Visualization of the solution
-# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+# -------------------------------------
 #
 # The output of the :code:`simulate()` function is a :code:`pandas.Dataframe`, which allows for direct plotting of the
 # timeseries it contains.
@@ -107,7 +106,7 @@ ax.set_ylabel('r')
 
 # %%
 # QIF SFA Model
-# -------------
+# ^^^^^^^^^^^^^
 #
 # Now, lets have a look at the QIF model with spike-frequency adaptation. We will follow the same steps as outlined
 # above.

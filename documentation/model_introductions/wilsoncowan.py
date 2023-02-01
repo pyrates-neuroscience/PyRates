@@ -11,7 +11,7 @@ a wide range of brain systems and neuroscientific questions.
 The dynamics of each population are described by a 1st-order ordinary differential equation (ODE):
 
 .. math::
-        \\tau \\dot r &= -r + (k - q r) S(m),
+        \\tau \\dot r = -r + (k - q r) S(m),
 
 where :math:`r` represents the average firing rate of the population, :math:`\tau` is a lumped population time constant,
 :math:`k` is a coupling term, :math:`q` is a refractory term, and :math:`S(m)` is the synaptic input.
@@ -31,8 +31,7 @@ Considering both the E and the I population, the Wilson-Cowan model can be descr
 where additional extrinsic inputs :math:`I_e` and :math:`I_i` have been added.
 Below, we will demonstrate how to load this a model into pyrates and perform numerical simulations with it.
 
-References
-^^^^^^^^^^
+**References**
 
 .. [1] H.R. Wilson and J.D. Cowan (1972) *Excitatory and Inhibitory Interactions in Localized Populations of Model
        Neurons.* Biophysical Journal 12.
@@ -41,7 +40,7 @@ References
 
 # %%
 # Step 1: Importing the frontend class for defining models
-# --------------------------------------------------------
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
 # As a first step, we import the :code:`pyrates.frontend.CircuitTemplate` class, which allows us to set up a model
 # definition in PyRates.
@@ -50,7 +49,7 @@ from pyrates.frontend import CircuitTemplate
 
 # %%
 # Step 2: Loading a model template from the `model_templates` library
-# -------------------------------------------------------------------
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
 # In the second step, we load a model template for the Wilson-Cowan model that comes with PyRates via the
 # :code:`from_yaml()` method of the :code:`CircuitTemplate`. This method returns a :code:`CircuitTemplate` instance.
@@ -65,7 +64,7 @@ wc = CircuitTemplate.from_yaml("model_templates.neural_mass_models.wilsoncowan.W
 
 # %%
 # Step 3: Numerical simulation of a the model behavior in time
-# ------------------------------------------------------------
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
 # After loading the model template, numerical simulations can be performed via the :code:`run()` method.
 # Calling this function will solve the initial value problem of the above defined differential equations for a time
@@ -100,7 +99,7 @@ results = wc.run(simulation_time=T,
 
 # %%
 # Step 4: Visualization of the solution
-# -------------------------------------
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
 # The output of the :code:`run()` method is a :code:`pandas.Dataframe`, which comes with a :code:`plot()` method for
 # plotting the timeseries it contains.

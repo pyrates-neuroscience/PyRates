@@ -7,7 +7,7 @@ a generic phase oscillator model with a wide range of applications [1]_.
 In its simplest form, each Kuramoto oscillator is governed by a non-linear, 1st order ODE:
 
 .. math::
-        \\dot \\theta_i &= \\omega + \\sum_j J_{ij} sin(\\theta_j - \\theta_i),
+        \\dot \\theta_i = \\omega + \\sum_j J_{ij} sin(\\theta_j - \\theta_i),
         :label: eq1
 
 with phase :math:`\\theta` and intrinsic frequency :math:`\\omega`. The sum represents sinusoidal coupling with all
@@ -23,8 +23,7 @@ entering at one of them:
 
 Below, we will first demonstrate how this model can be used and examined via PyRates.
 
-References
-^^^^^^^^^^
+**References**
 
 .. [1] Y. Kuramoto (1991) *Collective synchronization of pulse-coupled oscillators and excitable units.* Physia D: Nonlinear Phenomena 50(1): 15-30.
 
@@ -34,7 +33,7 @@ References
 
 # %%
 # 2 Coupled Kuramoto Oscillators
-# ------------------------------
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
 # Here, we use the :code:`integrate` function imported from PyRates. As a first argument to this function, either a path
 # to a YAML-based model definition or a :code:`CircuitTemplate` instance can be provided. The function will then compile
@@ -72,7 +71,7 @@ plt.show()
 
 # %%
 # Kuramoto Order Parameter Dynamics
-# ---------------------------------
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
 # The `Kuramoto order parameter <https://mathinsight.org/applet/kuramoto_order_parameters>`_ :math:`z` of a system of
 # coupled phase oscillators is given by
@@ -110,7 +109,8 @@ I_ext[int(start/step_size):int(stop/step_size)] = 2.0
 
 # perform simulation
 results = integrate("model_templates.oscillators.kuramoto.kmo_mf", step_size=step_size, simulation_time=T,
-                    outputs={'z': 'p/kmo_op/z'}, inputs={'p/kmo_op/s_ext': I_ext}, clear=True, solver='scipy')
+                    outputs={'z': 'p/kmo_op/z'}, inputs={'p/kmo_op/s_ext': I_ext}, clear=True, solver='scipy',
+                    float_precision='complex64')
 
 # plot resulting coherence dynamics
 import matplotlib.pyplot as plt
@@ -118,4 +118,6 @@ plt.plot(np.abs(results))
 plt.show()
 
 # %%
-# As can be seen, the system engaged in synchronized oscillations within the input period.
+# As can be seen, the system responded with an increased coherence to the stimulation. Note that we specified
+# :code:`float_precision='complex64'`. This is important to receice correct results, since it ensures that
+# none of the complex model variables are transformed into real variables, thus losing the imaginary part.

@@ -26,10 +26,10 @@ In this tutorial, we will demonstrate how to (1) , (2) perform a simple 1D param
 :math:`\\bar \\eta`, and (3) plot the corresponding bifurcation diagram.
 The latter has also been done in [1]_, so you can compare the resulting plot with the results reported by Montbrió et
 al. For parts (2) and (3) of the tutorial, it is required that you have
-`PyAuto <https://github.com/pyrates-neuroscience/PyAuto>`_ installed in the Python environment you are using.
+`PyCoBi <https://github.com/pyrates-neuroscience/PyCoBi>`_ installed in the Python environment you are using.
 
-References
-^^^^^^^^^^
+**References**
+
 .. [1] E. Montbrió, D. Pazó, A. Roxin (2015) *Macroscopic description for networks of spiking neurons.* Physical
        Review X, 5:021028, https://doi.org/10.1103/PhysRevX.5.021028.
 .. [2] E.J. Doedel, T.F. Fairgrieve, B. Sandstede, A.R. Champneys, Y.A. Kuznetsov and W. Xianjun (2007) *Auto-07p:
@@ -39,7 +39,7 @@ References
 
 import matplotlib.pyplot as plt
 from pyrates import CircuitTemplate
-from pyauto import PyAuto
+from pycobi import ODESystem
 import sys
 sys.path.append('../')
 
@@ -47,15 +47,15 @@ path = sys.argv[-1]
 auto_dir = path if type(path) is str and ".py" not in path else "~/PycharmProjects/auto-07p"
 
 # %%
-# Part 1: Creating a PyAuto Instance
-# ----------------------------------
+# Part 1: Creating a PyCoBi Instance
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
 # In this first part, we will be concerned with how to create a model representation that is compatible with auto-07p,
 # which is the software that is used for parameter continuations and bifurcation analysis in PyRates [2]_.
 
 # %%
 # Step 1: Load the model into PyRates
-# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+# -----------------------------------
 #
 # As a first step, we have to load the model into PyRates. This is done the usual way. If you are not familiar with
 # this, check out the example galleries for model definitions.
@@ -64,13 +64,13 @@ qif = CircuitTemplate.from_yaml("model_templates.neural_mass_models.qif.qif")
 
 # %%
 # Step 2: Generate the Fortran routines required by Auto-07p
-# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+# ----------------------------------------------------------
 #
 # In the next step, we will translate our model into a Fortran file containing all subroutines required by
 # :code:`auto-07p`. In short, :code:`auto-07p` requires a fortran file with the model equations and initial values [2]_.
 # This will require using the Fortran backend of PyRates and turning the :code:`vectorize` option off:
 
-qif.get_run_func(func_name='qif_rhs', file_name='qif', step_size=1e-4, auto=True, backend='fortran', solver='pyauto',
+qif.get_run_func(func_name='qif_rhs', file_name='qif', step_size=1e-4, auto=True, backend='fortran', solver='scipy',
                  vectorize=False, float_precision='float64')
 
 # %%
@@ -97,13 +97,13 @@ f.close()
 # `Auto-07p documentation <https://github.com/auto-07p/auto-07p>`_.
 
 # %%
-# Step 3: Generate a PyAuto instance
-# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+# Step 3: Generate a PyCoBi instance
+# ----------------------------------
 #
-# Now that the model equations are compiled, we can generate an instance of :code:`pyauto.PyAuto`, a Python
-# `tool <https://github.com/pyrates-neuroscience/PyAuto>`_ that provides and interface to :code:`auto-07p`.
+# Now that the model equations are compiled, we can generate an instance of :code:`pycobi.ODESystem`, a Python
+# `tool <https://github.com/pyrates-neuroscience/PyCoBi>`_ that provides and interface to :code:`auto-07p`.
 
-qif_auto = PyAuto(working_dir=None, auto_dir=auto_dir)
+qif_auto = ODESystem(working_dir=None, auto_dir=auto_dir, init_cont=False)
 
 # %%
 # Now, we can use all the tools provided by Auto-07p to investigate how the model reacts to changes in its
@@ -111,14 +111,14 @@ qif_auto = PyAuto(working_dir=None, auto_dir=auto_dir)
 
 # %%
 # Part 2: Performing Parameter Continuations
-# ------------------------------------------
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
-# In this part, we will demonstrate how to perform simple 1D parameter continuations via the :code:`PyAuto.run()`
+# In this part, we will demonstrate how to perform simple 1D parameter continuations via the :code:`ODESystem.run()`
 # method.
 
 # %%
 # Step 1: Time continuation
-# ^^^^^^^^^^^^^^^^^^^^^^^^^
+# -------------------------
 #
 # In parameter continuations, it is required that you start continuing the parameters from an
 # `equilibrium <http://www.scholarpedia.org/article/Equilibrium>`_ or
@@ -126,12 +126,12 @@ qif_auto = PyAuto(working_dir=None, auto_dir=auto_dir)
 # `initial value problem <http://www.scholarpedia.org/article/Initial_value_problems>`_ would be constant or periodic
 # in time. To achieve this, you can either set the initial values and parameters of your system to a known solution in
 # the model definition (e.g. the YAML template), or choose a model parameterization for which a finite solution exists
-# and then calculate the solution of the model in time until it converges to a equilibrium (or periodic orbit).
+# and then calculate the solution of the model in time until it converges to an equilibrium (or periodic orbit).
 # If you go with the latter, you can then start to perform parameter continuations using the values of the state
 # variables at the end point of your solution in time. This can be simply achieved by a call to the
-# :code:`CircuitIR.run()` method, before calling the :code:`to_pyauto()` method. Then, PyRates will automatically use
-# the values of the state variables from the last simulation step. Alternatively, you can perform simulations in time
-# via PyAuto as follows:
+# :code:`CircuitTemplate.run()` method, before calling the :code:`get_run_func()` method.
+# Then, PyRates will automatically use the values of the state variables from the last simulation step.
+# Alternatively, you can perform simulations in time via PyCoBi as follows:
 
 t_sols, t_cont = qif_auto.run(
     e='qif', c='ivp', name='time', DS=1e-4, DSMIN=1e-10, EPSL=1e-08, EPSU=1e-08, EPSS=1e-06,
@@ -141,7 +141,7 @@ qif_auto.plot_continuation('PAR(14)', 'U(1)', cont='time')
 plt.show()
 
 # %%
-# In this function call, you see how the general interface of the :code:`PyAuto.run()` method works. In every first call
+# In this function call, you see how the general interface of the :code:`ODESystem.run()` method works. In every first call
 # of this method, the name of a fortran equations files needs to be specified by the keyword argument :code:`e`. The
 # standard name of this function is :code:`rhs_func` when the file was automatically generated via PyRates. Also, we
 # declare a constants file via :code:`c='ivp'`. This file has been automatically generated by PyRates as well and
@@ -168,7 +168,7 @@ plt.show()
 
 # %%
 # Step 2: Continuation of :math:`\bar \eta`
-# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+# -----------------------------------------
 #
 # If you look at the auto-07p output in the terminal, you will see that the values for :code:`U(1)` and :code:`U(2)`
 # converged to certain values. These two values represent the current values of our state variables :math:`r` and
@@ -194,16 +194,16 @@ eta_sols, eta_cont = qif_auto.run(
 # intuitive explanation of the most important ones and refer to the
 # `auto documentation <https://github.com/auto-07p/auto-07p/tree/master/doc>`_ for the rest:
 #
-#   - :code:`origin='t_cont'` is a keyword argument specific to `PyAuto`. It tells auto-07p from which branch of
+#   - :code:`origin='t_cont'` is a keyword argument specific to `PyCoBi`. It tells auto-07p from which branch of
 #     solutions to start the parameter continuation from. This needs to be specified for every call to the
 #     :code:`.run()` method, except for the first (since their is no solutions branch at this point). Here, we
 #     specified the solution branch from our initial continuation in time.
-#   - :code:`starting_point='UZ1'` is a keyword argument specific to `PyAuto`. It tells auto-07p to start the
+#   - :code:`starting_point='UZ1'` is a keyword argument specific to `PyCoBi`. It tells auto-07p to start the
 #     continuation from the first user-specified marker of the provided origin
-#   - :code:`name='eta'` is a keyword argument specific to `PyAuto`. It tells PyAuto to store the results of the
+#   - :code:`name='eta'` is a keyword argument specific to `PyCoBi`. It tells PyCoBi to store the results of the
 #     continuation using this particular name. We can use this name for later continuations or for plotting, to indicate
 #     which continuation to start from or to plot the results of.
-#   - :code:`bidirectional=True` is a keyword argument specific to `PyAuto`. It tells PyAuto to change :math:`\bar\eta`
+#   - :code:`bidirectional=True` is a keyword argument specific to `PyCoBi`. It tells PyCoBi to change :math:`\bar\eta`
 #     both in the positive and the negative direction.
 #   - :code:`ICP=4` tells auto-07p to perform a 1D continuation over parameter number 4 (you can check in the fortran
 #     file *rhs_func.f* that :math:`\bar\eta` is indeed the 4th parameter)
@@ -236,7 +236,7 @@ plt.show()
 # Final step: Clean up all temporary files
 # ----------------------------------------
 #
-# As a last step, it is good practice to clean up all temporary files created by PyAuto and PyRates. This can be
+# As a last step, it is good practice to clean up all temporary files created by PyCoBi and PyRates. This can be
 # achieved with the following simple call:
 
 qif.clear()

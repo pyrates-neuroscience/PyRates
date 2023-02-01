@@ -596,7 +596,7 @@ class CircuitTemplate(AbstractBaseTemplate):
         for arg in arg_names:
             try:
                 args_mapped.append(net._ir.get_frontend_varname(arg))
-            except ValueError:
+            except (ValueError, KeyError):
                 args_mapped.append(arg)
         return func, args, tuple(args_mapped), state_var_map
 

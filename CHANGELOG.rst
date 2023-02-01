@@ -13,6 +13,9 @@ pre 1.0 versions.
 Minor improvements since 0.17.4:
 
 - removed typos in documentation
+- improved layout of the online documentation
+- updated documentation to account for latest changes
+- removed bug where a delayed differential equation model would lead to a KeyError when trying to generate the run function
 
 0.17
 ----

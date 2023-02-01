@@ -47,8 +47,8 @@ kmo_op:
     omega: 10.0
     Delta: 1.0
     i: 0.0+1.0j
-    s_in: input(0.0+0.0j)
-    s_ext: input(0.0+0.0j)
+    s_in: input(complex)
+    s_ext: input(complex)
 
 # node templates
 ################

@@ -8,7 +8,7 @@ and takes the form
 
 .. math::
 
-    \\dot \\theta_i &= (1 - \\cos(\\theta_i)) + I(t) (1 + \\cos(\\theta_i)),
+    \\dot \\theta_i = (1 - \\cos(\\theta_i)) + I(t) (1 + \\cos(\\theta_i)),
 
 with neural phase :math:`\\theta_i` and mean-field input :math:`I(t)` [1]_. The phase variable lies on the unit circle
 and when :math:`\\theta = \\pi` a spike is counted. Considering an all-to-all coupled network of :math:`N` theta neurons
@@ -18,8 +18,8 @@ a pulse-like synaptic current centered around :math:`\\theta_i = \\pi`, these me
 
 .. math::
 
-        \\dot z = \\frac{1}{2} [(i*(\\eta + s v_s) - \\Delta) (z+1)^2 - s(z^2-1) - i(z-1)^2], \\\\
-        s = \\frac{J (1-|z|)^2}{(1+z+\\bar z+ |z|^2}.
+        \\dot z &= \\frac{1}{2} [(i*(\\eta + s v_s) - \\Delta) (z+1)^2 - s(z^2-1) - i(z-1)^2], \n
+        s &= \\frac{J (1-|z|)^2}{(1+z+\\bar z+ |z|^2}.
 
 They are governed by 3 parameters:
     - :math:`\\eta` --> the mean of a Lorenzian distribution over the neural excitability in the population
@@ -32,8 +32,7 @@ spiking neural network consisting of theta neurons with Lorentzian distributed b
 Below, we will demonstrate ow to load the mhodel template into pyrates, perform simulations with it and visualize the
 results.
 
-References
-^^^^^^^^^^
+**References**
 
 .. [1] G.B. Ermentrout and N. Kopell (1986) *Parabolic bursting in an excitable system coupled with a slow oscillation.* SIAM-J.-Appl.-Math 46: 233-253.
 
@@ -43,7 +42,7 @@ References
 
 # %%
 # Step 1: Numerical simulation of a the model behavior in time
-# ------------------------------------------------------------
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
 # Here, we use the :code:`integrate` function imported from PyRates. As a first argument to this function, either a path
 # to a YAML-based model definition or a :code:`CircuitTemplate` instance can be provided. The function will then compile
@@ -71,11 +70,15 @@ I_ext[int(start/step_size):int(stop/step_size)] = 3.0
 
 # perform simulation
 results = integrate("model_templates.neural_mass_models.theta.kmo_theta", step_size=step_size, simulation_time=T,
-                    outputs={'z': 'p/theta_op/z'}, inputs={'p/theta_op/I_ext': I_ext}, clear=True, solver='scipy')
+                    outputs={'z': 'p/theta_op/z'}, inputs={'p/theta_op/I_ext': I_ext}, clear=True, solver='scipy',
+                    float_precision='complex64')
 
 # %%
+# Note that we specified :code:`float_precision='complex64'`. This is important to receice correct results, since it
+# ensures that none of the complex model variables are transformed into real variables, thus losing the imaginary part.
+#
 # Step 2: Visualization of the solution
-# -------------------------------------
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
 # The output of the :code:`simulate()` function is a :code:`pandas.Dataframe`, which allows for direct plotting of the
 # timeseries it contains.

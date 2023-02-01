@@ -60,8 +60,7 @@ synapses at both interneuron populations, respectively.
 
 Below, we will demonstrate how to load this a model into pyrates and perform numerical simulations with it.
 
-References
-^^^^^^^^^^
+**References**
 
 .. [1] B.H. Jansen & V.G. Rit (1995) *Electroencephalogram and visual evoked potential generation in a mathematical
        model of coupled cortical columns.* Biological Cybernetics, 73(4): 357-366.
@@ -77,7 +76,7 @@ References
 
 # %%
 # Step 1: Importing the frontend class for defining models
-# --------------------------------------------------------
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
 # As a first step, we import the :code:`pyrates.frontend.CircuitTemplate` class, which allows us to set up a model
 # definition in PyRates.
@@ -86,7 +85,7 @@ from pyrates.frontend import CircuitTemplate
 
 # %%
 # Step 2: Loading a model template from the `model_templates` library
-# -------------------------------------------------------------------
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
 # In the second step, we load a model template for the Jansen-Rit model that comes with PyRates via the
 # :code:`from_yaml()` method of the :code:`CircuitTemplate`. This method returns a :code:`CircuitTemplate` instance.
@@ -101,7 +100,7 @@ jrc = CircuitTemplate.from_yaml("model_templates.neural_mass_models.jansenrit.JR
 
 # %%
 # Step 3: Numerical simulation of a the model behavior in time
-# ------------------------------------------------------------
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
 # After loading the model template, numerical simulations can be performed via the :code:`run()` method.
 # Calling this function will solve the initial value problem of the above defined differential equations for a time
@@ -124,7 +123,7 @@ results = jrc.run(simulation_time=2.0,
 
 # %%
 # Step 4: Visualization of the solution
-# -------------------------------------
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
 # The output of the :code:`run()` method is a :code:`pandas.Dataframe`, which comes with a :code:`plot()` method for
 # plotting the timeseries it contains.

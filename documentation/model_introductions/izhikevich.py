@@ -1,4 +1,4 @@
-r"""
+"""
 Izhikevich Neuron Mean-Field Model
 ==================================
 
@@ -8,10 +8,10 @@ The model equations are given by:
 
 .. math::
 
-    \tau \dot r &= \frac{\Delta}{\pi\tau} +  r(2 v - \\alpha - g \\tau s), \n
-    \tau \dot v &= v^2 - \alpha v + \bar\\eta + I(t) - u + g s \\tau (E-v) - (\\pi r \\tau)^2, \n
-    \dot u &= a(b v - u) + d r, \n
-    \tau_s \dot s &= -s + \\tau_s J r,
+    \\tau \\dot r &= \\frac{\\Delta}{\\pi\\tau} + r(2 v - \\alpha - g \\tau s), \n
+    \\tau \\dot v &= v^2 - \\alpha v + \\bar\\eta + I(t) - u + g s \\tau (E-v) - (\\pi r \\tau)^2, \n
+    \\dot u &= a(b v - u) + d r, \n
+    \\tau_s \\dot s &= -s + \\tau_s J r,
 
 where :math:`r` is the average firing rate, :math:`v` is the average membrane potential, :math:`u` is an average
 recovery variable, and :math:`s` is a post-synaptic current.
@@ -19,7 +19,7 @@ It is governed by the following parameters:
     - :math:`\\tau` --> the population time constant
     - :math:`\\bar \\eta` --> the mean of a Lorenzian distribution over the neural excitability in the population
     - :math:`\\Delta` --> the half-width at half maximum of the Lorenzian distribution over the neural excitability
-    - :math:`alpha` --> controls the leaking properties of the membrane potential dynamics
+    - :math:`\\alpha` --> controls the leaking properties of the membrane potential dynamics
     - :math:`g` --> the maximal synaptic conductance
     - :math:`E` --> the reversal potential of the synapse
     - :math:`a`, :math:`b` and :math:`d` --> control parameters for the recovery variable
@@ -32,8 +32,7 @@ simulations with it and visualize the results.
 Note that PyRates also provides model templates for the biophysical Izhikevich mean-field model with distributed
 spike-threshold heterogeneity as derived in [3]_. The model templates are available in the same YAML file.
 
-References
-^^^^^^^^^^
+**References**
 
 .. [1] E. Izhikevich (2007) *Dynamical Systems in Neuroscience: The Geometry of Excitability and Bursting.* MIT Press.
 
@@ -52,7 +51,7 @@ References
 
 # %%
 # Step 1: Numerical simulation of a the model behavior in time
-# ------------------------------------------------------------
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
 # Here, we use the :code:`integrate` function imported from PyRates. As a first argument to this function, either a path
 # to a YAML-based model definition or a :code:`CircuitTemplate` instance can be provided. The function will then compile
@@ -86,7 +85,7 @@ results = integrate("model_templates.neural_mass_models.ik.ik_nodim", step_size=
 
 # %%
 # Step 2: Visualization of the solution
-# -------------------------------------
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
 # The output of the :code:`simulate()` function is a :code:`pandas.Dataframe`, which allows for direct plotting of the
 # timeseries it contains.
@@ -102,7 +101,7 @@ ax.set_ylabel('r')
 
 # %%
 # Step 3: Changing the model parametrization
-# -------------------------------------------
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
 # Now, lets change the model parameters and repeat the simulation from above. As a target parameter to change, we alter
 # the maximal synaptic conductance :math:`g`.

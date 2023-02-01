@@ -12,19 +12,17 @@ In cartesian coordinates, the evolution equations of the Stuart Landau oscillato
 with intrinsic angular frequency :math:`\omega`. It can be used as the generating model of a harmonic oscillation with
 frequency :math:`\omega` and is thus useful to incorporate periodic forcing into dynamical systems models.
 Below, we provide an example where we apply periodic forcing to a Van der Pol oscillator (for a detailed description of
-the latter, see the corresponding `use example <https://pyrates.readthedocs.io/en/latest/auto_introductions/vanderpol.html>`
-in the use example section `Model introductions`).
+the latter, see the corresponding
+`use example <https://pyrates.readthedocs.io/en/latest/auto_introductions/vanderpol.html>`_ in the use example section
+`Model introductions`).
 
-References
-^^^^^^^^^^
+**References**
 
 .. [1] L.D. Landau (1944) *On the problem of turbulence* Conference paper: Dokl. Akad. Nauk UDSSR 44: 311.
 
 """
 
 # %%
-# Using the Stuart-Landau oscillator model for periodic forcing
-# -------------------------------------------------------------
 #
 # Step 1: The Stuart-Landau oscillator dynamics
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
