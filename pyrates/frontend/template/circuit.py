@@ -723,6 +723,11 @@ class CircuitTemplate(AbstractBaseTemplate):
                 # project inputs to edge ir node
                 if not sources:
                     i_, in_var = edge_ir.inputs.copy().popitem()
+                    if i_ == source.split("/")[-1]:
+                        raise PyRatesException(f"The input variable of an edge operator that a source node projects to "
+                                               f"cannot be the same as the name of the output variable on the node. "
+                                               f"Please rename either the node output variable {source} or the edge "
+                                               f"input variable {edge_ir.label}/{in_var[0]}.")
                     sources[f"{edge_ir.label}/{in_var[0]}"] = ['source']*len(source_idx)
 
                 # collect new edge attributes

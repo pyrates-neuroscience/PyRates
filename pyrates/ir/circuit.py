@@ -710,7 +710,7 @@ class NetworkGraph(AbstractBaseIR):
             eqs.append(eq)
 
         # step 4: define target variable as operator output
-        args[tvar] = tval  #deepcopy(tval)
+        args[tvar] = tval
         args[tvar]['vtype'] = 'variable'
 
         # step 5: add edge operator to target node
