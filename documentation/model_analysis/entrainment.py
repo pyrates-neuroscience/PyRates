@@ -3,8 +3,8 @@ Non-linear Oscillator Entrainment
 =================================
 
 In this tutorial, we will examine entrainment of a
-`Van der Pol oscillator (VPO) <www.scholarpedia.org/article/Van_der_Pol_model>`_ that receives oscillatory input from a
-simple `Kuramoto oscillator (KO) <https://en.wikipedia.org/wiki/Kuramoto_model>`_.
+`Van der Pol oscillator (VPO) <https://en.wikipedia.org/wiki/Van_der_Pol_oscillator>`_ that receives oscillatory input
+from a simple `Kuramoto oscillator (KO) <https://en.wikipedia.org/wiki/Kuramoto_model>`_.
 To this end, we will use the :code:`pyrates.integrate()` the :code:`pyrates.grid_search()` functions from pyrates to
 generate time series of the VPO dynamics and time series analysis methods from scipy to quantify the entrainment.
 
@@ -85,7 +85,7 @@ plt.show()
 # Step 3: Coherence calculation
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
-# As a next step, lets calculate a metric called `coherence <www.scholarpedia.org/article/Coherence_resonance>`_,
+# As a next step, lets calculate a metric called `coherence <https://en.wikipedia.org/wiki/Coherence_(physics)>`_,
 # which can be used to quantify the entrainment of :code:`VPO` to the intrinsic frequency of :code:`KO`.
 # The coherence :math:`C` between :code:`VPO` and :code:`KO` is given by:
 #
