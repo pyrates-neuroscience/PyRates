@@ -2,10 +2,11 @@
 Non-linear Oscillator Entrainment
 =================================
 
-In this tutorial, we will examine entrainment of a Van der Pol oscillator (VPO) that receives oscillatory input from a
-simple Kuramoto oscillator (KO). To this end, we will use the :code:`pyrates.integrate()` the
-:code:`pyrates.grid_search()` functions from pyrates to generate time series of the VPO dynamics and time series
-analysis methods from scipy to quantify the entrainment.
+In this tutorial, we will examine entrainment of a
+`Van der Pol oscillator (VPO) <var.scholarpedia.org/article/Van_der_Pol_model>`_ that receives oscillatory input from a
+simple `Kuramoto oscillator (KO) <en.wikipedia.org/wiki/Kuramoto_model>`_.
+To this end, we will use the :code:`pyrates.integrate()` the :code:`pyrates.grid_search()` functions from pyrates to
+generate time series of the VPO dynamics and time series analysis methods from scipy to quantify the entrainment.
 
 To learn more about the Van der Pol oscillator model, have a look at the respective gallery example in
 *Model Introductions*.
@@ -13,6 +14,9 @@ To learn more about the Van der Pol oscillator model, have a look at the respect
 """
 
 # %%
+# Step 1: Model Definition
+# ^^^^^^^^^^^^^^^^^^^^^^^^
+#
 # First, let's define the model:
 
 import matplotlib.pyplot as plt
@@ -32,7 +36,12 @@ net = CircuitTemplate(name="VPO_forced", nodes=nodes, edges=edges)
 
 # %%
 # This defines a simple VPO model that receives periodic input from a KO, where we are interested in the entrainment of the
-# former to the intrinsic frequency of the latter. Lets first have a look at the model dynamics for a driving frequency
+# former to the intrinsic frequency of the latter.
+#
+# Step 2: Simulation of the oscillator dynamics
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+#
+# Lets first have a look at the model dynamics for a driving frequency
 # of :math:`\omega = 0.5`:
 
 # change the intrinsic KO frequency
@@ -73,17 +82,21 @@ plt.show()
 # frequency of :code:`KO` for that particular parametrization of the model. Instead, both oscillators
 # express periodic activity close to their intrinsic frequency.
 #
-# As a next step, lets calculate a metric called *coherence*, which can be used to quantify the
-# entrainment of :code:`VPO` to the intrinsic frequency of :code:`KO`. The coherence :math:`C` between :code:`VPO`
-# and :code:`KO` is given by:
+# Step 3: Coherence calculation
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+#
+# As a next step, lets calculate a metric called `coherence <www.scholarpedia.org/article/Coherence_resonance>`_,
+# which can be used to quantify the entrainment of :code:`VPO` to the intrinsic frequency of :code:`KO`.
+# The coherence :math:`C` between :code:`VPO` and :code:`KO` is given by:
 #
 # .. math::
 #
 #         C = \frac{|P_{x\theta}|}{P_{x} P_{\theta}},
 #
-# where :math:`P_{x}` and :math:`P_{\theta}` are the power spectral densities of :code:`VPO` and :code:`KO`, respectively,
-# and :math:`P_{x\theta}` is the cross-spectral density between the two. This measure can be easily calculated using the
-# :code:`scipy.signal.coherence` method, which uses Welch's method for the spectral density estimation:
+# where :math:`P_{x}` and :math:`P_{\theta}` are the power spectral densities of :code:`VPO` and :code:`KO`,
+# respectively, and :math:`P_{x\theta}` is the cross-spectral density between the two.
+# This measure can be easily calculated using the :code:`scipy.signal.coherence` method,
+# which uses `Welch's method <https://en.wikipedia.org/wiki/Welch%27s_method>`_ for the spectral density estimation:
 
 from scipy.signal import coherence
 
@@ -101,7 +114,12 @@ plt.show()
 
 # %%
 # As we can see, the coherence at the input frequency (0.5 Hz) is :math:`C \approx 0.15`
-# for this set of parameters. In a next step, we'll examine how this changes as we
+# for this set of parameters.
+#
+# Step 4: Parallelized parameter sweep
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+#
+# In a next step, we'll examine how this changes as we
 # systematically alter the input frequency :math:`\omega` as well as the input
 # strength :math:`J`.
 # Again, we will first simulate the model dynamics for each parameter set, using the

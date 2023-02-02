@@ -10,8 +10,8 @@ As an example, we will use the Jansen-Rit model (check out the model introductio
 about the mathematics behind the model and about its implementation in PyRates) [1]_.
 We will perform a 1D parameter sweep over its connectivity scaling parameter :math:`C`.
 
-References
-^^^^^^^^^^
+**References**
+
 .. [1] B.H. Jansen & V.G. Rit (1995) *Electroencephalogram and visual evoked potential generation in a mathematical
        model of coupled cortical columns.* Biological Cybernetics, 73(4): 357-366.
 """
@@ -24,8 +24,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # %%
-# The parameter C
-# ---------------
+# Step 1: Identify a parameter to sweep over
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
 # The Jansen-Rit model consists of 3 populations: Pyramidal cells (PCs), excitatory interneurons (EINs), and inhibitory
 # interneurons (IINs). Between those populations, there exist 4 synaptic connections: PC to EIN, PC to IIN, EIN to PC,
@@ -36,8 +36,8 @@ import numpy as np
 # results.
 
 # %%
-# The parameter grid definition
-# -----------------------------
+# Step 2: Specify the parameter grid
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
 # To perform a parameter sweep, we first define a range of values for C:
 
@@ -63,8 +63,8 @@ param_map = {'C': {'vars': ['jrc_op/c'], 'nodes': ['jrc']}}
 # for numerical simulations.
 
 # %%
-# Performing the parameter sweep
-# ------------------------------
+# Step 3: Perform the parameter sweep
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
 # To perform the parameter sweep, execute the following call to the :code:`grid_search()` function:
 

@@ -22,6 +22,10 @@ model introduction gallery.
 """
 
 # %%
+#
+# Numerical simulations of pre-existing models
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+#
 # First, lets look at the most direct way to perform numerical simulations via PyRates - the :code:`integrate` function:
 
 import matplotlib.pyplot as plt
@@ -42,7 +46,12 @@ plt.show()
 
 # %%
 # A numerical simulation performed that way merely returns a :code:`pandas.DataFrame` containing the resulting model
-# dynamics. Using an alternative interface to PyRates, the default model parameters can be adjusted before performing
+# dynamics.
+#
+# Customizing the model prior to simulations
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+#
+# Using an alternative interface to PyRates, the default model parameters can be adjusted before performing
 # the simulation:
 
 from pyrates.frontend import CircuitTemplate
@@ -62,6 +71,10 @@ plt.plot(res)
 plt.show()
 
 # %%
+#
+# Customizing the numerical simulation settings
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+#
 # Numerical simulations can be further customized. For example, extrinsic inputs can be added, which must be
 # :code:`numpy.ndarray` objects. Each entry in the input array refers to the value of the input at a specific time
 # point, with time steps increasing by the defined step-size.
@@ -108,6 +121,10 @@ plt.plot(res)
 plt.show()
 
 # %%
+#
+# Using third-party simulation tools with PyRates models
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+#
 # Finally, it is also possible to write out function files that can be used in combination with various other tools that
 # provide numerical integration algorithms. As an example, we demonstrate below how to interface the
 # :code:`scipy.integrate.solve_ivp` method via a PyRates-generated function file for the evaluation of

@@ -28,8 +28,7 @@ model optimization strategy that is used. For a summary of differential evolutio
 `this article <https://en.wikipedia.org/wiki/Differential_evolution>`_. Below, we show how PyRates can be used in
 combination with :code:`scipy.optimize.differential_evolution` to perform such parameter optimizations.
 
-References
-^^^^^^^^^^
+**References**
 
 .. [1] R. Storn and K. Price (1997) *Differential Evolution - a Simple and Efficient Heuristic for Global Optimization
        over Continuous Spaces.* Journal of Global Optimization, 11: 341-359.
@@ -50,8 +49,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # %%
-# Definition of the optimization details
-# --------------------------------------
+# Step 1: Definition of the optimization details
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
 # (1) To optimize our parameter :math:`C`, we will have to define the parameter boundaries within which the optimization
 # should be performed:
@@ -117,8 +116,8 @@ def eval_param(value, T, dt, kwargs):
 
 
 # %%
-# Performing the model optimization
-# ---------------------------------
+# Step 2: Performing the model optimization
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
 # Now that we have prepared everything to start the optimization, we can use
 # :code:`scipy.optimize.differential_evolution` to optimize our parameter of interest:
