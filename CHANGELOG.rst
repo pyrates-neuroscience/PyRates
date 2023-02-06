@@ -8,6 +8,8 @@ Changelog
 -----
 
 - added a background input parameter to the izhikevich population template
+- updated the documentation example for parameter sweeps to account for recent changes in the keyword arguments to the `grid_search` function
+- changed keyword argument `vectorization` of the function `grid_search` to `vectorize`, to be consistent with the naming of the same argument in `CircuitTemplate.run`
 
 1.0.0
 -----

@@ -84,7 +84,8 @@ results, results_map = grid_search(circuit_template="model_templates.neural_mass
                                    sampling_step_size=dts,
                                    inputs={'jrc/jrc_op/u': noise},
                                    outputs={'V_pce': 'jrc/jrc_op/V_e', 'V_pci': 'jrc/jrc_op/V_i'},
-                                   init_kwargs={'backend': 'default', 'solver': 'euler'},
+                                   backend="default",
+                                   solver="euler",
                                    cutoff=cutoff
                                    )
 

@@ -226,7 +226,7 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
     # argument pre-processing
     #########################
 
-    vectorization = kwargs.pop('vectorization', True)
+    vectorize = kwargs.pop('vectorize', True)
 
     # linearize parameter grid if necessary
     if type(param_grid) is dict:
@@ -268,15 +268,8 @@ def grid_search(circuit_template: Union[CircuitTemplate, str], param_grid: Union
                           sampling_step_size=sampling_step_size,
                           inputs=inputs,
                           outputs=outputs_new,
-                          vectorization=vectorization,
+                          vectorize=vectorize,
                           **kwargs)    # type: pd.DataFrame
-
-    # # create dataframe that maps between output names and parameter sets
-    # data, index = [], []
-    # for key in results.keys():
-    #     param_key = key[1].split('/')[0]
-    #     data.append(param_grid.loc[param_key, :].values)
-    # param_map = pd.DataFrame(data=np.asarray(data).T, columns=results.columns, index=param_grid.columns)
 
     # return results
     return results, param_grid
