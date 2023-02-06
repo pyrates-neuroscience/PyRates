@@ -4,6 +4,11 @@ Changelog
 1.0
 ---
 
+1.0.1
+-----
+
+- added a background input parameter to the izhikevich population template
+
 1.0.0
 -----
 
