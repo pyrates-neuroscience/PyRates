@@ -88,7 +88,7 @@ and
 
 [Gast, R., Rose, D., Salomon, C., Möller, H. E., Weiskopf, N., & Knösche, T. R. (2019). PyRates-A Python framework for rate-based neural simulations. PloS one, 14(12):e0225900.](https://doi.org/10.1371/journal.pone.0225900)
 
-Other work that used of PyRates:
+Other work that used PyRates:
 
 [Weise, K., Poßner, L., Müller, E., Gast, R. & Knösche, T. R. (2020) Software X, 11:100450.](https://www.sciencedirect.com/science/article/pii/S2352711020300078)
 
