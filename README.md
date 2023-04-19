@@ -77,11 +77,25 @@ Documentation
 For a full API of PyRates, see https://pyrates.readthedocs.io/en/latest/.
 For examplary simulations and model configurations, please have a look at the jupyter notebooks provided in the documenation folder.
 
-Reference
-=========
+References
+==========
 
 If you use this framework, please cite:
-[Gast, R., Rose, D., Salomon, C., Möller, H. E., Weiskopf, N., & Knösche, T. R. (2019). PyRates-A Python framework for rate-based neural simulations. PloS one, 14(12), e0225900.](https://doi.org/10.1371/journal.pone.0225900)
+
+[Gast, R., Knösche, T. R. & Kennedy, A. (2023). PyRates - A Code-Generation Tool for Dynamical Systems Modeling. arXiv:2302.03763.](https://arxiv.org/abs/2302.03763)
+
+and
+
+[Gast, R., Rose, D., Salomon, C., Möller, H. E., Weiskopf, N., & Knösche, T. R. (2019). PyRates-A Python framework for rate-based neural simulations. PloS one, 14(12):e0225900.](https://doi.org/10.1371/journal.pone.0225900)
+
+Other work that used PyRates:
+
+[Weise, K., Poßner, L., Müller, E., Gast, R. & Knösche, T. R. (2020) Software X, 11:100450.](https://www.sciencedirect.com/science/article/pii/S2352711020300078)
+
+[Gast, R., Gong, R., Schmidt, H., Meijer, H.G.E., & Knösche, T.R. (2021) On the Role of Arkypallidal and Prototypical Neurons for Phase Transitions in the External Pallidum. Journal of Neuroscience, 41(31):6673-6683.](https://www.jneurosci.org/content/41/31/6673.abstract)
+
+[Gast, R., Solla, S.A. & Kennedy, A. (2023). Macroscopic dynamics of neural networks with heterogeneous spiking thresholds. Physical Review E, 107(2):024306.](https://journals.aps.org/pre/abstract/10.1103/PhysRevE.107.024306)
+
 
 Contact
 =======
