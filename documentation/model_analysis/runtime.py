@@ -41,7 +41,7 @@ net = CircuitTemplate(name="li_coupled", nodes={key: li for key in nodes})
 
 # add random connections between nodes
 C = np.random.uniform(low=-10.0, high=10.0, size=(N, N))
-net.add_edges_from_matrix(source_var="tanh_op/m", target_var="li_op/m_in", nodes=nodes, weight=C)
+net.add_edges_from_matrix(source_var="tanh_op/m", target_var="li_op/m_in", source_nodes=nodes, weight=C)
 
 # %%
 #

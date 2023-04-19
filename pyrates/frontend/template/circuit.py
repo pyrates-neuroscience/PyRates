@@ -287,8 +287,8 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         return self
 
-    def add_edges_from_matrix(self, source_var: str, target_var: str, nodes: list, weight=None, template=None,
-                              edge_attr: dict = None, min_weight: float = 1e-6) -> None:
+    def add_edges_from_matrix(self, source_var: str, target_var: str, source_nodes: list, target_nodes: list = None,
+                              weight=None, template=None, edge_attr: dict = None, min_weight: float = 1e-6) -> None:
         """Adds all possible edges between the `source_var` and `target_var` of all passed `nodes`. `Weight` and `Delay`
         need to be arrays containing scalars for each of those edges.
 
@@ -298,8 +298,10 @@ class CircuitTemplate(AbstractBaseTemplate):
             Pointer to a variable on the source nodes ('op/var').
         target_var
             Pointer to a variable on the target nodes ('op/var').
-        nodes
-            List of node names that should be connected to each other
+        source_nodes
+            List of node names from which to extract the source variable.
+        target_nodes
+            List of node names to which to project the source variable. If `None`, `source_nodes` will be used instead.
         weight
             Optional N x N matrix with edge weights (N = number of nodes). If not passed, all edges receive a weight of
             1.0.
@@ -318,13 +320,15 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         if edge_attr is None:
             edge_attr = dict()
+        if target_nodes is None:
+            target_nodes = source_nodes
 
         # construct edge attribute dictionary from arguments
         ####################################################
 
         # weights and delays
         if weight is None:
-            weight = np.ones((len(nodes), len(nodes)))
+            weight = np.ones((len(target_nodes), len(source_nodes)))
         edge_attributes = {'weight': weight}
 
         # add rest of the attributes
@@ -341,15 +345,10 @@ class CircuitTemplate(AbstractBaseTemplate):
 
         # create edge list
         edges = []
-        for i, source in enumerate(nodes):
-            for j, target in enumerate(nodes):
+        for i, source in enumerate(source_nodes):
+            for j, target in enumerate(target_nodes):
 
                 if np.abs(weight[j, i]) > min_weight:
-
-                    if source not in self.nodes:
-                        raise ValueError(f'Node {source} is not defined on this CircuitTemplate instance.')
-                    if target not in self.nodes:
-                        raise ValueError(f'Node {target} is not defined on this CircuitTemplate instance.')
 
                     edge_attributes_tmp = {}
 

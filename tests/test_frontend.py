@@ -123,7 +123,7 @@ def test_edge_definition_via_matrix():
     delays = np.random.uniform(low=1, high=2, size=(n, n))
     edge_attr = {'sin_edge/coupling_op/theta_s': 'source', 'sin_edge/coupling_op/theta_t': 'p2/phase_op/theta',
                  'delay': delays}
-    circuit.add_edges_from_matrix(source_var='phase_op/theta', target_var='phase_op/s_in', nodes=node_names,
+    circuit.add_edges_from_matrix(source_var='phase_op/theta', target_var='phase_op/s_in', source_nodes=node_names,
                                   weight=weights, template=edge, edge_attr=edge_attr, min_weight=0.0)
 
     # test whether edges have been added as expected
