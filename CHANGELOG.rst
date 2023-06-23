@@ -4,6 +4,15 @@ Changelog
 1.0
 ---
 
+1.0.2
+-----
+
+- fixed bug in fortran backend where the NPAR parameter for Auto-07p files was not properly set
+- improved code readability in fortran backend
+- moved selection of output variables from the results of a numerical simulation from the backend to the computegraph, thus reducing the amount of variables that had to be passed between the different classes
+- after each simulation, the value of all state variables in the compute graph is updated to the value at the final simulation step
+- added functionalities to the `CircuitTemplate` that allow to remember the state of all network variables from a previous simulation, even if a new backend is chosen for function generation or more simulations
+
 1.0.1
 -----
 

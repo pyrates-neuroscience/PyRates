@@ -138,6 +138,7 @@ class CircuitTemplate(AbstractBaseTemplate):
         self._vectorization_labels = {}
         self._vectorization_indices = {}
         self._state_var_indices = {}
+        self._state_var_values = {}
 
     def __getitem__(self, item):
         """Attempts to return the node with name `item`.
@@ -147,6 +148,10 @@ class CircuitTemplate(AbstractBaseTemplate):
         except KeyError:
             warn(PyRatesWarning(f"Node with name {item} was not found on {self.name}."))
             return
+
+    @property
+    def state(self):
+        return self._state_var_values
 
     def to_yaml(self, path, **kwargs) -> None:
         """Shorthand to save the `CircuitTemplate` to a yaml file. After that call, either a new YAML file has been
@@ -507,6 +512,11 @@ class CircuitTemplate(AbstractBaseTemplate):
             columns = MultiIndex.from_tuples(columns)
         results = DataFrame(data=np.asarray(data).T, columns=columns, index=time_vec)
 
+        # store current state of the network
+        for key in net.compute_graph.state_vars:
+            self._state_var_values[key] = net.compute_graph.get_var(key).value
+
+        # clean up
         if clear:
             net.clear()
         self._ir = net._ir
@@ -576,10 +586,20 @@ class CircuitTemplate(AbstractBaseTemplate):
         net.apply(adaptive_steps=adaptive_steps, verbose=verbose, backend=backend, step_size=step_size,
                   vectorize=vectorize, **kwargs)
 
+        # impose initial condition
+        for key, val in self._state_var_values.items():
+            v = net.compute_graph.get_var(key)
+            v.set_value(np.reshape(val, v.shape))
+
         # generate the run function
         func, args, arg_names, state_var_indices = net._ir.get_run_func(func_name=func_name, step_size=step_size,
                                                                         **kwargs)
         self._state_var_indices = state_var_indices
+
+        # set current network state if it was empty before
+        if not self.state:
+            for key in net.compute_graph.state_vars:
+                self._state_var_values[key] = net.compute_graph.get_var(key).value
 
         # clear the network temporary files
         if clear:

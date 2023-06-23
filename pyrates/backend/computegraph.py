@@ -454,7 +454,7 @@ class ComputeGraph(MultiDiGraph):
         return func, tuple(fargs), tuple(func_args), self._state_var_indices.copy()
 
     def run(self, func: Callable, func_args: tuple, T: float, dt: float, dts: Optional[float] = None,
-            outputs: Optional[dict] = None, **kwargs):
+            outputs: Optional[dict] = None, **kwargs) -> dict:
 
         # pre-process outputs
         if outputs is None:
@@ -469,8 +469,20 @@ class ComputeGraph(MultiDiGraph):
         solver = kwargs.pop('solver', 'euler')
 
         # call backend method
-        return self.backend.run(func=func, func_args=func_args, T=T, dt=dt, dts=dts, outputs=outputs, solver=solver,
-                                **kwargs)
+        results, times = self.backend.run(func=func, func_args=func_args, T=T, dt=dt, dts=dts, solver=solver, **kwargs)
+
+        # set state variables to final simulated value
+        for key in self.state_vars:
+            var = self.get_var(key)
+            idx = self._state_var_indices[key]
+            var.set_value(np.reshape(self._index_state_var(results, idx)[-1], var.shape))
+
+        # reduce state recordings to requested state variables
+        for key, idx in outputs.items():
+            outputs[key] = self._index_state_var(results, idx)
+        outputs['time'] = times
+
+        return outputs
 
     def clear(self) -> None:
         """Deletes build directory and removes all compute graph nodes
@@ -885,6 +897,14 @@ class ComputeGraph(MultiDiGraph):
             return self._generate_unique_label(new_label)
         else:
             return label
+
+    @staticmethod
+    def _index_state_var(y: np.ndarray, idx: Union[int, tuple, list]) -> np.ndarray:
+        if type(idx) is tuple and idx[1] - idx[0] == 1:
+            idx = (idx[0],)
+        elif type(idx) is int:
+            idx = (idx,)
+        return y[:, idx] if len(idx) == 1 else y[:, idx[0]:idx[1]]
 
     @staticmethod
     def _process_func_call(expr: str, func: str, replacement: str):
