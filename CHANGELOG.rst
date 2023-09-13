@@ -4,6 +4,11 @@ Changelog
 1.0
 ---
 
+1.0.3
+-----
+
+- simplified automated generation of unique variable names (recursive calls etc. were replaced with look-up tables)
+
 1.0.2
 -----
 
