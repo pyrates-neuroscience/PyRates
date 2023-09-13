@@ -291,7 +291,7 @@ class FortranBackend(BaseBackend):
 
         # extract parameters from args list
         increment = 1
-        params = []
+        params, param_indices = [], []
         for i, arg in enumerate(func_args):
             idx = i + increment
             if blocked_indices[0] <= idx <= blocked_indices[1]:
@@ -299,6 +299,7 @@ class FortranBackend(BaseBackend):
                 increment += blocked_indices[1] - blocked_indices[0]
                 idx += increment
             params.append(f'args({idx})')
+            param_indices.append(idx)
 
         # call the pyrates subroutine
         additional_args = f", {', '.join(params)}" if params else ""
@@ -323,12 +324,7 @@ class FortranBackend(BaseBackend):
 
         # define parameter values
         increment = 1
-        for i, arg in enumerate(func_args):
-            idx = i + increment
-            if blocked_indices[0] <= idx <= blocked_indices[1]:
-                idx -= increment
-                increment += blocked_indices[1] - blocked_indices[0]
-                idx += increment
+        for idx, arg in zip(param_indices, func_args):
             p = self._var_declaration_info[arg]
             if sum(p.shape) > 1:
                 raise ValueError(f'Vector-valued parameter detected ({p.name} with shape {p.shape}), which cannot be '
@@ -369,7 +365,7 @@ class FortranBackend(BaseBackend):
                           'UZR': {}, 'STOP': {}}
 
         auto_constants['NDIM'] = len(state_vars)
-        auto_constants['NPAR'] = len(func_args)
+        auto_constants['NPAR'] = max(param_indices)
         for key in list(kwargs.keys()):
             if key in auto_constants:
                 auto_constants[key] = kwargs.pop(key)

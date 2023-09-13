@@ -332,8 +332,7 @@ class BaseBackend(CodeGen):
 
         return rhs_eval
 
-    def run(self, func: Callable, func_args: tuple, T: float, dt: float, dts: float, outputs: dict,
-            solver: str, **kwargs) -> dict:
+    def run(self, func: Callable, func_args: tuple, T: float, dt: float, dts: float, solver: str, **kwargs) -> tuple:
 
         # initial values
         t0 = func_args[0]
@@ -344,16 +343,7 @@ class BaseBackend(CodeGen):
         results = self._solve(solver=solver, func=func, args=func_args[2:], T=T, dt=dt, dts=dts, y0=y0, t0=t0,
                               times=times, **kwargs)
 
-        # reduce state recordings to requested state variables
-        for key, idx in outputs.items():
-            if type(idx) is tuple and idx[1] - idx[0] == 1:
-                idx = (idx[0],)
-            elif type(idx) is int:
-                idx = (idx,)
-            outputs[key] = results[:, idx] if len(idx) == 1 else results[:, idx[0]:idx[1]]
-        outputs['time'] = times
-
-        return outputs
+        return results, times
 
     def clear(self):
 
