@@ -1413,7 +1413,7 @@ def is_integration_adaptive(solver: str, **solver_kwargs):
 
 
 # cache for input nodes
-input_labels = []
+input_labels = {}
 
 
 def create_input_node(var: str, inp: np.ndarray, continuous: bool, T: float, vectorized_net: bool) -> tuple:
@@ -1422,10 +1422,10 @@ def create_input_node(var: str, inp: np.ndarray, continuous: bool, T: float, vec
     #####################################
 
     # create left-hand side of input assignment
-    var_name = get_unique_label(f"{var}_timed_input", input_labels)
+    var_name, input_labels_tmp = get_unique_label(f"{var}_timed_input", input_labels)
     lhs = f"index({var_name}, 0)" if vectorized_net else var_name
     lhs_shape = (1,) if vectorized_net else ()
-    input_labels.append(var_name)
+    input_labels.update(input_labels_tmp)
 
     if continuous:
 
@@ -1455,11 +1455,11 @@ def create_input_node(var: str, inp: np.ndarray, continuous: bool, T: float, vec
     # create input operator
     #######################
 
-    op_key = get_unique_label(f'{var}_input_op', input_labels)
+    op_key, input_labels_tmp = get_unique_label(f'{var}_input_op', input_labels)
     in_op = OperatorTemplate(name=op_key, path='none', equations=eqs, variables=var_dict)
-    node_key = get_unique_label(f'{var}_input_node', input_labels)
+    input_labels.update((input_labels_tmp))
+    node_key, input_labels_tmp = get_unique_label(f'{var}_input_node', input_labels)
     in_node = NodeTemplate(name=node_key, path='none', operators=[in_op])
-    input_labels.append(node_key)
-    input_labels.append(op_key)
+    input_labels.update(input_labels_tmp)
 
     return node_key, op_key, var_name, in_node

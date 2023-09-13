@@ -1295,9 +1295,8 @@ class CircuitIR(AbstractBaseIR):
 
         # preparations
         if scope not in in_edge_vars:
-            in_edge_vars[scope] = []
+            in_edge_vars[scope] = {}
         inputs_unique = in_edge_vars[scope]
-        inputs_unique.append(tvar)
         input_mapping = {}
         new_input_vars = []
 
@@ -1309,11 +1308,11 @@ class CircuitIR(AbstractBaseIR):
                 in_var = var.name
             except AttributeError:
                 in_var = key.split('/')[-1]
-            inp = get_unique_label(in_var, inputs_unique)
+            inp, inputs_unique_tmp = get_unique_label(in_var, inputs_unique)
+            inputs_unique.update(inputs_unique_tmp)
 
             # store input-related information
             new_input_vars.append(inp)
-            inputs_unique.append(inp)
             input_mapping[inp] = key
 
         # collect input into single variable

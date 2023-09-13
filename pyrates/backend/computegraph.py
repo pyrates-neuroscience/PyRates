@@ -248,6 +248,7 @@ class ComputeGraph(MultiDiGraph):
         self._eq_nodes = []
         self._state_var_indices = dict()
         self._state_var_hist = dict()
+        self._node_names = {}
 
     @property
     def state_vars(self):
@@ -874,17 +875,21 @@ class ComputeGraph(MultiDiGraph):
             if self.in_degree(n) == 0 and n not in self._eq_nodes:
                 self.remove_node(n)
 
-    def _generate_unique_label(self, label: str):
+    def _generate_unique_label(self, label: str) -> str:
 
-        if label in self.nodes:
-            label_split = label.split('_')
-            try:
-                new_label = "_".join(label_split[:-1] + [f"{int(label_split[-1])+1}"])
-            except ValueError:
-                new_label = f"{label}_0"
-            return self._generate_unique_label(new_label)
-        else:
+        if label == "t":
             return label
+        if label in self._node_names:
+            n = self._node_names[label]
+            if n == 0:
+                label_new = f"{label}_n1"
+            else:
+                label_new = f"{label}_n{n + 1}"
+            self._node_names[label] += 1
+        else:
+            label_new = label
+            self._node_names[label] = 0
+        return label_new
 
     @staticmethod
     def _process_func_call(expr: str, func: str, replacement: str):

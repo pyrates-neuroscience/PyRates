@@ -105,7 +105,8 @@ def from_edge(edge: EdgeTemplate, return_dict: dict, base: str = 'EdgeTemplate')
 def add_to_dict(template, template_dict: dict, full_dict: dict):
 
     temp_key = template.name
+    existing_labels = {key: 0 for key in full_dict.keys()}
     if temp_key in full_dict and full_dict[temp_key] != template_dict:
-        temp_key = get_unique_label(temp_key, list(full_dict.keys()))
+        temp_key, _ = get_unique_label(temp_key, existing_labels)
     full_dict[temp_key] = template_dict
     return temp_key

@@ -38,7 +38,7 @@ __status__ = "Development"
 
 node_cache = {}
 op_cache = {}
-node_labels = []
+node_labels = {}
 
 
 def clear_ir_caches():
@@ -86,11 +86,10 @@ def cache_func(label: str, operators: dict, values: dict = None, template: str =
 
         # create new node
         op_cache[h] = op_graph
-        if label in node_labels:
-            label = get_unique_label(label, node_labels)
+        label, labels_tmp = get_unique_label(label, node_labels)
+        node_labels.update(labels_tmp)
         node = ir_class(label, operators=op_graph, values=values, template=template, **kwargs)
         node_cache[h] = node
-        node_labels.append(label)
         var_ranges = {key: (0, val) for key, val in node.op_graph.var_lengths.items()}
 
     return node, changed_labels, var_ranges
