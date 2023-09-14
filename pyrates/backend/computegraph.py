@@ -894,9 +894,9 @@ class ComputeGraph(MultiDiGraph):
         if label in self._node_names:
             n = self._node_names[label]
             if n == 0:
-                label_new = f"{label}_n1"
+                label_new = f"{label}_v1"
             else:
-                label_new = f"{label}_n{n + 1}"
+                label_new = f"{label}_v{n + 1}"
             self._node_names[label] += 1
         else:
             label_new = label

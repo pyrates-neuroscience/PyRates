@@ -8,6 +8,7 @@ Changelog
 -----
 
 - simplified automated generation of unique variable names (recursive calls etc. were replaced with look-up tables)
+- improved variable passing between different operators within a node. Less additional variables are now created, thus reducing the memory load
 
 1.0.2
 -----

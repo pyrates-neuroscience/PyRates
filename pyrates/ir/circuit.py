@@ -42,7 +42,7 @@ from pyrates.backend import PyRatesException, PyRatesWarning
 from pyrates.ir.node import NodeIR
 from pyrates.ir.edge import EdgeIR
 from pyrates.ir.abc import AbstractBaseIR
-from pyrates.backend.parser import parse_equations, get_unique_label
+from pyrates.backend.parser import parse_equations, get_unique_label, replace
 from pyrates.backend.computegraph import ComputeGraph, ComputeVar, ComputeGraphBackProp
 
 __author__ = "Daniel Rose, Richard Gast"
@@ -1212,15 +1212,15 @@ class CircuitIR(AbstractBaseIR):
 
                     # if multiple inputs to variable, sum them up
                     if len(in_ops_col) > 1:
-                        in_ops[var_name] = self._map_multiple_inputs(in_ops_col, scope=scope, tvar=var_name)
+                        in_ops[var_name] = self._map_multiple_inputs(in_ops_col, scope=scope)
                     else:
                         key, _ = in_ops_col.popitem()
                         in_ops[var_name] = (None, {var_name: key})
 
             # replace input variables with input in operator equations
-            for var, (eq, inp) in in_ops.items():
-                if eq:
-                    op_info['equations'] = [eq] + op_info['equations']
+            for var, (inp_term, inp) in in_ops.items():
+                if inp_term:
+                    op_info['equations'] = [replace(eq, var_name, inp_term) for eq in op_info['equations']]
                 op_args['inputs'].update(inp)
 
             # collect operator variables and equations
@@ -1275,7 +1275,7 @@ class CircuitIR(AbstractBaseIR):
         return v
 
     @staticmethod
-    def _map_multiple_inputs(inputs: dict, scope: str, tvar: str) -> tuple:
+    def _map_multiple_inputs(inputs: dict, scope: str) -> tuple:
         """Creates mapping between multiple input variables and a single output variable.
 
         Parameters
@@ -1284,8 +1284,6 @@ class CircuitIR(AbstractBaseIR):
             Input variables.
         scope
             Scope of the input variables
-        tvar
-            Name of the input-receiving variable
 
         Returns
         -------
@@ -1316,9 +1314,9 @@ class CircuitIR(AbstractBaseIR):
             input_mapping[inp] = key
 
         # collect input into single variable
-        input_eq = f"{tvar} = {'+'.join(new_input_vars)}"
+        input_term = f"({'+'.join(new_input_vars)})"
 
-        return input_eq, input_mapping
+        return input_term, input_mapping
 
     @property
     def nodes(self):

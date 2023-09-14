@@ -746,9 +746,9 @@ def get_unique_label(label: str, labels: dict) -> tp.Tuple[str, dict]:
     if label in labels:
         n = labels[label]
         if n == 0:
-            label_new = f"{label}_n1"
+            label_new = f"{label}_num1"
         else:
-            label_new = f"{label}_n{n+1}"
+            label_new = f"{label}_num{n+1}"
         labels[label] += 1
     else:
         label_new = label
