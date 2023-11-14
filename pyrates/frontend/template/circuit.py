@@ -573,7 +573,10 @@ class CircuitTemplate(AbstractBaseTemplate):
         """
 
         # add extrinsic inputs to network
-        adaptive_steps = is_integration_adaptive(kwargs.pop('solver', 'euler'), **kwargs)
+        if "adaptive" in kwargs:
+            adaptive_steps = kwargs.pop("adaptive")
+        else:
+            adaptive_steps = is_integration_adaptive(kwargs.pop('solver', 'euler'), **kwargs)
         net = self if in_place else deepcopy(self)
         if inputs:
             for target, in_array in inputs.items():
@@ -1396,9 +1399,9 @@ class CircuitTemplate(AbstractBaseTemplate):
                                    'please provide the path to Julia executable via `julia_path`.')
         if run and backend in ['matlab']:
             warn(PyRatesWarning(
-                "Running simulations via the Matlab backend is extremely slow point, since it requires "
+                "Running simulations via the Matlab backend is extremely slow at this point, since it requires "
                 "multiple transformations between numpy arrays and Matlab arrays at every simulation step. It is thus "
-                "only recommended to be used with `CirucitTemplate.generate_run_function()` at this point, but not "
+                "only recommended to be used with `CirucitTemplate.generate_run_function()`, but not "
                 "for usage with `CircuitTemplate.run()`."
             ))
 

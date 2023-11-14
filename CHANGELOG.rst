@@ -8,6 +8,10 @@ Changelog
 -----
 
 - updated readthedocs configuration file
+- added keyword argument `adaptive` to the `CircuitTemplate.get_run_func` method, which allows to indicate whether the generated equation file is expected to be called with an adaptive step-size solver (`adaptive=True`) or not
+- reduced computational overhead for the creation and simulation of delayed differential equation systems
+- removed a bug where edge attribute dictionaries were changed by mistake during the `CircuitIR` instantiation
+- improved working directory management in the backend
 
 1.0.3
 -----

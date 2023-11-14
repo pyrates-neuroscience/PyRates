@@ -150,9 +150,11 @@ class BaseBackend(CodeGen):
 
         # file-creation-related attributes
         fdir, *fname = self.get_fname(kwargs.pop('file_name', 'pyrates_run'))
+        cwdir = os.getcwd()
+        sys.path.append(cwdir)
         if fdir:
+            fdir = f"{cwdir}/{fdir}"
             sys.path.append(fdir)
-        sys.path.append(os.getcwd())
         self.fdir = fdir
         self._fname = fname[0]
         self._fend = f".{fname[1]}" if len(fname) > 1 else kwargs.pop('file_ending', '.py')

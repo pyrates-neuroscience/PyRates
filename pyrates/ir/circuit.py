@@ -326,7 +326,7 @@ class NetworkGraph(AbstractBaseIR):
             if source not in data:
                 data[source] = dict()
             for key in keys:
-                val = edge[key]  #deepcopy(edge[key])
+                val = deepcopy(edge[key])
                 try:
                     data[source][key].extend(val)
                 except AttributeError:
@@ -567,10 +567,11 @@ class NetworkGraph(AbstractBaseIR):
 
             buffer_eqs = []
             for i, (d, sidx) in enumerate(zip(delays, source_idx)):
+                var_delayed = f"past({var}, {d})" if type(d) is float or d != 1 else var
                 if len(target_shape) < 1 or (len(target_shape) == 1 and target_shape[0] == 1):
-                    buffer_eqs.append(f"{var}_buffered{buffer_id} = past({var}, {d})")
+                    buffer_eqs.append(f"{var}_buffered{buffer_id} = {var_delayed}")
                 else:
-                    buffer_eqs.append(f"index({var}_buffered{buffer_id}, {sidx}) = index(past({var}, {d}), {sidx})")
+                    buffer_eqs.append(f"index({var}_buffered{buffer_id}, {sidx}) = index({var_delayed}, {sidx})")
 
         # add buffer equations to node operator
         op_info = node_ir[op]
