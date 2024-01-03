@@ -82,7 +82,7 @@ References
 
 If you use this framework, please cite:
 
-[Gast, R., Knösche, T. R. & Kennedy, A. (2023). PyRates - A Code-Generation Tool for Dynamical Systems Modeling. arXiv:2302.03763.](https://arxiv.org/abs/2302.03763)
+[Gast, R., Knösche, T. R. & Kennedy, A. (2023). PyRates - A Code-Generation Tool for Dynamical Systems Modeling. PLOS Computational Biology 19 (12), e1011761.](https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1011761)
 
 and
 

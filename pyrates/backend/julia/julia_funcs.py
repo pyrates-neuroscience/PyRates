@@ -62,8 +62,8 @@ end
 ###############################
 
 julia_funcs = {
-    'max': {'call': 'maximum', 'func': np.maximum, 'imports': []},
-    'min': {'call': 'mininum', 'func': np.minimum, 'imports': []},
+    'maximum': {'call': 'maximum', 'func': np.maximum, 'imports': []},
+    'minimum': {'call': 'mininum', 'func': np.minimum, 'imports': []},
     'round': {'call': 'round', 'func': np.round, 'imports': []},
     'sum': {'call': 'sum', 'func': np.sum, 'imports': []},
     'mean': {'call': 'mean', 'func': np.mean, 'imports': []},

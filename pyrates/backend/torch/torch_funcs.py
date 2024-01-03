@@ -56,8 +56,8 @@ def interp(x_new, x, y):
 ###############################
 
 torch_funcs = {
-    'max': {'call': 'max', 'func': np.max, 'imports': ['torch.max']},
-    'min': {'call': 'min', 'func': np.min, 'imports': ['torch.min']},
+    'maximum': {'call': 'maximum', 'func': np.maximum, 'imports': ['torch.maximum']},
+    'minimum': {'call': 'minimum', 'func': np.minimum, 'imports': ['torch.minimum']},
     'round': {'call': 'round', 'func': np.round, 'imports': ['torch.round']},
     'sum': {'call': 'sum', 'func': np.sum, 'imports': ['torch.sum']},
     'mean': {'call': 'mean', 'func': np.mean, 'imports': ['torch.mean']},

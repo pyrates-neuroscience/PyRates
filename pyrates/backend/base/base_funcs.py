@@ -76,8 +76,8 @@ def sigmoid(x):
 ###############################
 
 base_funcs = {
-    'max': {'call': 'maximum', 'func': np.maximum, 'imports': ['numpy.maximum']},
-    'min': {'call': 'minimum', 'func': np.minimum, 'imports': ['numpy.minimum']},
+    'maximum': {'call': 'maximum', 'func': np.maximum, 'imports': ['numpy.maximum']},
+    'minimum': {'call': 'minimum', 'func': np.minimum, 'imports': ['numpy.minimum']},
     'round': {'call': 'round', 'func': np.round, 'imports': ['numpy.round']},
     'sum': {'call': 'sum', 'func': np.sum, 'imports': ['numpy.sum']},
     'mean': {'call': 'mean', 'func': np.mean, 'imports': ['numpy.mean']},
