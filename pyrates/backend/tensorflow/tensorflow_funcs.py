@@ -55,8 +55,8 @@ def interp(x_new, x, y):
 ###############################
 
 tf_funcs = {
-    'maximum': {'call': 'maximum', 'func': np.maximum, 'imports': ['tensorflow.math.maximum']},
-    'minimum': {'call': 'minimum', 'func': np.minimum, 'imports': ['tensorflow.math.minimum']},
+    'maxi': {'call': 'maximum', 'func': np.maximum, 'imports': ['tensorflow.math.maximum']},
+    'mini': {'call': 'minimum', 'func': np.minimum, 'imports': ['tensorflow.math.minimum']},
     'round': {'call': 'round', 'func': np.round, 'imports': ['tensorflow.round']},
     'sum': {'call': 'reduce_sum', 'func': np.sum, 'imports': ['tensorflow.reduce_sum']},
     'mean': {'call': 'reduce_mean', 'func': np.mean, 'imports': ['tensorflow.mean']},

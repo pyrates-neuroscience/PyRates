@@ -7,7 +7,7 @@ Changelog
 1.0.5
 -----
 
-- adjusted the call of the max/min functions: Use `maximum` and `minimum` in the equations. Both functions take two input arguments, and return the larger/smaller one, respectively
+- adjusted the call of the max/min functions: Use `maxi` and `mini` in the equations. Both functions take two input arguments, and return the larger/smaller one, respectively
 - updated the PyRates reference in the readme and on the documentation website (using the PLOS CB paper now instead of the arxiv preprint)
 
 1.0.4

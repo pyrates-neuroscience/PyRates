@@ -130,8 +130,8 @@ end function {fname}
 ###############################
 
 fortran_funcs = {
-    'maximum': {'call': 'max', 'func': np.maximum},
-    'minimum': {'call': 'min', 'func': np.minimum},
+    'maxi': {'call': 'max', 'func': np.maximum},
+    'mini': {'call': 'min', 'func': np.minimum},
     'round': {'call': 'nint', 'func': np.round},
     'sum': {'call': 'sum', 'func': np.sum},
     'matmul': {'call': 'matmul', 'func': np.dot},

@@ -68,8 +68,8 @@ end
 ###############################
 
 matlab_funcs = {
-    'maximum': {'call': 'max', 'func': np.maximum, 'imports': []},
-    'minimum': {'call': 'min', 'func': np.minimum, 'imports': []},
+    'maxi': {'call': 'max', 'func': np.maximum, 'imports': []},
+    'mini': {'call': 'min', 'func': np.minimum, 'imports': []},
     'matmul': {'call': 'matmul', 'func': np.dot, 'def': matmul, 'imports': []},
     'matvec': {'call': 'matmul', 'func': np.dot, 'def': matmul, 'imports': []},
     'roll': {'call': 'circshift', 'func': np.roll, 'imports': []},
