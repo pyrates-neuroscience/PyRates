@@ -458,6 +458,8 @@ class FortranBackend(BaseBackend):
             dtype = self._float_precision
         if 'float' in dtype:
             dtype = 'double precision' if '64' in dtype else 'real'
+        elif 'complex' in dtype:
+            dtype = 'complex'
         else:
             dtype = 'integer'
         return dtype

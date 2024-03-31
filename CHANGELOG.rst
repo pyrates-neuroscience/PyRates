@@ -9,6 +9,8 @@ Changelog
 
 - adjusted the call of the max/min functions: Use `maxi` and `mini` in the equations. Both functions take two input arguments, and return the larger/smaller one, respectively
 - updated the PyRates reference in the readme and on the documentation website (using the PLOS CB paper now instead of the arxiv preprint)
+- removed a bug where differential equations with a constant right-hand side were not properly handled by the automated compute graph optimization
+- resolved an issue with the fortran backend where complex data types were not properly processed during the code generation
 
 1.0.4
 -----

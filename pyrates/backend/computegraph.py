@@ -306,10 +306,10 @@ class ComputeGraph(MultiDiGraph):
 
     def eval_node(self, n):
 
-        inputs = [self.eval_node(inp) for inp in self.predecessors(n)]
+        inputs = tuple([self.eval_node(inp) for inp in self.predecessors(n)])
         node = self.get_var(n)
         if isinstance(node, ComputeOp):
-            return node.func(*tuple(inputs))
+            return node.func(*inputs)
         return node.value
 
     def eval_subgraph(self, n):
@@ -344,7 +344,7 @@ class ComputeGraph(MultiDiGraph):
                     self.eval_subgraph(inp)
 
             # evaluate node if all its inputs are constants
-            if all([self.get_var(inp).is_constant for inp in self.predecessors(node)]):
+            if all([self.get_var(inp).is_constant for inp in self.predecessors(node)]) and node not in self._eq_nodes:
                 self.eval_subgraph(node)
 
         # remove unconnected nodes and constants from graph
