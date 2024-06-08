@@ -68,16 +68,19 @@ def cache_func(label: str, operators: dict, values: dict = None, template: str =
         node = node_cache[h]
 
         # change operator labels if necessary
+        checked_ops = []
         for name, op in operators.items():
             op_hash = hash(op)
             for cached_name, cached_op in op_cache[h]:
-                if op_hash == hash(cached_op["operator"]):
+                if op_hash == hash(cached_op["operator"]) and cached_name not in checked_ops:
                     changed_labels[name] = cached_name
                     for old_name, new_name in changed_labels.items():
                         try:
                             values[new_name] = values.pop(old_name)
                         except (AttributeError, KeyError):
                             pass
+                    checked_ops.append(cached_name)
+                    break
 
         # extend cached node
         var_ranges = node.extend(NodeIR(label, operators=op_graph, values=values, template=template), **kwargs)

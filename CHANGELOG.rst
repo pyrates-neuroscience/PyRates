@@ -4,6 +4,11 @@ Changelog
 1.0
 ---
 
+1.0.6
+-----
+
+- fixed a bug that caused vectorization to fail if the same operator was used multiple times on a single node
+
 1.0.5
 -----
 
