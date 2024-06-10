@@ -470,6 +470,8 @@ def parse_equations(equations: list, equation_args: dict, cg: ComputeGraph, def_
 
     for eq, scope in equations:
 
+        scope = scope.split('/')
+
         # parse arguments
         #################
 
@@ -479,9 +481,11 @@ def parse_equations(equations: list, equation_args: dict, cg: ComputeGraph, def_
         update_vars = {}
         for key, var in equation_args.copy().items():
 
-            if scope in key:
+            key_split = key.split('/')
 
-                var_name = key.split('/')[-1]
+            if key_split[:-1] == scope:
+
+                var_name = key_split[-1]
 
                 if var_name == 'inputs':
 

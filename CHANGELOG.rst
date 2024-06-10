@@ -8,6 +8,7 @@ Changelog
 -----
 
 - fixed a bug that caused vectorization to fail if the same operator was used multiple times on a single node
+- fixed a bug that caused an error in the generation of unique variable names on nodes with more than 10 operators defined on them
 
 1.0.5
 -----
