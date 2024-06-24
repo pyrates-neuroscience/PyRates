@@ -1080,6 +1080,8 @@ class CircuitTemplate(AbstractBaseTemplate):
         """
         self._ir.clear()
         self._ir = None
+        self._state_var_values.clear()
+        self._state_var_indices.clear()
         clear_ir_caches()
         input_labels.clear()
         gc.collect()
