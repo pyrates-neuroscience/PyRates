@@ -649,7 +649,7 @@ class ComputeGraph(MultiDiGraph):
             try:
                 expr_old = expr.func.__name__
                 func_info = self.get_op(expr_old, shape=node.shape)
-                expr = expr.replace(Function(expr_old), Function(func_info['call']))
+                expr = expr.replace(expr.func, Function(func_info['call']))
             except (AttributeError, KeyError):
                 pass
 

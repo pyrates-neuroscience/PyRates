@@ -36,10 +36,11 @@ from .fortran_funcs import fortran_funcs
 from ..parser import replace
 
 # external _imports
-from typing import Optional, Dict, List, Callable, Iterable, Union, Tuple
+import subprocess
 import os
 from numpy import f2py
 import numpy as np
+from typing import Optional, Dict, List, Union, Tuple, Iterable, Callable
 
 # meta infos
 __author__ = "Richard Gast"
@@ -184,10 +185,7 @@ class FortranBackend(BaseBackend):
     def generate_func(self, func_name: str, to_file: bool = True, func_args: tuple = (), state_vars: tuple = (),
                       **kwargs):
 
-        if to_file:
-            file = f'{self.fdir}/{self._fname}{self._fend}' if self.fdir else f'{self._fname}{self._fend}'
-        else:
-            file = None
+        file = f'{self.fdir}/{self._fname}{self._fend}' if self.fdir else f'{self._fname}{self._fend}'
 
         # generate the final string representing the function file
         auto_compatible = kwargs.pop('auto', False)
@@ -212,8 +210,14 @@ class FortranBackend(BaseBackend):
             # case II: generate a standard fortran function string
             func_file = self.generate()
 
+        # write function to file
+        with open(file, 'w') as f:
+            f.writelines(func_file)
+            f.close()
+
         # compile fortran function and write it to file
-        f2py.compile(func_file, modulename=self._fname, extension=self._fend, source_fn=file, verbose=False)
+        subprocess.run(f"python -m numpy.f2py -c -m {self._fname} {file}", shell=True,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
         # import function from temporary file
         exec(f"from {self._fname} import {self._fname}", globals())
@@ -225,6 +229,9 @@ class FortranBackend(BaseBackend):
         if decorator:
             decorator_kwargs = kwargs.pop('decorator_kwargs', dict())
             rhs_eval = decorator(rhs_eval, **decorator_kwargs)
+
+        if not to_file:
+            os.remove(file)
 
         return rhs_eval
 
