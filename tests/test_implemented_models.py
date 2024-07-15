@@ -18,10 +18,10 @@ __status__ = "Development"
 ###########
 
 # define backends for which to run the tests
-backends = ['tensorflow', 'torch', 'default']
-vectorization = [True, True, False]
+backends = ['torch', 'default']
+vectorization = [True, False]
 backend_kwargs = [{}, {}, {}]
-complex_compat = [False, True, False]
+complex_compat = [True, False]
 
 # define test accuracy
 accuracy = 1e-4

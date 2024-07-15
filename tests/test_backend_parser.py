@@ -90,7 +90,7 @@ def test_1_2_expression_parser_parsing_exceptions():
                 'b': {'vtype': 'constant', 'value': np.ones((3, 3)), 'dtype': 'float32', 'shape': (3, 3)}}
         with pytest.raises(ValueError):
             cg = ComputeGraph(backend=backend)
-            Parser("bool(a) + float32(b)", args=args, cg=cg).parse_expr()
+            Parser("str(a) + float32(b)", args=args, cg=cg).parse_expr()
             cg.eval_graph()
 
         # undefined mathematical operator

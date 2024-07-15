@@ -4,6 +4,11 @@ Changelog
 1.0
 ---
 
+1.0.7
+-----
+
+- updated pytests to account for recent updates to sympy and other python packages
+
 1.0.6
 -----
 
