@@ -11,7 +11,7 @@ In its two-dimensional form, the Van der Pol oscillator is governed by the follo
 
 with damping constant :math:`\mu`. Depending on the latter parameter, the periodic solutions of the Van der Pol oscillator change,
 with simple harmonic oscillations for :math:`\mu = 0` and non-harmonic limit cycle oscillations for :math:`\mu > 0`.
-In this gallery, we will simulate and visualize the model dynamics for :math:`\mu = 0` and :math:`\mu = 0`.
+In this gallery, we will simulate and visualize the model dynamics for :math:`\mu = 0` and :math:`\mu = 5`.
 
 **References**
 
@@ -64,7 +64,7 @@ clear(model)
 # load model template
 model = CircuitTemplate.from_yaml("model_templates.oscillators.vanderpol.vdp")
 
-# set mu to 0
+# set mu to 5
 model.update_var({'p/vdp_op/mu': 5.0})
 results = model.run(step_size=step_size, simulation_time=T, outputs={'x': 'p/vdp_op/x'}, solver='scipy', method='RK23')
 
