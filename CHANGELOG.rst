@@ -8,6 +8,7 @@ Changelog
 -----
 
 - updated pytests to account for recent updates to sympy and other python packages
+- fixed a bug in the documentation use example `continuation.py`
 
 1.0.6
 -----

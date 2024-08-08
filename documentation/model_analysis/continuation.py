@@ -103,7 +103,7 @@ f.close()
 # Now that the model equations are compiled, we can generate an instance of :code:`pycobi.ODESystem`, a Python
 # `tool <https://github.com/pyrates-neuroscience/PyCoBi>`_ that provides and interface to :code:`auto-07p`.
 
-qif_auto = ODESystem(working_dir=None, auto_dir=auto_dir, init_cont=False)
+qif_auto = ODESystem(eq_file="qif", working_dir=None, auto_dir=auto_dir, init_cont=False)
 
 # %%
 # Now, we can use all the tools provided by Auto-07p to investigate how the model reacts to changes in its
@@ -134,7 +134,7 @@ qif_auto = ODESystem(working_dir=None, auto_dir=auto_dir, init_cont=False)
 # Alternatively, you can perform simulations in time via PyCoBi as follows:
 
 t_sols, t_cont = qif_auto.run(
-    e='qif', c='ivp', name='time', DS=1e-4, DSMIN=1e-10, EPSL=1e-08, EPSU=1e-08, EPSS=1e-06,
+    c='ivp', name='time', DS=1e-4, DSMIN=1e-10, EPSL=1e-08, EPSU=1e-08, EPSS=1e-06,
     DSMAX=1e-2, NMX=1000, UZR={14: 4.0}, STOP={'UZ1'})
 
 qif_auto.plot_continuation('PAR(14)', 'U(1)', cont='time')
