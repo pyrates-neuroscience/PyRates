@@ -81,6 +81,7 @@ class FortranBackend(BaseBackend):
         # define fortran-specific imports
         self._imports.pop(0)
         self._imports.append("double precision :: PI = 4.0*atan(1.0)")
+        self._imports.append("complex :: I = (0.0, 1.0)")
 
     def add_var_update(self, lhs: ComputeVar, rhs: str, lhs_idx: Optional[str] = None, rhs_shape: Optional[tuple] = ()):
         self.register_vars([lhs])
@@ -337,12 +338,12 @@ class FortranBackend(BaseBackend):
                 raise ValueError(f'Vector-valued parameter detected ({p.name} with shape {p.shape}), which cannot be '
                                  f'handled by Auto-07p. Please change the definition of your network (e.g. remove '
                                  f'extrinsic inputs) such that no vectorized model parameters exist.')
-            self.add_code_line(f"args({idx}) = {p.value}  ! {p.name}")
+            self.add_code_line(f"args({idx}) = {self._var_to_str(p)}  ! {p.name}")
 
         # define initial state
         for i, var in enumerate(state_vars):
             v = self._var_declaration_info[var]
-            self.add_code_line(f"y({i+1}) = {v.value}  ! {v.name}")
+            self.add_code_line(f"y({i+1}) = {self._var_to_str(v)}  ! {v.name}")
 
         # end subroutine
         self.add_linebreak()
@@ -366,7 +367,7 @@ class FortranBackend(BaseBackend):
         ############################
 
         auto_constants = {'NDIM': 1, 'NPAR': 1, 'IPS': -2, 'ILP': 0, 'ICP': [14], 'NTST': 1, 'NCOL': 3, 'IAD': 0,
-                          'ISP': 0, 'ISW': 1, 'IPLT': 0, 'NBC': 0, 'NINT': 0, 'NMX': 10000, 'NPR': 1, 'MXBF': 10,
+                          'ISP': 0, 'ISW': 1, 'IPLT': 0, 'NBC': 0, 'NINT': 0, 'NMX': 9000, 'NPR': 20, 'MXBF': 10,
                           'IID': 2, 'ITMX': 2, 'ITNW': 5, 'NWTN': 2, 'JAC': 0, 'EPSL': 1e-6, 'EPSU': 1e-6, 'EPSS': 1e-4,
                           'IRS': 0, 'DS': 1e-4, 'DSMIN': 1e-8, 'DSMAX': 1e-2, 'IADS': 1, 'THL': {}, 'THU': {},
                           'UZR': {}, 'STOP': {}}
@@ -501,3 +502,9 @@ class FortranBackend(BaseBackend):
                         idx = idx_tmp
             return idx + start
         return stop + start
+
+    @staticmethod
+    def _var_to_str(y: ComputeVar) -> str:
+        if y.is_complex:
+            return f"({np.real(y.value)}, {np.imag(y.value)})"
+        return f"{y.value}"

@@ -311,6 +311,7 @@ def _separate_variables(variables: dict):
 def _get_variable_info(expr: Union[str, int, float], value: Union[int, complex, float]) -> tuple:
     # set dtype and value and shape
     shape = (1,)
+    expr = expr.replace(" ", "")
     if expr.endswith("(float)"):
         dtype = "float"
     elif expr.endswith("(complex)"):
