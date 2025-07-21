@@ -5,13 +5,6 @@ version: 2.1
 # Define a job to be invoked later in a workflow.
 # See: https://circleci.com/docs/2.0/configuration-reference/#jobs
 jobs:
-  p37:
-    docker:
-      - image: cimg/python:3.7.12
-    steps:
-      - checkout
-      - run: pip install .[tests] 
-      - run: pytest tests/
   p38:
     docker:
       - image: cimg/python:3.8.12
@@ -28,20 +21,36 @@ jobs:
       - run: pytest tests/
   p310:
     docker:
-      - image: cimg/python:3.10.13
+      - image: cimg/python:3.10.18
     steps:
       - checkout
       - run: pip install --upgrade pip
       - run: pip install .[tests]
       - run: pytest tests/
-
+  p311:
+    docker:
+      - image: cimg/python:3.11.13
+    steps:
+      - checkout
+      - run: pip install --upgrade pip
+      - run: pip install .[tests]
+      - run: pytest tests/
+  p312:
+    docker:
+      - image: cimg/python:3.12.11
+    steps:
+      - checkout
+      - run: pip install --upgrade pip
+      - run: pip install .[tests]
+      - run: pytest tests/
 # Invoke jobs via workflows
 # See: https://circleci.com/docs/2.0/configuration-reference/#workflows
 workflows:
   pyrates: # This is the name of the workflow, feel free to change it to better match your workflow.
     # Inside the workflow, you define the jobs you want to run.
     jobs:
-      - p37
       - p38
       - p39
       - p310
+      - p311
+      - p312

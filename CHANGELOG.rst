@@ -12,6 +12,7 @@ Changelog
 - improved support for complex variables in Fortran backend. The global variable `I = sqrt(-1.0)` is now defined in each fortran script. Also, initial conditions for complex variables are properly set via the parentheses notation, e.g. `v = (1.0, 0.5)`.
 - fixed a bug with the recognition of complex-valued variables in the `OperatorTemplate` class
 - resolved bug with edge template vectorization where edge source and target indices were not applied correctly
+- dropped support for Python 3.7 and added support for Python 3.11 and 3.12
 
 1.0.6
 -----
