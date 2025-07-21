@@ -667,10 +667,11 @@ class CircuitTemplate(AbstractBaseTemplate):
             for key, value in node_values.items():
                 *node_id, op, var = key.split("/")
                 target_nodes = self.get_nodes(node_id)
-                for n in target_nodes:
+                for i, n in enumerate(target_nodes):
                     if n not in values:
                         values[n] = dict()
-                    values[n]["/".join((op, var))] = value
+                    val_tmp = value[i] if hasattr(value, 'shape') and sum(value.shape) == len(target_nodes) else value
+                    values[n]["/".join((op, var))] = val_tmp
 
         # go through node templates and transform them into intermediate representations
         nodes = self._apply_nodes(node_keys=self.get_nodes(['all']), values=values, vectorize=vectorize)
@@ -1279,9 +1280,8 @@ class CircuitTemplate(AbstractBaseTemplate):
                 # extend edge dict by edge variables
                 base_dict = edge_col[(source_new, target_new, template, delayed)]
                 for key, val in edge_dict.items():
-                    if type(val) is not str:
-                        val = [val] * edge_len
-                        base_dict[key].extend(val)
+                    val = [val] * edge_len
+                    base_dict[key].extend(val)
                 base_dict['source_idx'].extend(s_idx)
                 base_dict['target_idx'].extend(t_idx)
 
@@ -1289,10 +1289,7 @@ class CircuitTemplate(AbstractBaseTemplate):
 
                 # prepare edge dict for vectorization
                 for key, val in edge_dict.items():
-                    if type(val) is str:
-                        edge_dict[key] = val
-                    else:
-                        edge_dict[key] = [val]*edge_len
+                    edge_dict[key] = [val]*edge_len
                 edge_dict['source_idx'] = list(s_idx)
                 edge_dict['target_idx'] = list(t_idx)
 
