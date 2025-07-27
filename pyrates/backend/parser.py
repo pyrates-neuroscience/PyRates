@@ -213,7 +213,7 @@ class ExpressionParser:
 
     _constant_counter = 0
 
-    def __init__(self, expr_str: str, args: dict, cg: ComputeGraph, def_shape: tp.Optional[tuple] = None,
+    def __init__(self, expr_str: str, args: dict, cg: ComputeGraph, def_shape: tuple = (),
                  parsing_method: str = 'sympy') -> None:
         """Instantiates expression parser.
         """

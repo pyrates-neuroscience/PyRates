@@ -63,7 +63,7 @@ class ComputeNode:
     __slots__ = ["name", "symbol", "dtype", "shape", "_value"]
 
     def __init__(self, name: str, symbol: Union[Symbol, Expr, Function], dtype: Optional[str] = None,
-                 shape: Optional[tuple] = None, def_shape: Optional[tuple] = None):
+                 shape: tuple = (), def_shape: tuple = ()):
         """Instantiates a basic node of a ComputeGraph instance.
         """
 
@@ -114,7 +114,7 @@ class ComputeNode:
         return True
 
     def _get_value(self, value: Optional[Union[list, np.ndarray]] = None, dtype: Optional[str] = None,
-                   shape: Optional[tuple] = None):
+                   shape: tuple = ()):
         """Defines initial value of variable.
         """
 
@@ -129,7 +129,7 @@ class ComputeNode:
             return np.zeros(shape=shape, dtype=dtype) + value
 
         # case III: match given shape with the shape of the given value array
-        if shape is not None:
+        if len(shape) > 0:
             value = np.asarray(value, dtype=dtype)
             if value.shape == shape:
                 return value
@@ -154,8 +154,8 @@ class ComputeNode:
             self.dtype = dtype
 
     @staticmethod
-    def _get_shape(s: Union[tuple, None], s_def: tuple):
-        if s is None or sum(s) < 2:
+    def _get_shape(s: tuple, s_def: tuple):
+        if sum(s) < 2:
             return s_def
         return s
 
@@ -178,8 +178,7 @@ class ComputeVar(ComputeNode):
     __slots__ = ComputeNode.__slots__ + ["vtype"]
 
     def __init__(self, name: str, symbol: Union[Symbol, Expr, Function], vtype: str, dtype: Optional[str] = None,
-                 shape: Optional[str] = None, value: Optional[Union[list, np.ndarray]] = None,
-                 def_shape: Optional[tuple] = None):
+                 shape: tuple = (), value: Optional[Union[list, np.ndarray]] = None, def_shape: tuple = ()):
 
         # set attributes
         super().__init__(name=name, symbol=symbol, dtype=dtype, shape=shape, def_shape=def_shape)
@@ -200,7 +199,7 @@ class ComputeOp(ComputeNode):
     __slots__ = ComputeNode.__slots__ + ["func", "expr"]
 
     def __init__(self, name: str, symbol: Union[Symbol, Expr, Function], func: Callable, expr: Expr,
-                 dtype: Optional[str] = None, shape: Optional[str] = None):
+                 dtype: Optional[str] = None, shape: tuple = ()):
 
         # set attributes
         super().__init__(name=name, symbol=symbol, dtype=dtype, shape=shape)
@@ -381,7 +380,10 @@ class ComputeGraph(MultiDiGraph):
         try:
             state_vec = np.concatenate(variables, axis=0)
         except ValueError:
-            state_vec = np.asarray(variables)
+            try:
+                state_vec = np.asarray(variables)
+            except ValueError:
+                state_vec = np.asarray([np.squeeze(v) for v in variables])
         dtype = 'complex' if 'complex' in state_vec.dtype.name else 'float'
         state_var_key, y = self.add_var(label='y', vtype='state_var', value=state_vec, dtype=dtype)
         rhs_var_key = self._generate_vecfield_var(state_vec, dtype)
