@@ -4,6 +4,11 @@ Changelog
 1.0
 ---
 
+1.0.8
+-----
+
+- added support for numpy 2.3: Changes from numpy 2.2 to numpy 2.3 dropped support for using a default shape of `None` for non-array variables. This update introduces several changes to the PyRates backend to account for that.
+
 1.0.7
 -----
 
