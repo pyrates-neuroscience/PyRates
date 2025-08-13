@@ -155,7 +155,7 @@ class ComputeNode:
 
     @staticmethod
     def _get_shape(s: tuple, s_def: tuple):
-        if sum(s) < 2:
+        if sum(s) <= 1:
             return s_def
         return s
 
@@ -369,7 +369,7 @@ class ComputeGraph(MultiDiGraph):
 
             # store information of the original, non-vectorized state variable
             vshape = sum(lhs.shape)
-            if vshape >= 1:
+            if vshape > 1:
                 self._state_var_indices[var] = (idx, idx+vshape)
                 idx += vshape
             else:

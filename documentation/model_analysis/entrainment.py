@@ -175,9 +175,9 @@ for key in res_map.index:
 
     # collect phases
     tf = np.maximum(0.01, freq[np.argmin(np.abs(omegas - omega))])
-    p1 = np.sin(get_phase(results['VPO'][key].squeeze(), N=10,
+    p1 = np.sin(get_phase(results['VPO'][key].squeeze().values, N=10,
                           freqs=(tf-0.3*tf, tf+0.3*tf), fs=1/dts))
-    p2 = np.sin(2 * np.pi * results['KO'][key].squeeze())
+    p2 = np.sin(2 * np.pi * results['KO'][key].squeeze().values)
 
     # calculate coherence
     freq, coh = coherence(p1, p2, fs=1/dts, nperseg=nps, window=window)

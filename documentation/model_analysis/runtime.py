@@ -101,15 +101,7 @@ clear(net)
 # evaluation function into optimized machine code during runtime based on the `LLVM compiler library
 # <https://llvm.org>`_. Let's see, how this helps with our vectorized and our non-vectorized models:
 
-# njit optimization of non-vectorized model
-func, args, _, _ = net.get_run_func(func_name="li_eval", file_name="li_novec_numba", step_size=1e-3, in_place=False,
-                                    vectorize=False, decorator=njit)
-func(*args)
-T2 = eval_time(func, args)
-print(f"Average evaluation time of numba-optimized model without vectorization: T = {T2} s.")
-clear(net)
-
-# njit optimization of non-vectorized model
+# njit optimization of vectorized model
 func, args, _, _ = net.get_run_func(func_name="li_eval", file_name="li_vec_numba", step_size=1e-3, in_place=False,
                                     vectorize=True, decorator=njit)
 func(*args)
@@ -118,7 +110,7 @@ print(f"Average evaluation time of numba-optimized model without vectorization: 
 clear(net)
 
 # %%
-# While the non-vectorized model was not sped up a lot, we were cut the evaluation time of the vectorized model in half.
+# We were able to cut the evaluation time of the vectorized model in half.
 # Further options that can be tried out to improve evaluation times involve different choices of backends.
 # The default backend chosen here employs :code:`numpy` to implement the model equations.
 # For additional backend options, see the documentation of

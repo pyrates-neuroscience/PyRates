@@ -4,6 +4,12 @@ Changelog
 1.0
 ---
 
+1.0.9
+-----
+
+- updated use examples to work with recent updates
+- debugged problems with the Fortran backend that were caused by the changes `PyRates 1.0.8` (state variables were represented as length-1 vectors instead of as scalars after 1.0.8)
+
 1.0.8
 -----
 

@@ -1077,7 +1077,7 @@ class CircuitIR(AbstractBaseIR):
                    dtype='float' if self._dt_adapt else 'int')
 
         # node operators
-        parsing_kwargs = ['parsing_method']
+        parsing_kwargs = ['parsing_method', 'vectorized']
         parsing_kwargs = {key: kwargs.pop(key) for key in parsing_kwargs if key in kwargs}
 
         self._parse_op_layers_into_computegraph(graph, cg, layers=[], exclude=True, op_identifier="edge_from_",
@@ -1101,8 +1101,8 @@ class CircuitIR(AbstractBaseIR):
         in_edge_vars.clear()
 
     def _parse_op_layers_into_computegraph(self, net: NetworkGraph, cg: ComputeGraph, layers: list,
-                                           exclude: bool = False, op_identifier: Optional[str] = None, **kwargs
-                                           ) -> None:
+                                           exclude: bool = False, op_identifier: Optional[str] = None,
+                                           vectorized: bool = False, **kwargs) -> None:
         """
 
         Parameters
@@ -1139,7 +1139,7 @@ class CircuitIR(AbstractBaseIR):
                     else:
                         ops_tmp = ops
                     op_eqs, op_vars = self._collect_ops(ops_tmp, node_name=node_name, graph=net, compute_graph=cg,
-                                                        reduce=exclude)
+                                                        reduce=exclude, vectorized=vectorized)
 
                     # parse equations and variables into computegraph
                     variables = parse_equations(op_eqs, op_vars, cg=cg, def_shape=self._def_shape, **kwargs)
@@ -1154,7 +1154,7 @@ class CircuitIR(AbstractBaseIR):
                 i += 1
 
     def _collect_ops(self, ops: List[str], node_name: str, graph: NetworkGraph, compute_graph: ComputeGraph,
-                     reduce: bool) -> tuple:
+                     reduce: bool, vectorized: bool) -> tuple:
         """Adds a number of operations to the backend graph.
 
         Parameters
@@ -1166,6 +1166,7 @@ class CircuitIR(AbstractBaseIR):
         graph
         compute_graph
         reduce
+        vectorized
 
         Returns
         -------
@@ -1242,7 +1243,7 @@ class CircuitIR(AbstractBaseIR):
                         try:
                             variables[in_var] = self._front_to_back[in_var]
                         except KeyError:
-                            variables[in_var] = graph[in_var]
+                            variables[in_var] = self._finalize_var_def(graph[in_var], reduce, vectorized)
 
                 else:
                     try:
@@ -1250,17 +1251,17 @@ class CircuitIR(AbstractBaseIR):
                         variables[full_key] = self._front_to_back[full_key]
                     except KeyError:
                         # case IV: new variables
-                        variables[full_key] = self._finalize_var_def(var, reduce)
+                        variables[full_key] = self._finalize_var_def(var, reduce, vectorized)
 
         return equations, variables
 
     @staticmethod
-    def _finalize_var_def(v: dict, reduce: bool):
+    def _finalize_var_def(v: dict, reduce: bool, vectorized: bool):
         if not reduce:
             return v
         if not v:
             return v
-        if v['vtype'] != 'constant':
+        if v['vtype'] != "constant" and vectorized:
             return v
         if v['dtype'] != 'float':
             return v

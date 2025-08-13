@@ -331,7 +331,6 @@ class FortranBackend(BaseBackend):
         self.add_linebreak()
 
         # define parameter values
-        increment = 1
         for idx, arg in zip(param_indices, func_args):
             p = self._var_declaration_info[arg]
             if sum(p.shape) > 1:
