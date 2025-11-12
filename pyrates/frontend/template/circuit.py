@@ -1445,8 +1445,8 @@ def create_input_node(var: str, inp: np.ndarray, continuous: bool, T: float, vec
 
     # create left-hand side of input assignment
     var_name, input_labels_tmp = get_unique_label(f"{var}_timed_input", input_labels)
-    lhs = f"index({var_name}, 0)" if vectorized_net else var_name
-    lhs_shape = (1,) if vectorized_net else ()
+    lhs = f"index({var_name}, 0)" if vectorized_net and inp.shape[-1] == 1 else var_name
+    lhs_shape = (inp.shape[-1],) if vectorized_net and len(inp.shape) > 1 and inp.shape[-1] > 1 else ()
     input_labels.update(input_labels_tmp)
 
     if continuous:

@@ -4,6 +4,15 @@ Changelog
 1.0
 ---
 
+1.0.10
+-----
+
+- fixed https://github.com/pyrates-neuroscience/PyRates/issues/38
+- updated use example for delayed differential equations https://pyrates.readthedocs.io/en/latest/auto_analysis/dde.html#sphx-glr-auto-analysis-dde-py
+- TODO: fix issues with numpy backend and `past()` usage
+- added `sqrt` function to pytorch backend
+- fixed dimension problem with external inputs and vectorized networks. Now, different inputs to different network nodes can be passed using the `all/operator/variable` convention, if the input is an appropriate 2D array.
+
 1.0.9
 -----
 

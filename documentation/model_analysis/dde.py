@@ -43,7 +43,7 @@ import matplotlib.pyplot as plt
 # implement an `OperatorTemplate` representing the delayed Van der Pol equations is provided below.
 
 # define parameters
-k = -2.0
+k = 1.0
 tau = 5.0
 
 # define operator
@@ -81,15 +81,19 @@ vdp.update_template(edges=[('p/vdp_op/x', 'p/vdp_op/inp', None, {'weight': k, 'd
 # We can perform a simple simulation using a forward Euler algorithm to solve the DDE as follows:
 
 # define simulation time
-T = 100.0
+T = 50.0
 step_size = 1e-2
 
 # solve DDE via forward Euler
-results = vdp.run(step_size=step_size, simulation_time=T, outputs={'x': 'p/vdp_op/x'}, solver='euler',
-                  in_place=False, clear=True)
+results = vdp.run(step_size=step_size, simulation_time=T, outputs={'x': 'p/vdp_op/x', 'z': 'p/vdp_op/z'},
+                  solver='euler', in_place=False, clear=False)
 
 # plot resulting signal
-plt.plot(results)
+fig, ax = plt.subplots()
+ax.plot(results["x"], label="x")
+ax.plot(results["z"], label="z")
+ax.legend()
+ax.set_xlabel("time")
 plt.show()
 
 # %%
@@ -116,11 +120,13 @@ res2 = ddeint(func=dde_run, g=hist, tt=eval_time)
 
 # compare results
 fig, ax = plt.subplots(figsize=(10, 5))
-ax.plot(eval_time, res2[:, 0])
-ax.plot(results)
+ax.plot(eval_time, res2[:, 0], label="x (ddeint)")
+ax.plot(eval_time, res2[:, 1], label="z (ddeint)")
+lines = ax.get_lines()
+ax.plot(results["x"], label="x (Euler)", color=lines[0].get_color(), linestyle="dashed")
+ax.plot(results["z"], label="z (Euler)", color=lines[1].get_color(), linestyle="dashed")
 ax.set_xlabel('time')
-ax.set_ylabel('x')
-plt.legend(['euler', 'ddeint'])
+ax.legend()
 plt.show()
 
 # %%

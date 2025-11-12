@@ -72,6 +72,7 @@ class TorchBackend(BaseBackend):
 
         # call parent method
         super().__init__(ops=torch_ops, imports=imports, **kwargs)
+        self._imports[0] = "from torch import pi, sqrt"
 
     def get_var(self, v: ComputeVar):
         return torch.from_numpy(super().get_var(v))

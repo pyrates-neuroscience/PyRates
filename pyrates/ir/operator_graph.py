@@ -244,7 +244,7 @@ class VectorizedOperatorGraph(DiGraph):
                 shape_sum = _np.sum(shape)
                 if shape_sum > 1:
                     if _np.all(shape == _np.shape(var["value"])[1:]):
-                        raise ValueError(f"Inconsistent dimensions of variable {var}. Dimension of value to add: "
+                        raise ValueError(f"Inconsistent dimensions of variable {var_key}. Dimension of value to add: "
                                          f"{shape} Internal dimension of vectorized value array: "
                                          f"{_np.shape(var['value'])[1:]}")
                     var["value"].append(value)
