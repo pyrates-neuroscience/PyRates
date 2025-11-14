@@ -1193,8 +1193,12 @@ class CircuitTemplate(AbstractBaseTemplate):
         node_key, net = self._add_input_node(node_key, in_node, self._depth)
 
         # connect input node to target nodes
-        edges = [(f"{node_key}/{op_key}/{var_key}", f"{t}/{op}/{var}", None, {'weight': 1.0})
-                 for t in target_nodes]
+        if inp.shape[-1] == len(target_nodes):
+            edges = [(f"{node_key}/{op_key}/{var_key}", f"{t}/{op}/{var}", None, {'weight': 1.0, 'source_idx': i})
+                     for i, t in enumerate(target_nodes)]
+        else:
+            edges = [(f"{node_key}/{op_key}/{var_key}", f"{t}/{op}/{var}", None, {'weight': 1.0})
+                     for t in target_nodes]
 
         return net.update_template(edges=edges)
 
@@ -1270,7 +1274,7 @@ class CircuitTemplate(AbstractBaseTemplate):
             target_new = self._relabel_var(target, label_map)
 
             # extract indices of source and target variables in their respective vectors
-            s_idx = indices[source]
+            s_idx = [edge_dict.pop("source_idx")] if "source_idx" in edge_dict else indices[source]
             t_idx = indices[target]
             edge_len = len(s_idx)
 
