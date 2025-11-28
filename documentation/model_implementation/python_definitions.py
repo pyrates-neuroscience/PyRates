@@ -63,7 +63,7 @@ from pyrates.frontend import OperatorTemplate
 
 pro = OperatorTemplate(
     name='PRO', path=None,
-    equations=["m_out = 2.*m_max / (1 + exp(r*(V_th - V)))"],
+    equations=["m_out = 2.*m_max / (1 + exp(r*(V_thr - V)))"],
     variables={'m_out': 'output',
                'V': 'input',
                'V_thr': 6e-3,
