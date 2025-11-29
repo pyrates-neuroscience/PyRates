@@ -939,7 +939,7 @@ class CircuitTemplate(AbstractBaseTemplate):
         net = self.circuits if self.circuits else self.nodes
         net_node = net[node[0]]
         if isinstance(net_node, CircuitTemplate):
-            self.add_node_template(node[1:], template=template)
+            net_node.add_node_template(node[1:], template=template)
         else:
             self.nodes[node[0]] = template
 
