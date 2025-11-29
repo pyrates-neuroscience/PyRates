@@ -12,6 +12,7 @@ Changelog
 - TODO: fix issues with numpy backend and `past()` usage
 - added `sqrt` function to pytorch backend
 - fixed dimension problem with external inputs and vectorized networks. Now, different inputs to different network nodes can be passed using the `all/operator/variable` convention, if the input is an appropriate 2D array.
+- merged pull request #40 from PC-DOS/master to fix issue #39 as well as a typo in python_definitions.py
 
 1.0.9
 -----
