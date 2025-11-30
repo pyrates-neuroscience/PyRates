@@ -1,6 +1,6 @@
 numpy
 matplotlib
-networkx
+networkx<=3.5
 pandas
 tensorflow>=2.0
 ruamel.yaml
