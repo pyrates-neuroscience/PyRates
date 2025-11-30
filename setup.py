@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 PYRATES_TEAM = "Richard Gast, Daniel Rose"
 
 INSTALL_REQUIREMENTS = ['numpy',
-                        'networkx',
+                        'networkx<=3.5',
                         'pandas',
                         'ruamel.yaml',
                         'sympy',
