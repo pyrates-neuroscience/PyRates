@@ -1085,6 +1085,7 @@ class CircuitTemplate(AbstractBaseTemplate):
         self._state_var_indices.clear()
         clear_ir_caches()
         input_labels.clear()
+        OperatorTemplate.cache.clear()
         gc.collect()
 
     @property
