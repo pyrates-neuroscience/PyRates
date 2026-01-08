@@ -338,8 +338,12 @@ class BaseBackend(CodeGen):
 
         # initial values
         t0 = func_args[0]
-        times = np.arange(0.0, T, dts) if dts else np.arange(0.0, T, dt)
         y0 = func_args[1]
+
+        # use a safer way to generate time points
+        times = np.arange(0.0, T, dts) if dts else np.arange(0.0, T, dt)
+        n_time_points = round(T/dts) if dts else round(T/dt)
+        times = times[0:n_time_points]
 
         # perform simulation
         results = self._solve(solver=solver, func=func, args=func_args[2:], T=T, dt=dt, dts=dts, y0=y0, t0=t0,
