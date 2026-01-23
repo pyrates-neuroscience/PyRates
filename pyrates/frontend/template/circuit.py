@@ -286,8 +286,8 @@ class CircuitTemplate(AbstractBaseTemplate):
                 self.add_node_template(n, template=node_temp)
 
         # updates to edge variable values
-        for source, target, edge_dict in edge_vars:
-            _, _, _, base_dict = self.get_edge(source, target)
+        for source, target, idx, edge_dict in edge_vars:
+            _, _, _, base_dict = self.get_edge(source, target, idx)
             base_dict.update(edge_dict)
 
         return self
