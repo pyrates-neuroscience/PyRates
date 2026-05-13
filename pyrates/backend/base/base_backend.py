@@ -50,7 +50,7 @@ from .. import PyRatesException
 # external _imports
 from typing import Optional, Dict, List, Union, Tuple, Callable, Iterable
 import numpy as np
-import os, sys
+import os, sys, importlib
 from shutil import rmtree
 
 
@@ -316,8 +316,20 @@ class BaseBackend(CodeGen):
                 f.writelines(func_str)
                 f.close()
 
-            # import function from file
-            exec(f"from {self._fname} import {func_name}", globals())
+            # Compile from the in-memory source string and exec into a fresh
+            # module, bypassing the .pyc bytecode cache entirely.  A stale
+            # .pyc can persist when clear() removes the .py but not
+            # __pycache__, and the next write lands in the same second, making
+            # the source mtime appear unchanged to Python's cache validator.
+            if self._fname in sys.modules:
+                del sys.modules[self._fname]
+            import types as _types
+            src_path = f'{file}{self._fend}'
+            _mod = _types.ModuleType(self._fname)
+            _mod.__file__ = src_path
+            exec(compile(func_str, src_path, 'exec'), _mod.__dict__)
+            sys.modules[self._fname] = _mod
+            globals()[func_name] = _mod.__dict__[func_name]
 
         else:
 
