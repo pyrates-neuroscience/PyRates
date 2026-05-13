@@ -287,7 +287,7 @@ def test_2_3_edge():
         targets = np.zeros((sim_steps, 2), dtype=np.float32)
         for i in range(sim_steps-1):
             targets[i + 1, 0] = update2(targets[i, 0], targets[i, 1] * 0.5)
-            targets[i + 1, 1] = update3(targets[i, 1], targets[i, 0] * 2.0, inp[i])
+            targets[i + 1, 1] = update3(targets[i, 1], targets[i, 0] * 2.0, inp[i, 0])
 
         diff = np.mean(np.abs(results['a'].values[:] - targets[:, 0])) + \
                np.mean(np.abs(results['b'].values[:] - targets[:, 1]))

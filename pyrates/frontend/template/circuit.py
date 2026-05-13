@@ -485,7 +485,7 @@ class CircuitTemplate(AbstractBaseTemplate):
         # interpolate data if necessary
         if sampling_step_size and not all(np.diff(time_vec, 1) - sampling_step_size < step_size * 0.01):
             n = int(np.round(simulation_time / sampling_step_size, decimals=0))
-            new_times = np.linspace(step_size, simulation_time, n + 1)
+            new_times = np.linspace(0.0, simulation_time, n)
             for key, val in outputs_final.items():
                 if type(val) is dict:
                     for key2, v in val.items():

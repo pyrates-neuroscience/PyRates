@@ -32,7 +32,7 @@
 # external _imports
 from typing import Any, Callable, Union, Iterable, Optional
 from networkx import MultiDiGraph
-from sympy import Symbol, Expr, Function
+from sympy import Symbol, Expr, Function, lambdify
 import numpy as np
 
 # meta infos
@@ -196,15 +196,23 @@ class ComputeOp(ComputeNode):
     """Class for ComputeGraph nodes that represent mathematical operations.
     """
 
-    __slots__ = ComputeNode.__slots__ + ["func", "expr"]
+    __slots__ = ComputeNode.__slots__ + ["func", "expr", "func_args", "backend_funcs"]
 
-    def __init__(self, name: str, symbol: Union[Symbol, Expr, Function], func: Callable, expr: Expr,
-                 dtype: Optional[str] = None, shape: tuple = ()):
+    def __init__(self, name: str, symbol: Union[Symbol, Expr, Function], expr: Expr,
+                 func: Optional[Callable] = None, func_args: Optional[list] = None,
+                 backend_funcs: Optional[dict] = None, dtype: Optional[str] = None, shape: tuple = ()):
 
         # set attributes
         super().__init__(name=name, symbol=symbol, dtype=dtype, shape=shape)
         self.func = func
         self.expr = expr
+        self.func_args = func_args if func_args is not None else []
+        self.backend_funcs = backend_funcs if backend_funcs is not None else {}
+
+    def get_func(self) -> Callable:
+        if self.func is None:
+            self.func = lambdify(self.func_args, expr=self.expr, modules=[self.backend_funcs, "numpy"])
+        return self.func
 
     @property
     def is_constant(self):
@@ -260,11 +268,13 @@ class ComputeGraph(MultiDiGraph):
         super().add_node(unique_label, node=var)
         return unique_label, self.nodes[unique_label]['node']
 
-    def add_op(self, inputs: Union[list, tuple], label: str, expr: Expr, func: Callable, **kwargs):
+    def add_op(self, inputs: Union[list, tuple], label: str, expr: Expr, func: Optional[Callable] = None,
+               func_args: Optional[list] = None, backend_funcs: Optional[dict] = None, **kwargs):
 
         # add target node that contains result of operation
         unique_label = self._generate_unique_label(label)
-        op = ComputeOp(name=unique_label, symbol=Symbol(unique_label), func=func, expr=expr, **kwargs)
+        op = ComputeOp(name=unique_label, symbol=Symbol(unique_label), expr=expr, func=func,
+                       func_args=func_args, backend_funcs=backend_funcs, **kwargs)
         super().add_node(unique_label, node=op)
 
         # add edges from source nodes to target node
@@ -308,7 +318,7 @@ class ComputeGraph(MultiDiGraph):
         inputs = tuple([self.eval_node(inp) for inp in self.predecessors(n)])
         node = self.get_var(n)
         if isinstance(node, ComputeOp):
-            return node.func(*inputs)
+            return node.get_func()(*inputs)
         return node.value
 
     def eval_subgraph(self, n):
@@ -321,7 +331,7 @@ class ComputeGraph(MultiDiGraph):
 
         node = self.get_var(n)
         if inputs:
-            node.set_value(node.func(*tuple(inputs)))
+            node.set_value(node.get_func()(*tuple(inputs)))
 
         return node.value
 
@@ -663,7 +673,8 @@ class ComputeGraph(MultiDiGraph):
                 expr_args.append(n)
                 expr = node.symbol
             elif 'dummy_constant' in node.name:
-                expr = Symbol(str(float(node.value)))
+                val = float(np.squeeze(node.value))
+                expr = Symbol(str(val))
             else:
                 expr = node.symbol
 

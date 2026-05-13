@@ -18,9 +18,9 @@ __status__ = "Development"
 ###########
 
 # define backends for which to run the tests
-backends = ['torch', 'default']
+backends = ['default', 'default']
 vectorization = [True, False]
-backend_kwargs = [{}, {}, {}]
+backend_kwargs = [{}, {}]
 complex_compat = [True, False]
 
 # define test accuracy

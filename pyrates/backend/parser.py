@@ -38,10 +38,18 @@ from numbers import Number
 import numpy as np
 # from pyparsing import Literal, CaselessLiteral, Word, Combine, Optional, \
 #     ZeroOrMore, Forward, nums, alphas, ParserElement
-from sympy import Expr, Symbol, lambdify, sympify
+from sympy import Expr, Symbol, sympify
 
 # pyrates internal _imports
 from pyrates.backend.computegraph import ComputeGraph, ComputeNode
+
+_sympify_cache: dict = {}
+
+
+def _cached_sympify(s: str):
+    if s not in _sympify_cache:
+        _sympify_cache[s] = sympify(s)
+    return _sympify_cache[s]
 
 # meta infos
 __author__ = "Richard Gast"
@@ -230,7 +238,7 @@ class ExpressionParser:
 
         # define the parsing function
         if parsing_method == 'sympy':
-            self.parse_func = sympify
+            self.parse_func = _cached_sympify
         elif parsing_method == 'pyrates':
             a = Algebra()
             self.parse_func = a.parseString
@@ -310,18 +318,18 @@ class ExpressionParser:
             if replacements:
                 expr = replace_in_expr(expr, replacements)
 
-            # create callable function of the operation
+            # collect backend-specific function override for this operation, if any
             label = expr.func.__name__
             try:
                 v_tmp = self.cg.get_var(func_args[0].name)
                 op = self.cg.get_op(label, shape=v_tmp.shape, dtype=v_tmp.dtype)
                 backend_funcs = {label: op['func']}
             except (KeyError, IndexError):
-                backend_funcs = dict()
-            func = lambdify(func_args, expr=expr, modules=[backend_funcs, "numpy"])
+                backend_funcs = {}
 
-            # parse mathematical operation into compute graph
-            return self.cg.add_op(inputs, label=label, expr=expr, func=func)
+            # parse mathematical operation into compute graph (lambdify deferred to first eval_node call)
+            return self.cg.add_op(inputs, label=label, expr=expr, func_args=func_args,
+                                  backend_funcs=backend_funcs)
 
         else:
 
