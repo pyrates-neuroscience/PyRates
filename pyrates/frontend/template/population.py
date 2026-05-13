@@ -131,8 +131,23 @@ class Connectivity:
         and will be stored as a 0-d array (must be combined with explicit
         source/target shapes at compile time — use an explicit matrix for clarity).
     edge
-        Optional ``EdgeTemplate`` that adds per-connection dynamics with an
-        ``(n_target, n_source)`` state matrix.  **Not yet implemented.**
+        Optional ``EdgeTemplate`` defining a non-dynamic coupling function.  The
+        template's operators must contain **no state variables**.  Each equation is
+        evaluated element-wise over the ``(n_target, n_source)`` pair space and
+        the result is reduced via ``(W * coupling_matrix).sum(axis=1)``.
+    edge_var_map
+        Required when *edge* is given.  Maps each input variable name of the
+        EdgeTemplate to either:
+
+        * ``'source'`` — the pre-synaptic variable (from *source*), broadcast
+          as ``source_var[None, :]``;
+        * a ``'pop_name/op/var'`` path — a post-synaptic variable from the target
+          population, broadcast as ``post_var[:, None]``.
+
+        Example for Kuramoto coupling ``sin(theta_pre - theta_post)``::
+
+            edge_var_map={'theta_pre': 'source', 'theta_post': 'e/phase_op/theta'}
+
     delays
         Optional scalar transmission delay (same time units as the simulation).
         Matrix delays are not yet supported.
@@ -141,9 +156,11 @@ class Connectivity:
     def __init__(self, source: str, target: str,
                  weights: Union[np.ndarray, float],
                  edge: Optional[EdgeTemplate] = None,
+                 edge_var_map: Optional[Dict[str, str]] = None,
                  delays: Optional[float] = None):
         self.source = source
         self.target = target
         self.weights = np.asarray(weights, dtype=float)
         self.edge = edge
+        self.edge_var_map = edge_var_map or {}
         self.delays = delays

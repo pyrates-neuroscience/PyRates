@@ -491,7 +491,12 @@ class CircuitTemplate(AbstractBaseTemplate):
             if type(out_info) is dict:
                 outputs_final[key] = {key2: np.squeeze(outputs.pop(key2)[:, idx]) for key2, idx in out_info.items()}
             else:
-                outputs_final[key] = np.squeeze(outputs.pop(key)[:, out_info])
+                raw = outputs.pop(key)[:, out_info]
+                if hasattr(out_info, '__len__') and len(out_info) > 1:
+                    # population output: keep (n_time, n_units) — do not squeeze unit axis
+                    outputs_final[key] = raw
+                else:
+                    outputs_final[key] = np.squeeze(raw)
         time_vec = outputs.pop('time')
 
         # interpolate data if necessary
@@ -1165,16 +1170,48 @@ class CircuitTemplate(AbstractBaseTemplate):
                 self._vectorization_labels[pop_name] = vec_node.label
 
         for conn in self.connections:
-            if conn.edge is not None:
-                raise NotImplementedError(
-                    "EdgeTemplate-based Connectivity (per-connection dynamics) is not yet implemented."
-                )
-
             source = self._relabel_var(conn.source, self._vectorization_labels)
             target = self._relabel_var(conn.target, self._vectorization_labels)
 
+            edge_ir = None
+            resolved_edge_var_map = {}
+
+            if conn.edge is not None:
+                # Apply EdgeTemplate to get EdgeIR (non-dynamic: no state variables allowed)
+                edge_ir, _, _ = conn.edge.apply(values={}, vectorize=False)
+
+                # Validate: no differential equations (dynamic edges not yet supported)
+                for op_key in edge_ir.op_graph.nodes:
+                    for eq in edge_ir.op_graph.nodes[op_key].get('equations', []):
+                        lhs = eq.split("=")[0]
+                        if "d/dt" in lhs or "'" in lhs:
+                            raise ValueError(
+                                f"EdgeTemplate '{conn.edge.name}' contains differential equation: '{eq}'. "
+                                "Only algebraic (non-dynamic) coupling functions are supported for Connectivity."
+                            )
+
+                if not conn.edge_var_map:
+                    raise ValueError(
+                        f"'edge_var_map' is required when 'edge' is set on a Connectivity. "
+                        "Provide a mapping from each EdgeTemplate input variable to either "
+                        "'source' or a 'pop/op/var' path."
+                    )
+
+                # Parse source op/var from conn.source (format: 'pop/op/var')
+                src_parts = conn.source.split('/')
+                src_op, src_var = src_parts[-2], src_parts[-1]
+
+                # Resolve edge_var_map to internal format used by _generate_edge_equation
+                for ev, mapping in conn.edge_var_map.items():
+                    if mapping == 'source':
+                        resolved_edge_var_map[ev] = {'role': 'source'}
+                    else:
+                        parts = mapping.split('/')
+                        resolved_edge_var_map[ev] = {'role': 'target', 'op': parts[-2], 'var': parts[-1]}
+
             # Pass the weight matrix directly; NetworkGraph._generate_edge_equation
-            # detects ndim==2 and emits `matvec(W, r)` without scalar expansion.
+            # detects ndim==2 and emits `matvec(W, r)` (Case 0a) or the coupling
+            # equations (Case 0b when edge_ir is set).
             edge_dict = {
                 'weight': conn.weights,
                 'delay': conn.delays,
@@ -1182,6 +1219,9 @@ class CircuitTemplate(AbstractBaseTemplate):
                 'source_idx': [],
                 'target_idx': [],
             }
+            if edge_ir is not None:
+                edge_dict['edge_ir'] = edge_ir
+                edge_dict['edge_var_map'] = resolved_edge_var_map
             edges.append((source, target, edge_dict))
 
         return nodes, edges

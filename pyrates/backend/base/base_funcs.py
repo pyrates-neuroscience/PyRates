@@ -72,6 +72,33 @@ def sigmoid(x):
     return 1./(1. + exp(-x))
 """
 
+broadcast_pre = """
+def broadcast_pre(x):
+    return x[None, :]
+"""
+
+broadcast_post = """
+def broadcast_post(x):
+    return x[:, None]
+"""
+
+wsum = """
+def wsum(weight, coupling):
+    return einsum('ij,ij->i', weight, coupling)
+"""
+
+
+def _broadcast_pre(x):
+    return x[None, :]
+
+
+def _broadcast_post(x):
+    return x[:, None]
+
+
+def _wsum(weight, coupling):
+    return np.einsum('ij,ij->i', weight, coupling)
+
 # dictionary for backend import
 ###############################
 
@@ -97,6 +124,9 @@ base_funcs = {
     'exp': {'call': 'exp', 'func': np.exp, 'imports': ['numpy.exp']},
     'interp': {'call': 'interp', 'func': np.interp, 'imports': ['numpy.interp']},
     'sigmoid': {'call': 'sigmoid', 'def': sigmoid, 'imports': ['numpy.exp']},
+    'broadcast_pre': {'call': 'broadcast_pre', 'def': broadcast_pre, 'func': _broadcast_pre},
+    'broadcast_post': {'call': 'broadcast_post', 'def': broadcast_post, 'func': _broadcast_post},
+    'wsum': {'call': 'wsum', 'def': wsum, 'func': _wsum, 'imports': ['numpy.einsum']},
     'no_op': {'call': 'identity', 'func': identity},
     'index': {'call': 'index_1d', 'func': index_1d},
     'index_range': {'call': 'index_range', 'func': index_range},

@@ -32,7 +32,8 @@
 import time
 from typing import Union, Dict, Iterator, Optional, List, Tuple
 from warnings import filterwarnings
-from networkx import MultiDiGraph, DiGraph
+import re as _re
+from networkx import MultiDiGraph, DiGraph, topological_sort
 import numpy as np
 from copy import deepcopy
 from warnings import warn
@@ -219,7 +220,8 @@ class NetworkGraph(AbstractBaseIR):
                 # extract info from projections to input variable
                 op_name, var_name = in_var.split('/')
                 data = self._collect_from_edges(edges,
-                                                keys=['source_var', 'weight', 'source_idx', 'target_idx'])
+                                                keys=['source_var', 'weight', 'source_idx', 'target_idx',
+                                                      'edge_ir', 'edge_var_map'])
 
                 # create the final equations for all edges that target the input variable
                 self._generate_edge_equation(tnode=node_name, top=op_name, tvar=var_name, inputs=data, **kwargs)
@@ -327,7 +329,8 @@ class NetworkGraph(AbstractBaseIR):
             if source not in data:
                 data[source] = dict()
             for key in keys:
-                val = deepcopy(edge[key])
+                raw = edge.get(key)
+                val = raw if isinstance(raw, (np.ndarray, EdgeIR)) else deepcopy(raw)
                 try:
                     data[source][key].extend(val)
                 except AttributeError:
@@ -611,17 +614,20 @@ class NetworkGraph(AbstractBaseIR):
 
         # step 1: collect all inputs
         weights, source_indices, target_indices, sources = [], [], [], []
+        edge_irs, edge_var_maps = [], []
         for snode, sinfo in inputs.items():
             weights.append(sinfo['weight'])
             source_indices.append(sinfo['source_idx'])
             target_indices.append(sinfo['target_idx'])
             sources.append((snode,) + tuple(sinfo['source_var'].split('/')))
+            edge_irs.append(sinfo.get('edge_ir'))
+            edge_var_maps.append(sinfo.get('edge_var_map') or {})
 
         # step 2: process incoming edges
         source_vars, args = {}, {}
         eqs, in_vars = [], []
-        for i, (weight, sidx, tidx, (snode, sop, svar)) in \
-                enumerate(zip(weights, source_indices, target_indices, sources)):
+        for i, (weight, sidx, tidx, (snode, sop, svar), edge_ir, edge_var_map) in \
+                enumerate(zip(weights, source_indices, target_indices, sources, edge_irs, edge_var_maps)):
 
             # define variable name strings (adjusted when multiple inputs share same target var)
             if multiple_inputs:
@@ -644,8 +650,47 @@ class NetworkGraph(AbstractBaseIR):
             # (used by Connectivity; no scalar expansion needed)
             if isinstance(weight, np.ndarray) and weight.ndim == 2:
                 args[w_str] = {'vtype': 'constant', 'value': weight, 'dtype': 'float', 'shape': weight.shape}
-                eqs.append(f"{t_str} = matvec({w_str}, {s_str})")
                 source_vars[s_str] = {'sources': [sop], 'node': snode, 'var': svar}
+
+                if edge_ir is None:
+                    # case 0a: simple matvec — no coupling function
+                    eqs.append(f"{t_str} = matvec({w_str}, {s_str})")
+                else:
+                    # case 0b: matrix coupling with custom edge equations.
+                    # All EdgeTemplate equations are inlined into a single target equation
+                    # using broadcast_pre/broadcast_post for source/target variables and
+                    # wsum(W, coupling_matrix) for the final weighted row-sum reduction.
+                    # This avoids numpy indexing in equation strings (sympy can't parse [None, :]).
+
+                    def _subst(s, subst_map):
+                        for var, repl in subst_map.items():
+                            s = _re.sub(r'\b' + _re.escape(var) + r'\b', repl, s)
+                        return s
+
+                    # Build broadcast substitution for edge input variables
+                    expr_map = {}
+                    for ev, info in edge_var_map.items():
+                        if info['role'] == 'source':
+                            expr_map[ev] = f'broadcast_pre({s_str})'
+                        else:
+                            post_var = info['var']
+                            post_op = info['op']
+                            expr_map[ev] = f'broadcast_post({post_var})'
+                            source_vars[post_var] = {'sources': [post_op], 'node': tnode, 'var': post_var}
+
+                    # Inline all EdgeIR equations in topological order,
+                    # substituting intermediate outputs by their expressions
+                    last_out = None
+                    for op_key in topological_sort(edge_ir.op_graph):
+                        op_data = edge_ir.op_graph.nodes[op_key]
+                        for eq in op_data.get('equations', []):
+                            lhs, rhs = (s.strip() for s in eq.split('=', 1))
+                            expr_map[lhs] = _subst(rhs, expr_map)
+                        last_out = op_data.get('output')
+
+                    final_expr = expr_map.get(last_out, last_out)
+                    eqs.append(f"{t_str} = wsum({w_str}, {final_expr})")
+
                 in_vars.append(t_str)
                 continue
 
@@ -1276,6 +1321,8 @@ class CircuitIR(AbstractBaseIR):
         if v['dtype'] != 'float':
             return v
         if 'shape' in v and len(v['shape']) > 1:
+            return v
+        if 'shape' in v and np.prod(v['shape']) > 1:
             return v
         if len(np.unique(v['value'])) > 1:
             return v
