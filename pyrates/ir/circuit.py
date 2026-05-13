@@ -281,8 +281,9 @@ class NetworkGraph(AbstractBaseIR):
 
             # extract and process delay distribution spread
             v = self.edges[s, t, e].pop('spread', [0])
+            n_slots = max(len(self.edges[s, t, e]['target_idx']), 1)
             if v is None or np.sum(v) == 0:
-                v = [0] * len(self.edges[s, t, e]['target_idx'])
+                v = [0] * n_slots
                 discretize = True
             else:
                 discretize = False
@@ -290,7 +291,7 @@ class NetworkGraph(AbstractBaseIR):
 
             # finalize edge delay
             if d is None or np.sum(d) == 0:
-                d = [1] * len(self.edges[s, t, e]['target_idx'])
+                d = [1] * n_slots
             else:
                 d = self._process_delays(d, discretize=discretize)
 
@@ -622,6 +623,32 @@ class NetworkGraph(AbstractBaseIR):
         for i, (weight, sidx, tidx, (snode, sop, svar)) in \
                 enumerate(zip(weights, source_indices, target_indices, sources)):
 
+            # define variable name strings (adjusted when multiple inputs share same target var)
+            if multiple_inputs:
+                in_shape = (tsize,)
+                t_str = f'{tvar}_in{i}'
+                w_str = f'weight_in{i}'
+                s_str = f'{svar}_in{i}'
+                sidx_str = f'source_idx_in{i}'
+                tidx_str = f'target_idx_in{i}'
+                args[t_str] = {'value': np.zeros(in_shape), 'dtype': 'float', 'vtype': 'variable',
+                               'shape': in_shape}
+            else:
+                t_str = tvar
+                w_str = 'weight'
+                s_str = svar
+                sidx_str = 'source_idx'
+                tidx_str = 'target_idx'
+
+            # case 0: matrix edge — weight is a 2-D numpy array supplied directly
+            # (used by Connectivity; no scalar expansion needed)
+            if isinstance(weight, np.ndarray) and weight.ndim == 2:
+                args[w_str] = {'vtype': 'constant', 'value': weight, 'dtype': 'float', 'shape': weight.shape}
+                eqs.append(f"{t_str} = matvec({w_str}, {s_str})")
+                source_vars[s_str] = {'sources': [sop], 'node': snode, 'var': svar}
+                in_vars.append(t_str)
+                continue
+
             # get source variable size
             sval = self[f"{snode}/{sop}/{svar}"]
             if sval['shape']:
@@ -643,23 +670,6 @@ class NetworkGraph(AbstractBaseIR):
                 dot_edge = len(weight) / (n * m) > matrix_sparseness
             else:
                 dot_edge = False
-
-            # define new input variable if necessary
-            if multiple_inputs:
-                in_shape = (tsize,)
-                t_str = f'{tvar}_in{i}'
-                w_str = f'weight_in{i}'
-                s_str = f'{svar}_in{i}'
-                sidx_str = f'source_idx_in{i}'
-                tidx_str = f'target_idx_in{i}'
-                args[t_str] = {'value': np.zeros(in_shape), 'dtype': 'float', 'vtype': 'variable',
-                               'shape': in_shape}
-            else:
-                t_str = tvar
-                w_str = 'weight'
-                s_str = svar
-                sidx_str = 'source_idx'
-                tidx_str = 'target_idx'
 
             # case I: realize edge projection via a matrix product
             if dot_edge:

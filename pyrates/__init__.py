@@ -37,3 +37,4 @@ __version__ = "1.0.10"
 
 from pyrates.utility import integrate, grid_search, clear_frontend_caches, clear
 from pyrates.frontend import CircuitTemplate, NodeTemplate, EdgeTemplate, OperatorTemplate, save
+from pyrates.frontend.template.population import PopulationTemplate, Connectivity
