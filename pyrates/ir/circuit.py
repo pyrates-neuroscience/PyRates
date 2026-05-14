@@ -212,6 +212,12 @@ class NetworkGraph(AbstractBaseIR):
 
                 # add synaptic buffer to output variables with delay
                 if add_delay:
+                    # Clear delay fields from edges so _generate_edge_equation ignores them.
+                    # Kept here (not inside _collect_delays_from_edges) so that method is pure.
+                    for s, t, e in scalar_edges:
+                        self.edges[s, t, e]['source_idx'] = []
+                        self.edges[s, t, e]['delay'] = None
+
                     if vectorized:
                         self._add_edge_buffer(node_name, op_name, var_name, edges=scalar_edges, delays=delays,
                                               nodes=nodes, spreads=spreads, dde_approx=dde_approx)
@@ -334,12 +340,6 @@ class NetworkGraph(AbstractBaseIR):
                     ("float" in str(type(max_delay)) and max_delay > self.step_size)
         if sum(stds) == 0:
             stds = None
-
-        # if delays are going to be added from the created lists, remove the delays from the edges themselves
-        if add_delay:
-            for s, t, e in edges:
-                self.edges[s, t, e]['source_idx'] = []
-                self.edges[s, t, e]['delay'] = None
 
         return means, stds, nodes, add_delay
 
@@ -494,128 +494,80 @@ class NetworkGraph(AbstractBaseIR):
 
         if dde_approx or spreads:
 
-            # calculate orders and rates of ODE-system approximations to delayed connections
+            # --- Per-edge ODE orders and rates ---
             if spreads:
                 orders, rates = [], []
                 for m, v in zip(delays, spreads):
-                    order = np.round((m / v) ** 2, decimals=0) if v > 0 else 0
-                    orders.append(int(order) if m and order > dde_approx else dde_approx)
-                    rates.append(orders[-1] / m if m else 0)
+                    if v > 0:
+                        n_order = int(np.round((m / v) ** 2))
+                        n_order = n_order if m and n_order > dde_approx else dde_approx
+                    else:
+                        n_order = dde_approx if m else 0
+                    orders.append(n_order)
+                    rates.append(n_order / m if m else 0.0)
             else:
-                orders, rates = [], []
-                for m in delays:
-                    orders.append(dde_approx if m else 0)
-                    rates.append(dde_approx / m if m else 0)
+                orders = [dde_approx if m else 0 for m in delays]
+                rates = [dde_approx / m if m else 0.0 for m in delays]
 
-            # sort all edge information in ascending ODE order
-            order_idx = np.argsort(orders, kind='stable')
-            orders_sorted = np.asarray(orders, dtype='int')[order_idx]
-            orders_tmp = np.asarray(orders, dtype='int')[order_idx]
-            rates_tmp = np.asarray(rates)[order_idx]
-            source_idx_tmp = source_idx[order_idx]
+            # --- Group delay slots by (order, rate) — slots in the same group share one ODE chain ---
+            groups = {}
+            for slot_idx, (n_order, rate, src) in enumerate(zip(orders, rates, source_idx)):
+                key = (n_order, round(rate, 12))
+                if key not in groups:
+                    groups[key] = []
+                groups[key].append((slot_idx, int(src)))
 
-            buffer_eqs, var_dict, final_idx = [], {}, []
-            max_order = max(orders)
-            for i in range(max_order + 1):
+            n_src_var = sum(target_shape) if target_shape else 1
+            buffer_eqs, var_dict = [], {}
+            buf_var = f"{var}_buffered{buffer_id}"
+            var_dict[buf_var] = {'vtype': 'variable', 'dtype': 'float',
+                                 'shape': (len(delays),), 'value': 0.0}
 
-                # check which edges require the ODE order treated in this iteration of the loop
-                k = i + 1
-                idx, idx_str, idx_var = self._bool_to_idx(orders_tmp >= k)
-                if type(idx) is int:
-                    idx = [idx]
-                var_dict.update(idx_var)
+            for chain_id, ((n_order, _), group) in enumerate(groups.items()):
+                slot_indices = [g[0] for g in group]
+                src_indices  = [g[1] for g in group]
+                G = len(group)
+                rate_val = rates[slot_indices[0]]
 
-                # define new equation variable/parameter names
-                var_next = f"{var}_d{k}{buffer_id}"
-                var_prev = f"{var}_d{i}{buffer_id}" if i > 0 else var
-                rate = f"k_d{k}{buffer_id}"
-
-                # prepare variables for the next ODE
-                idx_apply = len(idx) != len(orders_tmp)
-                val = rates_tmp[idx] if idx_apply else rates_tmp
-                var_shape = (len(val),) if val.shape else ()
-                if i == 0 and idx != [0] and (sum(target_shape) != len(idx) or any(np.diff(order_idx) != 1)):
-                    var_prev_idx = f"index({var_prev}, source_idx{buffer_id})"
-                    var_dict[f"source_idx{buffer_id}"] = {'vtype': 'constant',
-                                                          'dtype': 'int',
-                                                          'shape': (len(source_idx_tmp[idx]),),
-                                                          'value': source_idx_tmp[idx]}
-                elif i != 0 and idx_apply:
-                    var_prev_idx = _get_indexed_var_str(var_prev, idx_str, var_length=len(rates_tmp))
+                # Build chain input: use source var directly when group covers all its elements
+                if sorted(src_indices) == list(range(n_src_var)):
+                    chain_in = var
+                elif G == 1:
+                    chain_in = f"index({var}, {src_indices[0]})"
                 else:
-                    var_prev_idx = var_prev
+                    src_name = f"{var}_src{chain_id}{buffer_id}"
+                    var_dict[src_name] = {'vtype': 'constant', 'dtype': 'int',
+                                          'value': np.asarray(src_indices, dtype='int'),
+                                          'shape': (G,)}
+                    chain_in = f"index({var}, {src_name})"
 
-                # create new ODE string and corresponding variable definitions
-                buffer_eqs.append(f"d/dt * {var_next} = {rate} * ({var_prev_idx} - {var_next})")
-                var_dict[var_next] = {'vtype': 'state_var',
-                                      'dtype': 'float',
-                                      'shape': var_shape,
-                                      'value': 0.}
-                var_dict[rate] = {'vtype': 'constant',
-                                  'dtype': 'float',
-                                  'value': val}
+                # Build the ODE chain (n_order stages, one shared rate constant)
+                chain_shape = (G,) if G > 1 else ()
+                if n_order > 0:
+                    rate_name = f"k_d{chain_id}{buffer_id}"
+                    var_dict[rate_name] = {'vtype': 'constant', 'dtype': 'float', 'value': rate_val}
+                    prev = chain_in
+                    for k in range(1, n_order + 1):
+                        zk = f"{var}_d{chain_id}_{k}{buffer_id}"
+                        var_dict[zk] = {'vtype': 'state_var', 'dtype': 'float',
+                                        'shape': chain_shape, 'value': 0.}
+                        buffer_eqs.append(f"d/dt * {zk} = {rate_name} * ({prev} - {zk})")
+                        prev = zk
+                else:
+                    prev = chain_in  # zero-order: pass-through (no ODE stages)
 
-                # store indices that are required to fill the edge buffer variable
-                if idx_apply:
-
-                    # right-hand side index
-                    if len(orders_tmp) < 2:
-                        idx_rhs_str = ''
-                    elif i == 0:
-                        idx_rhs = np.asarray(source_idx_tmp)[orders_tmp == i]
-                        n_idx = len(idx_rhs)
-                        if n_idx > 1:
-                            idx_rhs_str = f"source_idx2{buffer_id}"
-                            var_dict[f"source_idx2{buffer_id}"] = {'vtype': 'constant',
-                                                                   'dtype': 'int',
-                                                                   'shape': (n_idx,),
-                                                                   'value': idx_rhs}
-                        else:
-                            idx_rhs_str = f"{idx_rhs[0]}"
-                    else:
-                        _, idx_rhs_str, _ = self._bool_to_idx(orders_tmp == i)
-
-                    # left-hand side index
-                    if len(delays) > 1:
-                        _, idx_lhs_str, _ = self._bool_to_idx(orders_sorted == i)
-                    else:
-                        idx_lhs_str = ''
-                    final_idx.append((i, idx_lhs_str, idx_rhs_str))
-
-                # reduce lists of orders and rates by the ones that are fully implemented by the current ODE set
-                if idx_apply:
-                    orders_tmp = orders_tmp[idx]
-                    rates_tmp = rates_tmp[idx]
-                if not orders_tmp.shape:
-                    orders_tmp = np.asarray([orders_tmp], dtype='int')
-                    rates_tmp = np.asarray([rates_tmp])
-
-            # remove unnecessary ODEs
-            for _ in range(len(buffer_eqs) - final_idx[-1][0]):
-                i = len(buffer_eqs)
-                var_dict.pop(f"{var}_d{i}{buffer_id}")
-                var_dict.pop(f"k_d{i}{buffer_id}")
-                buffer_eqs.pop(-1)
-
-            # create edge buffer variable
-            buffer_length = len(delays)
-            for i, idx_l, idx_r in final_idx:
-                lhs = _get_indexed_var_str(f"{var}_buffered{buffer_id}", idx_l, var_length=buffer_length)
-                rhs = _get_indexed_var_str(f"{var}_d{i}{buffer_id}" if i != 0 else var, idx_r, var_length=buffer_length)
-                buffer_eqs.append(f"{lhs} = {rhs}")
-            var_dict[f"{var}_buffered{buffer_id}"] = {'vtype': 'variable',
-                                                      'dtype': 'float',
-                                                      'shape': (buffer_length,),
-                                                      'value': 0.0}
-
-            # re-order buffered variable if necessary
-            if any(np.diff(order_idx) != 1):
-                buffer_eqs.append(f"{var}_buffered{buffer_id} = index({var}_buffered{buffer_id}, "
-                                  f"{var}_buffered_idx{buffer_id})")
-                var_dict[f"{var}_buffered_idx{buffer_id}"] = {'vtype': 'constant',
-                                                              'dtype': 'int',
-                                                              'shape': (len(order_idx),),
-                                                              'value': np.argsort(order_idx, kind='stable')}
+                # Write chain output into the correct slots of the buffer
+                all_slots = (slot_indices == list(range(len(delays))))
+                if all_slots:
+                    buffer_eqs.append(f"{buf_var} = {prev}")
+                elif G == 1:
+                    buffer_eqs.append(f"index({buf_var}, {slot_indices[0]}) = {prev}")
+                else:
+                    slot_name = f"{var}_slots{chain_id}{buffer_id}"
+                    var_dict[slot_name] = {'vtype': 'constant', 'dtype': 'int',
+                                           'value': np.asarray(slot_indices, dtype='int'),
+                                           'shape': (len(slot_indices),)}
+                    buffer_eqs.append(f"index({buf_var}, {slot_name}) = {prev}")
 
         # discretized edge buffers
         ##########################
