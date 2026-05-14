@@ -478,6 +478,9 @@ class NetworkGraph(AbstractBaseIR):
 
         """
 
+        if not delays:
+            return
+
         max_delay = np.max(delays)
 
         # extract target shape and node
@@ -635,6 +638,13 @@ class NetworkGraph(AbstractBaseIR):
 
         # add buffer equations to node operator
         op_info = node_ir[op]
+        existing_vars = set(op_info.get('variables', {}).keys())
+        conflicts = existing_vars & set(var_dict.keys())
+        if conflicts:
+            raise PyRatesException(
+                f"Buffer variable name collision in operator '{op}' on node '{node}': {conflicts}. "
+                f"Use a unique buffer_id to avoid this."
+            )
         op_info['equations'] += buffer_eqs
         op_info['variables'].update(var_dict)
         op_info['output'] = f"{var}_buffered{buffer_id}"
