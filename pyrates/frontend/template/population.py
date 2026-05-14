@@ -150,17 +150,23 @@ class Connectivity:
 
     delays
         Optional scalar transmission delay (same time units as the simulation).
-        Matrix delays are not yet supported.
+    spread
+        Optional standard deviation of a gamma-kernel delay distribution centred on *delays*.
+        When given together with *delays*, the delay is implemented via an ODE cascade whose
+        order is ``n = round((delays/spread)**2)`` and rate ``a = n/delays``.  When ``None``
+        (default), a discrete ring-buffer is used instead.
     """
 
     def __init__(self, source: str, target: str,
                  weights: Union[np.ndarray, float],
                  edge: Optional[EdgeTemplate] = None,
                  edge_var_map: Optional[Dict[str, str]] = None,
-                 delays: Optional[float] = None):
+                 delays: Optional[float] = None,
+                 spread: Optional[float] = None):
         self.source = source
         self.target = target
         self.weights = np.asarray(weights, dtype=float)
         self.edge = edge
         self.edge_var_map = edge_var_map or {}
         self.delays = delays
+        self.spread = spread

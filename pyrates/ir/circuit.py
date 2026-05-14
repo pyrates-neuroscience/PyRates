@@ -187,22 +187,43 @@ class NetworkGraph(AbstractBaseIR):
 
                 # extract delay info from variable projections
                 op_name, var_name = out_var.split('/')
-                delays, spreads, nodes, add_delay = self._collect_delays_from_edges(edges)
+
+                # Separate matrix-connectivity edges (2-D weight array) from scalar edges.
+                # Matrix edges carry their own delay handling via _add_matrix_delay.
+                matrix_edges, scalar_edges = [], []
+                for s, t, e in edges:
+                    w = self.edges[s, t, e]['weight']
+                    if isinstance(w, np.ndarray) and w.ndim == 2:
+                        matrix_edges.append((s, t, e))
+                    else:
+                        scalar_edges.append((s, t, e))
+
+                for s, t, e in matrix_edges:
+                    d = self.edges[s, t, e].get('delay')
+                    v = self.edges[s, t, e].get('spread')
+                    if d is not None and d > self.step_size:
+                        self._add_matrix_delay(node_name, op_name, var_name, (s, t, e),
+                                               d, v, dde_approx=dde_approx)
+
+                if not scalar_edges:
+                    continue
+
+                delays, spreads, nodes, add_delay = self._collect_delays_from_edges(scalar_edges)
 
                 # add synaptic buffer to output variables with delay
                 if add_delay:
                     if vectorized:
-                        self._add_edge_buffer(node_name, op_name, var_name, edges=edges, delays=delays,
+                        self._add_edge_buffer(node_name, op_name, var_name, edges=scalar_edges, delays=delays,
                                               nodes=nodes, spreads=spreads, dde_approx=dde_approx)
                     else:
                         # TODO: sort edges into unique delay/spread combinations and only loop over those
                         if spreads:
-                            for i, (edge, delay, spread, node) in enumerate(zip(edges, delays, spreads, nodes)):
+                            for i, (edge, delay, spread, node) in enumerate(zip(scalar_edges, delays, spreads, nodes)):
                                 self._add_edge_buffer(node_name, op_name, var_name, edges=[edge], delays=[delay],
                                                       nodes=[node], spreads=[spread], dde_approx=dde_approx,
                                                       buffer_id=f"_out{i}")
                         else:
-                            for i, (edge, delay, node) in enumerate(zip(edges, delays, nodes)):
+                            for i, (edge, delay, node) in enumerate(zip(scalar_edges, delays, nodes)):
                                 self._add_edge_buffer(node_name, op_name, var_name, edges=[edge], delays=[delay],
                                                       nodes=[node], dde_approx=dde_approx, buffer_id=f"_out{i}")
 
@@ -342,6 +363,89 @@ class NetworkGraph(AbstractBaseIR):
                 except KeyError:
                     data[source][key] = val
         return data
+
+    def _add_matrix_delay(self, node: str, op: str, var: str, edge: tuple,
+                          delay: float, spread: Optional[float] = None,
+                          dde_approx: int = 0, buffer_id: str = "") -> None:
+        """Add delay buffer equations for a matrix-connectivity edge.
+
+        Supports two modes:
+        - **Discrete ring buffer** (default, fixed step size): ``(Ns, d+1)`` state variable,
+          updated by roll/index_axis each step.  Selected when *spread* is ``None``,
+          *dde_approx* is 0, and ``step_size_adaptation`` is ``False``.
+        - **ODE cascade** (gamma-kernel or explicit order): a chain of *n* ODEs of shape
+          ``(Ns,)`` that convolve the source signal with a gamma kernel.  Selected when
+          *spread* > 0, *dde_approx* > 0, or ``step_size_adaptation`` is ``True``.
+        """
+        s, t, e = edge
+        node_ir = self[node]
+        op_info = node_ir[op]
+
+        node_var = self[f"{node}/{op}/{var}"]
+        var_shape = node_var.get('shape', ())
+        Ns = int(var_shape[0]) if var_shape else 1
+
+        var_dict: dict = {}
+        buffer_eqs: list = []
+
+        use_ring_buffer = (
+            (spread is None or spread == 0)
+            and dde_approx == 0
+            and not self.step_size_adaptation
+        )
+
+        if use_ring_buffer:
+            # --- Discrete ring buffer of shape (Ns, d_steps+1) ---
+            d_steps = self._preprocess_delay(delay, discretize=True)
+            buf = f'{var}_buffer{buffer_id}'
+            buf_out = f'{var}_buffered{buffer_id}'
+            var_dict[buf] = {'vtype': 'variable', 'dtype': 'float',
+                             'shape': (Ns, d_steps + 1), 'value': 0.}
+            var_dict[buf_out] = {'vtype': 'variable', 'dtype': 'float',
+                                 'shape': (Ns,), 'value': 0.}
+            # Inline d_steps as a literal so index_axis returns shape (Ns,) not (Ns, 1)
+            buffer_eqs = [
+                f"index_axis({buf}) = roll({buf}, 1, 1)",
+                f"index_axis({buf}, 0, 1) = {var}",
+                f"{buf_out} = index_axis({buf}, {d_steps}, 1)",
+            ]
+        else:
+            # --- ODE cascade (gamma kernel or adaptive step size) ---
+            if spread is not None and spread > 0:
+                n = max(1, int(round((delay / spread) ** 2)))
+            elif dde_approx > 0:
+                n = dde_approx
+            else:
+                n = 1  # minimum ODE order for adaptive step size
+            a = n / delay if delay else 0.0
+            for k in range(1, n + 1):
+                zk = f'{var}_d{k}{buffer_id}'
+                zk_rate = f'k_d{k}{buffer_id}'
+                prev = var if k == 1 else f'{var}_d{k-1}{buffer_id}'
+                var_dict[zk] = {'vtype': 'state_var', 'dtype': 'float',
+                                'shape': (Ns,), 'value': [0.0] * Ns}
+                var_dict[zk_rate] = {'vtype': 'constant', 'dtype': 'float',
+                                     'value': a, 'shape': (1,)}
+                buffer_eqs.append(f"d/dt * {zk} = {zk_rate} * ({prev} - {zk})")
+            buf_out = f'{var}_buffered{buffer_id}'
+            var_dict[buf_out] = {'vtype': 'variable', 'dtype': 'float',
+                                 'shape': (Ns,), 'value': [0.0] * Ns}
+            buffer_eqs.append(f"{buf_out} = {var}_d{n}{buffer_id}")
+
+        # Attach buffer equations and variables to the source operator
+        op_info['equations'] += buffer_eqs
+        op_info['variables'].update(var_dict)
+        op_info['output'] = buf_out
+
+        # Update intra-node successor inputs (mirrors _add_edge_buffer)
+        for succ in node_ir.op_graph.succ[op]:
+            inputs = self[f"{node}/{succ}"]['inputs']
+            if var not in inputs:
+                inputs[var] = {'sources': {op}}
+
+        # Point the edge at the buffered source variable
+        self.edges[s, t, e]['source_var'] = f"{op}/{buf_out}"
+        self.edges[s, t, e]['delay'] = None
 
     def _add_edge_buffer(self, node: str, op: str, var: str, edges: list, delays: list, nodes: list,
                          spreads: Optional[list] = None, dde_approx: int = 0, buffer_id: str = "") -> None:

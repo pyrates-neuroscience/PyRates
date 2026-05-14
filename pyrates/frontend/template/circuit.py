@@ -1204,7 +1204,7 @@ class CircuitTemplate(AbstractBaseTemplate):
             edge_dict = {
                 'weight': conn.weights,
                 'delay': conn.delays,
-                'spread': None,
+                'spread': conn.spread,
                 'source_idx': [],
                 'target_idx': [],
             }

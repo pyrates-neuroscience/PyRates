@@ -349,6 +349,123 @@ def test_connectivity_dynamic_edge():
     )
 
 
+# ---------------------------------------------------------------------------
+# test 7: discrete matrix delay — trajectory matches reference loop
+# ---------------------------------------------------------------------------
+
+def test_matrix_discrete_delay():
+    """Discrete ring-buffer delay on a matrix Connectivity: full Euler trajectory
+    matches a hand-rolled reference that applies the same d-step delay."""
+    from pyrates.frontend.template.operator import OperatorTemplate
+    from pyrates.frontend.template.node import NodeTemplate
+    from pyrates.frontend.template.circuit import CircuitTemplate
+    from pyrates.frontend.template.population import PopulationTemplate, Connectivity
+    from pyrates.ir.node import clear_ir_caches
+
+    N = 2
+    r0 = np.array([1.0, 2.0])
+    eta = np.array([5.0, 8.0])
+    tau_r = 0.1
+    dt = 1e-3
+    d_steps = 4
+    delay = d_steps * dt
+    n_run = d_steps + 6
+    W = np.array([[0., 0.5], [0.5, 0.]])
+
+    node_op = OperatorTemplate(
+        name='rate_op_d',
+        equations=["r' = (-r + eta + s_in) / tau_r"],
+        variables={'r': 'output', 'eta': 5.0, 'tau_r': tau_r, 's_in': 'input'},
+    )
+    rate_node = NodeTemplate(name='rate_node_d', operators=[node_op])
+
+    clear_ir_caches()
+    pop = PopulationTemplate(name='p', node=rate_node, n=N,
+                             params={'rate_op_d/eta': list(eta), 'rate_op_d/r': list(r0)})
+    conn = Connectivity(source='p/rate_op_d/r', target='p/rate_op_d/s_in',
+                        weights=W, delays=delay)
+    circuit = CircuitTemplate(name='dtest', populations={'p': pop}, connections=[conn])
+    result = circuit.run(simulation_time=n_run * dt, step_size=dt, solver='euler',
+                         outputs={'r': 'p/rate_op_d/r'}, clear=True, verbose=False)
+    r_pyrates = result['r'].values  # shape (n_run, N)
+
+    # Reference Euler loop with explicit d-step ring buffer.
+    # Order matches PyRates: roll first, write current, then read (same as generated code).
+    r = r0.copy()
+    buf = np.zeros((N, d_steps + 1))  # columns: time steps (col 0 = most recent)
+    r_ref = np.zeros((n_run, N))
+    for k in range(n_run):
+        r_ref[k] = r
+        buf = np.roll(buf, 1, axis=1)         # 1. shift right
+        buf[:, 0] = r                          # 2. write current r[k]
+        s_in = W @ buf[:, d_steps]             # 3. read r[k - d_steps]
+        dr = (-r + eta + s_in) / tau_r
+        r = r + dt * dr
+
+    np.testing.assert_allclose(r_pyrates, r_ref, rtol=1e-5,
+                               err_msg="Discrete matrix delay: PyRates trajectory differs from reference loop")
+
+
+# ---------------------------------------------------------------------------
+# test 8: gamma-kernel matrix delay — ODE cascade trajectory
+# ---------------------------------------------------------------------------
+
+def test_matrix_gamma_kernel_delay():
+    """Gamma-kernel delay (ODE cascade) on a matrix Connectivity: full Euler trajectory
+    matches a hand-rolled reference cascade."""
+    from pyrates.frontend.template.operator import OperatorTemplate
+    from pyrates.frontend.template.node import NodeTemplate
+    from pyrates.frontend.template.circuit import CircuitTemplate
+    from pyrates.frontend.template.population import PopulationTemplate, Connectivity
+    from pyrates.ir.node import clear_ir_caches
+
+    N = 2
+    r0 = np.array([1.0, 2.0])
+    eta = np.array([5.0, 8.0])
+    tau_r = 0.1
+    dt = 1e-3
+    delay, spread = 5e-3, 2e-3   # gamma kernel: n = (5/2)^2 = 6, a = 6/5e-3
+    n_cascade = max(1, int(round((delay / spread) ** 2)))
+    a_rate = n_cascade / delay
+    n_run = 20
+    W = np.array([[0., 0.5], [0.5, 0.]])
+
+    node_op = OperatorTemplate(
+        name='rate_op_g',
+        equations=["r' = (-r + eta + s_in) / tau_r"],
+        variables={'r': 'output', 'eta': 5.0, 'tau_r': tau_r, 's_in': 'input'},
+    )
+    rate_node = NodeTemplate(name='rate_node_g', operators=[node_op])
+
+    clear_ir_caches()
+    pop = PopulationTemplate(name='p', node=rate_node, n=N,
+                             params={'rate_op_g/eta': list(eta), 'rate_op_g/r': list(r0)})
+    conn = Connectivity(source='p/rate_op_g/r', target='p/rate_op_g/s_in',
+                        weights=W, delays=delay, spread=spread)
+    circuit = CircuitTemplate(name='gtest', populations={'p': pop}, connections=[conn])
+    result = circuit.run(simulation_time=n_run * dt, step_size=dt, solver='euler',
+                         outputs={'r': 'p/rate_op_g/r'}, clear=True, verbose=False)
+    r_pyrates = result['r'].values  # shape (n_run, N)
+
+    # Reference Euler loop with ODE cascade
+    r = r0.copy()
+    z = np.zeros((n_cascade, N))   # z[k] is k-th cascade stage, shape (N,)
+    r_ref = np.zeros((n_run, N))
+    for k in range(n_run):
+        r_ref[k] = r
+        s_in = W @ z[-1]           # output of last cascade stage
+        dz = np.zeros_like(z)
+        dz[0] = a_rate * (r - z[0])
+        for j in range(1, n_cascade):
+            dz[j] = a_rate * (z[j - 1] - z[j])
+        dr = (-r + eta + s_in) / tau_r
+        r = r + dt * dr
+        z = z + dt * dz
+
+    np.testing.assert_allclose(r_pyrates, r_ref, rtol=1e-5,
+                               err_msg="Gamma-kernel matrix delay: PyRates trajectory differs from reference loop")
+
+
 if __name__ == '__main__':
     test_population_n1_matches_scalar()
     print("test_population_n1_matches_scalar PASSED")
@@ -362,3 +479,7 @@ if __name__ == '__main__':
     print("test_connectivity_edge_kuramoto_sine PASSED")
     test_connectivity_dynamic_edge()
     print("test_connectivity_dynamic_edge PASSED")
+    test_matrix_discrete_delay()
+    print("test_matrix_discrete_delay PASSED")
+    test_matrix_gamma_kernel_delay()
+    print("test_matrix_gamma_kernel_delay PASSED")
