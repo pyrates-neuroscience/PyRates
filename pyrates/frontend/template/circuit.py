@@ -1177,18 +1177,7 @@ class CircuitTemplate(AbstractBaseTemplate):
             resolved_edge_var_map = {}
 
             if conn.edge is not None:
-                # Apply EdgeTemplate to get EdgeIR (non-dynamic: no state variables allowed)
                 edge_ir, _, _ = conn.edge.apply(values={}, vectorize=False)
-
-                # Validate: no differential equations (dynamic edges not yet supported)
-                for op_key in edge_ir.op_graph.nodes:
-                    for eq in edge_ir.op_graph.nodes[op_key].get('equations', []):
-                        lhs = eq.split("=")[0]
-                        if "d/dt" in lhs or "'" in lhs:
-                            raise ValueError(
-                                f"EdgeTemplate '{conn.edge.name}' contains differential equation: '{eq}'. "
-                                "Only algebraic (non-dynamic) coupling functions are supported for Connectivity."
-                            )
 
                 if not conn.edge_var_map:
                     raise ValueError(

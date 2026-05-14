@@ -279,6 +279,76 @@ def test_connectivity_edge_kuramoto_sine():
                                err_msg="Kuramoto sine coupling: numerical result does not match hand-computed Euler step")
 
 
+# ---------------------------------------------------------------------------
+# test 6: dynamic (DE-bearing) EdgeTemplate matches a pure-Python reference loop
+# ---------------------------------------------------------------------------
+
+def test_connectivity_dynamic_edge():
+    """Lowpass-filter edge u' = (-u + r_pre)/tau_u, s = u, with N=2 and off-diagonal
+    weight matrix.  The PyRates Euler trajectory must match a hand-rolled Euler loop."""
+    from pyrates.frontend.template.node import NodeTemplate
+    from pyrates.frontend.template.edge import EdgeTemplate
+    from pyrates.frontend.template.operator import OperatorTemplate
+    from pyrates.frontend.template.circuit import CircuitTemplate
+    from pyrates.frontend.template.population import PopulationTemplate, Connectivity
+    from pyrates.ir.node import clear_ir_caches
+
+    clear_ir_caches()
+
+    # Node: r' = (-r + eta + s_in) / tau_r
+    node_op = OperatorTemplate(
+        name='rate_op',
+        equations=["r' = (-r + eta + s_in) / tau_r"],
+        variables={'r': 'output', 'eta': 10.0, 'tau_r': 1.0, 's_in': 'input'},
+    )
+    rate_node = NodeTemplate(name='rate_node', operators=[node_op])
+
+    # Edge: lowpass filter  u' = (-u + r_pre) / tau_u,  s = u
+    edge_op = OperatorTemplate(
+        name='lp_op',
+        equations=["u' = (-u + r_pre) / tau_u", 's = u'],
+        variables={'u': 0.0, 'r_pre': 'input', 'tau_u': 0.1, 's': 'output'},
+    )
+    lp_edge = EdgeTemplate(name='lp_edge', operators=[edge_op])
+
+    N = 2
+    W = np.array([[0., 1.], [1., 0.]])
+    eta = np.array([5.0, 15.0])
+    tau_r, tau_u = 1.0, 0.1
+    dt = 1e-3
+    n_steps = 5
+
+    # --- PyRates simulation ---
+    pop = PopulationTemplate(name='p', node=rate_node, n=N,
+                             params={'rate_op/eta': list(eta)})
+    conn = Connectivity(
+        source='p/rate_op/r', target='p/rate_op/s_in',
+        weights=W, edge=lp_edge, edge_var_map={'r_pre': 'source'},
+    )
+    circuit = CircuitTemplate(name='dyn_edge_test', populations={'p': pop}, connections=[conn])
+    result = circuit.run(simulation_time=n_steps * dt, step_size=dt, solver='euler',
+                         outputs={'r': 'p/rate_op/r'}, clear=True, verbose=False)
+
+    r_pyrates = result['r'].values  # shape (n_steps, 2), rows at t=0, dt, 2*dt, ...
+
+    # --- Reference Euler loop (pure Python/NumPy) ---
+    r_ref = np.zeros((n_steps, N))
+    r = np.zeros(N)
+    u = np.zeros((N, N))   # u[target, source]
+    for step in range(n_steps):
+        r_ref[step] = r
+        s_in = np.einsum('ij,ij->i', W, u)
+        dr = (-r + eta + s_in) / tau_r
+        du = (-u + r[np.newaxis, :]) / tau_u   # broadcast_pre(r) equivalent
+        r = r + dt * dr
+        u = u + dt * du
+
+    np.testing.assert_allclose(
+        r_pyrates, r_ref, rtol=1e-5,
+        err_msg="Dynamic edge: PyRates Euler trajectory differs from reference loop",
+    )
+
+
 if __name__ == '__main__':
     test_population_n1_matches_scalar()
     print("test_population_n1_matches_scalar PASSED")
@@ -290,3 +360,5 @@ if __name__ == '__main__':
     print("test_connectivity_edge_identity PASSED")
     test_connectivity_edge_kuramoto_sine()
     print("test_connectivity_edge_kuramoto_sine PASSED")
+    test_connectivity_dynamic_edge()
+    print("test_connectivity_dynamic_edge PASSED")

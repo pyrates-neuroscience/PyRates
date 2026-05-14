@@ -656,18 +656,28 @@ class NetworkGraph(AbstractBaseIR):
                     # case 0a: simple matvec — no coupling function
                     eqs.append(f"{t_str} = matvec({w_str}, {s_str})")
                 else:
-                    # case 0b: matrix coupling with custom edge equations.
-                    # All EdgeTemplate equations are inlined into a single target equation
-                    # using broadcast_pre/broadcast_post for source/target variables and
-                    # wsum(W, coupling_matrix) for the final weighted row-sum reduction.
-                    # This avoids numpy indexing in equation strings (sympy can't parse [None, :]).
+                    # case 0b / 0c: matrix coupling with custom edge equations
 
-                    def _subst(s, subst_map):
+                    def _subst(text, subst_map):
                         for var, repl in subst_map.items():
-                            s = _re.sub(r'\b' + _re.escape(var) + r'\b', repl, s)
-                        return s
+                            text = _re.sub(r'\b' + _re.escape(var) + r'\b', repl, text)
+                        return text
 
-                    # Build broadcast substitution for edge input variables
+                    def _de_lhs_var(lhs):
+                        """Extract bare variable name from a DE left-hand side."""
+                        return _re.sub(r"d/dt\s*\*?\s*|'", "", lhs).strip()
+
+                    Nt, Ns = weight.shape
+
+                    # Detect which edge variables are state variables (have DEs)
+                    edge_de_sv_names = set()
+                    for _ok in edge_ir.op_graph.nodes:
+                        for _eq in edge_ir.op_graph.nodes[_ok].get('equations', []):
+                            _lhs = _eq.split('=')[0].strip()
+                            if "d/dt" in _lhs or "'" in _lhs:
+                                edge_de_sv_names.add(_de_lhs_var(_lhs))
+
+                    # Build broadcast substitution map for edge input variables
                     expr_map = {}
                     for ev, info in edge_var_map.items():
                         if info['role'] == 'source':
@@ -678,18 +688,67 @@ class NetworkGraph(AbstractBaseIR):
                             expr_map[ev] = f'broadcast_post({post_var})'
                             source_vars[post_var] = {'sources': [post_op], 'node': tnode, 'var': post_var}
 
-                    # Inline all EdgeIR equations in topological order,
-                    # substituting intermediate outputs by their expressions
-                    last_out = None
-                    for op_key in topological_sort(edge_ir.op_graph):
-                        op_data = edge_ir.op_graph.nodes[op_key]
-                        for eq in op_data.get('equations', []):
-                            lhs, rhs = (s.strip() for s in eq.split('=', 1))
-                            expr_map[lhs] = _subst(rhs, expr_map)
-                        last_out = op_data.get('output')
+                    if edge_de_sv_names:
+                        # case 0c: dynamic edge
+                        # State variables are stored flat (Nt*Ns,) in the global state vector.
+                        # reshape2d / flatten1d views are used in generated equations so that
+                        # the ODE operates in (Nt, Ns) space while the solver sees a 1-D vector.
 
-                    final_expr = expr_map.get(last_out, last_out)
-                    eqs.append(f"{t_str} = wsum({w_str}, {final_expr})")
+                        for _ok in edge_ir.op_graph.nodes:
+                            for vk, vi in edge_ir.op_graph.nodes[_ok].get('variables', {}).items():
+                                vi_dict = vi if isinstance(vi, dict) else {}
+                                vtype = vi_dict.get('vtype', 'constant')
+
+                                if vk in edge_de_sv_names:
+                                    sv_flat = f'{vk}_edge{i}_flat'
+                                    sv_init = vi_dict.get('value', 0.0)
+                                    if isinstance(sv_init, list):
+                                        sv_init = sv_init[0]
+                                    expr_map[vk] = f'reshape2d({sv_flat}, {Nt}, {Ns})'
+                                    args[sv_flat] = {
+                                        'vtype': 'state_var', 'dtype': 'float',
+                                        'value': [float(sv_init)] * (Nt * Ns),
+                                        'shape': (Nt * Ns,),
+                                    }
+                                elif vtype == 'constant' and vk not in edge_var_map:
+                                    const_name = f'{vk}_edge{i}'
+                                    val = vi_dict.get('value', 0.0)
+                                    if isinstance(val, list):
+                                        val = val[0]
+                                    args[const_name] = {
+                                        'vtype': 'constant', 'dtype': 'float',
+                                        'value': float(val), 'shape': (1,),
+                                    }
+                                    expr_map[vk] = const_name
+
+                        last_out = None
+                        for _ok in topological_sort(edge_ir.op_graph):
+                            _od = edge_ir.op_graph.nodes[_ok]
+                            for _eq in _od.get('equations', []):
+                                _lhs, _rhs = (_s.strip() for _s in _eq.split('=', 1))
+                                _rhs_s = _subst(_rhs, expr_map)
+                                if "d/dt" in _lhs or "'" in _lhs:
+                                    sv_flat = f'{_de_lhs_var(_lhs)}_edge{i}_flat'
+                                    eqs.append(f"{sv_flat}' = flatten1d({_rhs_s})")
+                                else:
+                                    expr_map[_lhs] = _rhs_s
+                            last_out = _od.get('output')
+
+                        final_expr = expr_map.get(last_out, last_out)
+                        eqs.append(f"{t_str} = wsum({w_str}, {final_expr})")
+
+                    else:
+                        # case 0b: non-dynamic (algebraic) edge — inline and reduce
+                        last_out = None
+                        for _ok in topological_sort(edge_ir.op_graph):
+                            _od = edge_ir.op_graph.nodes[_ok]
+                            for _eq in _od.get('equations', []):
+                                _lhs, _rhs = (_s.strip() for _s in _eq.split('=', 1))
+                                expr_map[_lhs] = _subst(_rhs, expr_map)
+                            last_out = _od.get('output')
+
+                        final_expr = expr_map.get(last_out, last_out)
+                        eqs.append(f"{t_str} = wsum({w_str}, {final_expr})")
 
                 in_vars.append(t_str)
                 continue
