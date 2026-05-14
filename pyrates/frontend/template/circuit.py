@@ -92,7 +92,8 @@ class CircuitTemplate(AbstractBaseTemplate):
     target_ir = CircuitIR
 
     def __init__(self, name: str, path: str = None, description: str = "A circuit template.", circuits: dict = None,
-                 nodes: dict = None, edges: List[tuple] = None):
+                 nodes: dict = None, edges: List[tuple] = None, populations: dict = None,
+                 connections: list = None):
 
         # initialize base template clase
         super().__init__(name, path, description)
@@ -131,6 +132,17 @@ class CircuitTemplate(AbstractBaseTemplate):
             self.edges = self._load_edge_templates(edges)
         else:
             self.edges = []
+
+        # vector/matrix-native populations and connections
+        self.populations = populations or {}
+        self.connections = connections or []
+
+        # Register each population's base NodeTemplate in self.nodes so that the
+        # existing get_nodes / get_node_template / _get_nodes_with_var machinery
+        # can discover them for output variable lookup.  _apply_nodes skips these
+        # keys (they are handled by _apply_populations_and_connections instead).
+        for pop_name, pop in self.populations.items():
+            self.nodes[pop_name] = pop.node
 
         # private attributes
         self._ir = None
@@ -479,7 +491,12 @@ class CircuitTemplate(AbstractBaseTemplate):
             if type(out_info) is dict:
                 outputs_final[key] = {key2: np.squeeze(outputs.pop(key2)[:, idx]) for key2, idx in out_info.items()}
             else:
-                outputs_final[key] = np.squeeze(outputs.pop(key)[:, out_info])
+                raw = outputs.pop(key)[:, out_info]
+                if hasattr(out_info, '__len__') and len(out_info) > 1:
+                    # population output: keep (n_time, n_units) — do not squeeze unit axis
+                    outputs_final[key] = raw
+                else:
+                    outputs_final[key] = np.squeeze(raw)
         time_vec = outputs.pop('time')
 
         # interpolate data if necessary
@@ -490,6 +507,9 @@ class CircuitTemplate(AbstractBaseTemplate):
                 if type(val) is dict:
                     for key2, v in val.items():
                         outputs_final[key][key2] = np.interp(new_times, time_vec, v)
+                elif hasattr(val, 'ndim') and val.ndim == 2:
+                    outputs_final[key] = np.stack(
+                        [np.interp(new_times, time_vec, val[:, i]) for i in range(val.shape[1])], axis=1)
                 else:
                     outputs_final[key] = np.interp(new_times, time_vec, val)
             time_vec = new_times
@@ -505,6 +525,12 @@ class CircuitTemplate(AbstractBaseTemplate):
                     *nodes, op, var = key2.split("/")
                     columns.append((key,) + tuple(nodes) + ("/".join([op, var]),))
                     data.append(v)
+            elif hasattr(out, 'ndim') and out.ndim == 2:
+                # population output: (n_time, n_units) — split into one column per unit
+                multi_index = True
+                for i in range(out.shape[1]):
+                    columns.append((key, i))
+                    data.append(out[:, i])
             else:
                 columns.append(key)
                 data.append(out)
@@ -774,6 +800,12 @@ class CircuitTemplate(AbstractBaseTemplate):
                 edge_dict = self._prepare_edge_for_circuit(weight=weight, delay=delay, spread=spread,
                                                            source_idx=edge_idx, target_idx=target_idx)
                 edges.append((edge_ir.output, target, edge_dict))
+
+        # process PopulationTemplate instances and their Connectivity objects
+        if self.populations or self.connections:
+            pop_nodes, pop_edges = self._apply_populations_and_connections()
+            nodes.update(pop_nodes)
+            edges.extend(pop_edges)
 
         # instantiate an intermediate representation of the circuit template
         self._ir = CircuitIR(label, nodes=nodes, edges=edges, verbose=verbose, step_size_adaptation=adaptive_steps,
@@ -1107,11 +1139,90 @@ class CircuitTemplate(AbstractBaseTemplate):
         except KeyError:
             return idx
 
+    def _apply_populations_and_connections(self) -> tuple:
+        """Translate ``PopulationTemplate`` and ``Connectivity`` objects into IR nodes and edges.
+
+        For each population a single ``VectorizedNodeIR`` of length *n* is created directly,
+        avoiding the O(n) per-node application loop.  For each ``Connectivity`` a single IR
+        edge carrying the full ``(n_t, n_s)`` weight matrix is added; the downstream
+        ``_generate_edge_equation`` detects the 2-D weight and emits a ``matvec`` call.
+
+        Returns
+        -------
+        tuple
+            ``(nodes_dict, edges_list)`` ready to merge into the main IR.
+        """
+        from pyrates.frontend.template.population import Connectivity
+
+        nodes = {}
+        edges = []
+
+        for pop_name, pop in self.populations.items():
+            vec_node, label_map, var_ranges = pop.apply(label=pop_name)
+            nodes[vec_node.label] = vec_node
+
+            # register indices so existing-edge machinery can still find these vars
+            for (op, var), (start, stop) in var_ranges.items():
+                self._vectorization_indices[f"{pop_name}/{op}/{var}"] = list(range(start, stop))
+            for key, val in label_map.items():
+                self._vectorization_labels[f"{pop_name}/{key}"] = f"{vec_node.label}/{val}"
+            if pop_name != vec_node.label:
+                self._vectorization_labels[pop_name] = vec_node.label
+
+        for conn in self.connections:
+            source = self._relabel_var(conn.source, self._vectorization_labels)
+            target = self._relabel_var(conn.target, self._vectorization_labels)
+
+            edge_ir = None
+            resolved_edge_var_map = {}
+
+            if conn.edge is not None:
+                edge_ir, _, _ = conn.edge.apply(values={}, vectorize=False)
+
+                if not conn.edge_var_map:
+                    raise ValueError(
+                        f"'edge_var_map' is required when 'edge' is set on a Connectivity. "
+                        "Provide a mapping from each EdgeTemplate input variable to either "
+                        "'source' or a 'pop/op/var' path."
+                    )
+
+                # Parse source op/var from conn.source (format: 'pop/op/var')
+                src_parts = conn.source.split('/')
+                src_op, src_var = src_parts[-2], src_parts[-1]
+
+                # Resolve edge_var_map to internal format used by _generate_edge_equation
+                for ev, mapping in conn.edge_var_map.items():
+                    if mapping == 'source':
+                        resolved_edge_var_map[ev] = {'role': 'source'}
+                    else:
+                        parts = mapping.split('/')
+                        resolved_edge_var_map[ev] = {'role': 'target', 'op': parts[-2], 'var': parts[-1]}
+
+            # Pass the weight matrix directly; NetworkGraph._generate_edge_equation
+            # detects ndim==2 and emits `matvec(W, r)` (Case 0a) or the coupling
+            # equations (Case 0b when edge_ir is set).
+            edge_dict = {
+                'weight': conn.weights,
+                'delay': conn.delays,
+                'spread': conn.spread,
+                'source_idx': [],
+                'target_idx': [],
+            }
+            if edge_ir is not None:
+                edge_dict['edge_ir'] = edge_ir
+                edge_dict['edge_var_map'] = resolved_edge_var_map
+            edges.append((source, target, edge_dict))
+
+        return nodes, edges
+
     def _apply_nodes(self, node_keys: list, values: dict, vectorize: bool = True) -> dict:
         nodes = {}
         indices = {}
         label_map = {}
         for node in node_keys:
+            # Population nodes are handled by _apply_populations_and_connections
+            if node in self.populations:
+                continue
             updates = values[node] if node in values else {}
             node_template = self.get_node_template(node)
             node_ir, label_map_tmp, var_ranges = node_template.apply(values=updates, label=node, vectorize=vectorize)

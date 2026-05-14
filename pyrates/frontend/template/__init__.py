@@ -30,6 +30,7 @@ from .node import NodeTemplate
 from .operator import OperatorTemplate
 from .edge import EdgeTemplate
 from .circuit import CircuitTemplate
+from .population import PopulationTemplate, Connectivity
 
 known_template_classes = dict()
 

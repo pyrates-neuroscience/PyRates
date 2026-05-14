@@ -324,6 +324,14 @@ def test_2_3_edge():
                             file_name='net11')
         final_results_comparison.append(results.values)
 
+        # vectorized=True (default) must agree with vectorized=False for gamma-kernel delays
+        results_vec = integrate("model_templates.test_resources.test_backend.net13", simulation_time=sim_time,
+                                outputs={'a1': 'p1/op9/a', 'a2': 'p2/op10/a'}, inputs={'p1/op9/I_ext': inp},
+                                vectorize=True, step_size=dt, backend=b, solver='euler', clear=True,
+                                file_name='net11_vec')
+        diff_vec = np.mean(np.abs(results_vec.values - results.values))
+        assert diff_vec == pytest.approx(0., rel=accuracy, abs=accuracy)
+
     if len(final_results_comparison) > 1:
         r0 = final_results_comparison[0]
         final_comparison = np.mean([r0 - r for r in final_results_comparison[1:]])

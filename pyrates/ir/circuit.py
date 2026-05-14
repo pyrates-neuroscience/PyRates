@@ -32,7 +32,8 @@
 import time
 from typing import Union, Dict, Iterator, Optional, List, Tuple
 from warnings import filterwarnings
-from networkx import MultiDiGraph, DiGraph
+import re as _re
+from networkx import MultiDiGraph, DiGraph, topological_sort
 import numpy as np
 from copy import deepcopy
 from warnings import warn
@@ -186,22 +187,49 @@ class NetworkGraph(AbstractBaseIR):
 
                 # extract delay info from variable projections
                 op_name, var_name = out_var.split('/')
-                delays, spreads, nodes, add_delay = self._collect_delays_from_edges(edges)
+
+                # Separate matrix-connectivity edges (2-D weight array) from scalar edges.
+                # Matrix edges carry their own delay handling via _add_matrix_delay.
+                matrix_edges, scalar_edges = [], []
+                for s, t, e in edges:
+                    w = self.edges[s, t, e]['weight']
+                    if isinstance(w, np.ndarray) and w.ndim == 2:
+                        matrix_edges.append((s, t, e))
+                    else:
+                        scalar_edges.append((s, t, e))
+
+                for s, t, e in matrix_edges:
+                    d = self.edges[s, t, e].get('delay')
+                    v = self.edges[s, t, e].get('spread')
+                    if d is not None and d > self.step_size:
+                        self._add_matrix_delay(node_name, op_name, var_name, (s, t, e),
+                                               d, v, dde_approx=dde_approx)
+
+                if not scalar_edges:
+                    continue
+
+                delays, spreads, nodes, add_delay = self._collect_delays_from_edges(scalar_edges)
 
                 # add synaptic buffer to output variables with delay
                 if add_delay:
+                    # Clear delay fields from edges so _generate_edge_equation ignores them.
+                    # Kept here (not inside _collect_delays_from_edges) so that method is pure.
+                    for s, t, e in scalar_edges:
+                        self.edges[s, t, e]['source_idx'] = []
+                        self.edges[s, t, e]['delay'] = None
+
                     if vectorized:
-                        self._add_edge_buffer(node_name, op_name, var_name, edges=edges, delays=delays,
+                        self._add_edge_buffer(node_name, op_name, var_name, edges=scalar_edges, delays=delays,
                                               nodes=nodes, spreads=spreads, dde_approx=dde_approx)
                     else:
                         # TODO: sort edges into unique delay/spread combinations and only loop over those
                         if spreads:
-                            for i, (edge, delay, spread, node) in enumerate(zip(edges, delays, spreads, nodes)):
+                            for i, (edge, delay, spread, node) in enumerate(zip(scalar_edges, delays, spreads, nodes)):
                                 self._add_edge_buffer(node_name, op_name, var_name, edges=[edge], delays=[delay],
                                                       nodes=[node], spreads=[spread], dde_approx=dde_approx,
                                                       buffer_id=f"_out{i}")
                         else:
-                            for i, (edge, delay, node) in enumerate(zip(edges, delays, nodes)):
+                            for i, (edge, delay, node) in enumerate(zip(scalar_edges, delays, nodes)):
                                 self._add_edge_buffer(node_name, op_name, var_name, edges=[edge], delays=[delay],
                                                       nodes=[node], dde_approx=dde_approx, buffer_id=f"_out{i}")
 
@@ -219,7 +247,8 @@ class NetworkGraph(AbstractBaseIR):
                 # extract info from projections to input variable
                 op_name, var_name = in_var.split('/')
                 data = self._collect_from_edges(edges,
-                                                keys=['source_var', 'weight', 'source_idx', 'target_idx'])
+                                                keys=['source_var', 'weight', 'source_idx', 'target_idx',
+                                                      'edge_ir', 'edge_var_map'])
 
                 # create the final equations for all edges that target the input variable
                 self._generate_edge_equation(tnode=node_name, top=op_name, tvar=var_name, inputs=data, **kwargs)
@@ -281,8 +310,9 @@ class NetworkGraph(AbstractBaseIR):
 
             # extract and process delay distribution spread
             v = self.edges[s, t, e].pop('spread', [0])
+            n_slots = max(len(self.edges[s, t, e]['target_idx']), 1)
             if v is None or np.sum(v) == 0:
-                v = [0] * len(self.edges[s, t, e]['target_idx'])
+                v = [0] * n_slots
                 discretize = True
             else:
                 discretize = False
@@ -290,7 +320,7 @@ class NetworkGraph(AbstractBaseIR):
 
             # finalize edge delay
             if d is None or np.sum(d) == 0:
-                d = [1] * len(self.edges[s, t, e]['target_idx'])
+                d = [1] * n_slots
             else:
                 d = self._process_delays(d, discretize=discretize)
 
@@ -311,12 +341,6 @@ class NetworkGraph(AbstractBaseIR):
         if sum(stds) == 0:
             stds = None
 
-        # if delays are going to be added from the created lists, remove the delays from the edges themselves
-        if add_delay:
-            for s, t, e in edges:
-                self.edges[s, t, e]['source_idx'] = []
-                self.edges[s, t, e]['delay'] = None
-
         return means, stds, nodes, add_delay
 
     def _collect_from_edges(self, edges: list, keys: list):
@@ -326,7 +350,8 @@ class NetworkGraph(AbstractBaseIR):
             if source not in data:
                 data[source] = dict()
             for key in keys:
-                val = deepcopy(edge[key])
+                raw = edge.get(key)
+                val = raw if isinstance(raw, (np.ndarray, EdgeIR)) else deepcopy(raw)
                 try:
                     data[source][key].extend(val)
                 except AttributeError:
@@ -338,6 +363,89 @@ class NetworkGraph(AbstractBaseIR):
                 except KeyError:
                     data[source][key] = val
         return data
+
+    def _add_matrix_delay(self, node: str, op: str, var: str, edge: tuple,
+                          delay: float, spread: Optional[float] = None,
+                          dde_approx: int = 0, buffer_id: str = "") -> None:
+        """Add delay buffer equations for a matrix-connectivity edge.
+
+        Supports two modes:
+        - **Discrete ring buffer** (default, fixed step size): ``(Ns, d+1)`` state variable,
+          updated by roll/index_axis each step.  Selected when *spread* is ``None``,
+          *dde_approx* is 0, and ``step_size_adaptation`` is ``False``.
+        - **ODE cascade** (gamma-kernel or explicit order): a chain of *n* ODEs of shape
+          ``(Ns,)`` that convolve the source signal with a gamma kernel.  Selected when
+          *spread* > 0, *dde_approx* > 0, or ``step_size_adaptation`` is ``True``.
+        """
+        s, t, e = edge
+        node_ir = self[node]
+        op_info = node_ir[op]
+
+        node_var = self[f"{node}/{op}/{var}"]
+        var_shape = node_var.get('shape', ())
+        Ns = int(var_shape[0]) if var_shape else 1
+
+        var_dict: dict = {}
+        buffer_eqs: list = []
+
+        use_ring_buffer = (
+            (spread is None or spread == 0)
+            and dde_approx == 0
+            and not self.step_size_adaptation
+        )
+
+        if use_ring_buffer:
+            # --- Discrete ring buffer of shape (Ns, d_steps+1) ---
+            d_steps = self._preprocess_delay(delay, discretize=True)
+            buf = f'{var}_buffer{buffer_id}'
+            buf_out = f'{var}_buffered{buffer_id}'
+            var_dict[buf] = {'vtype': 'variable', 'dtype': 'float',
+                             'shape': (Ns, d_steps + 1), 'value': 0.}
+            var_dict[buf_out] = {'vtype': 'variable', 'dtype': 'float',
+                                 'shape': (Ns,), 'value': 0.}
+            # Inline d_steps as a literal so index_axis returns shape (Ns,) not (Ns, 1)
+            buffer_eqs = [
+                f"index_axis({buf}) = roll({buf}, 1, 1)",
+                f"index_axis({buf}, 0, 1) = {var}",
+                f"{buf_out} = index_axis({buf}, {d_steps}, 1)",
+            ]
+        else:
+            # --- ODE cascade (gamma kernel or adaptive step size) ---
+            if spread is not None and spread > 0:
+                n = max(1, int(round((delay / spread) ** 2)))
+            elif dde_approx > 0:
+                n = dde_approx
+            else:
+                n = 1  # minimum ODE order for adaptive step size
+            a = n / delay if delay else 0.0
+            for k in range(1, n + 1):
+                zk = f'{var}_d{k}{buffer_id}'
+                zk_rate = f'k_d{k}{buffer_id}'
+                prev = var if k == 1 else f'{var}_d{k-1}{buffer_id}'
+                var_dict[zk] = {'vtype': 'state_var', 'dtype': 'float',
+                                'shape': (Ns,), 'value': [0.0] * Ns}
+                var_dict[zk_rate] = {'vtype': 'constant', 'dtype': 'float',
+                                     'value': a, 'shape': (1,)}
+                buffer_eqs.append(f"d/dt * {zk} = {zk_rate} * ({prev} - {zk})")
+            buf_out = f'{var}_buffered{buffer_id}'
+            var_dict[buf_out] = {'vtype': 'variable', 'dtype': 'float',
+                                 'shape': (Ns,), 'value': [0.0] * Ns}
+            buffer_eqs.append(f"{buf_out} = {var}_d{n}{buffer_id}")
+
+        # Attach buffer equations and variables to the source operator
+        op_info['equations'] += buffer_eqs
+        op_info['variables'].update(var_dict)
+        op_info['output'] = buf_out
+
+        # Update intra-node successor inputs (mirrors _add_edge_buffer)
+        for succ in node_ir.op_graph.succ[op]:
+            inputs = self[f"{node}/{succ}"]['inputs']
+            if var not in inputs:
+                inputs[var] = {'sources': {op}}
+
+        # Point the edge at the buffered source variable
+        self.edges[s, t, e]['source_var'] = f"{op}/{buf_out}"
+        self.edges[s, t, e]['delay'] = None
 
     def _add_edge_buffer(self, node: str, op: str, var: str, edges: list, delays: list, nodes: list,
                          spreads: Optional[list] = None, dde_approx: int = 0, buffer_id: str = "") -> None:
@@ -370,6 +478,9 @@ class NetworkGraph(AbstractBaseIR):
 
         """
 
+        if not delays:
+            return
+
         max_delay = np.max(delays)
 
         # extract target shape and node
@@ -386,128 +497,80 @@ class NetworkGraph(AbstractBaseIR):
 
         if dde_approx or spreads:
 
-            # calculate orders and rates of ODE-system approximations to delayed connections
+            # --- Per-edge ODE orders and rates ---
             if spreads:
                 orders, rates = [], []
                 for m, v in zip(delays, spreads):
-                    order = np.round((m / v) ** 2, decimals=0) if v > 0 else 0
-                    orders.append(int(order) if m and order > dde_approx else dde_approx)
-                    rates.append(orders[-1] / m if m else 0)
+                    if v > 0:
+                        n_order = int(np.round((m / v) ** 2))
+                        n_order = n_order if m and n_order > dde_approx else dde_approx
+                    else:
+                        n_order = dde_approx if m else 0
+                    orders.append(n_order)
+                    rates.append(n_order / m if m else 0.0)
             else:
-                orders, rates = [], []
-                for m in delays:
-                    orders.append(dde_approx if m else 0)
-                    rates.append(dde_approx / m if m else 0)
+                orders = [dde_approx if m else 0 for m in delays]
+                rates = [dde_approx / m if m else 0.0 for m in delays]
 
-            # sort all edge information in ascending ODE order
-            order_idx = np.argsort(orders, kind='stable')
-            orders_sorted = np.asarray(orders, dtype='int')[order_idx]
-            orders_tmp = np.asarray(orders, dtype='int')[order_idx]
-            rates_tmp = np.asarray(rates)[order_idx]
-            source_idx_tmp = source_idx[order_idx]
+            # --- Group delay slots by (order, rate) — slots in the same group share one ODE chain ---
+            groups = {}
+            for slot_idx, (n_order, rate, src) in enumerate(zip(orders, rates, source_idx)):
+                key = (n_order, round(rate, 12))
+                if key not in groups:
+                    groups[key] = []
+                groups[key].append((slot_idx, int(src)))
 
-            buffer_eqs, var_dict, final_idx = [], {}, []
-            max_order = max(orders)
-            for i in range(max_order + 1):
+            n_src_var = sum(target_shape) if target_shape else 1
+            buffer_eqs, var_dict = [], {}
+            buf_var = f"{var}_buffered{buffer_id}"
+            var_dict[buf_var] = {'vtype': 'variable', 'dtype': 'float',
+                                 'shape': (len(delays),), 'value': 0.0}
 
-                # check which edges require the ODE order treated in this iteration of the loop
-                k = i + 1
-                idx, idx_str, idx_var = self._bool_to_idx(orders_tmp >= k)
-                if type(idx) is int:
-                    idx = [idx]
-                var_dict.update(idx_var)
+            for chain_id, ((n_order, _), group) in enumerate(groups.items()):
+                slot_indices = [g[0] for g in group]
+                src_indices  = [g[1] for g in group]
+                G = len(group)
+                rate_val = rates[slot_indices[0]]
 
-                # define new equation variable/parameter names
-                var_next = f"{var}_d{k}{buffer_id}"
-                var_prev = f"{var}_d{i}{buffer_id}" if i > 0 else var
-                rate = f"k_d{k}{buffer_id}"
-
-                # prepare variables for the next ODE
-                idx_apply = len(idx) != len(orders_tmp)
-                val = rates_tmp[idx] if idx_apply else rates_tmp
-                var_shape = (len(val),) if val.shape else ()
-                if i == 0 and idx != [0] and (sum(target_shape) != len(idx) or any(np.diff(order_idx) != 1)):
-                    var_prev_idx = f"index({var_prev}, source_idx{buffer_id})"
-                    var_dict[f"source_idx{buffer_id}"] = {'vtype': 'constant',
-                                                          'dtype': 'int',
-                                                          'shape': (len(source_idx_tmp[idx]),),
-                                                          'value': source_idx_tmp[idx]}
-                elif i != 0 and idx_apply:
-                    var_prev_idx = _get_indexed_var_str(var_prev, idx_str, var_length=len(rates_tmp))
+                # Build chain input: use source var directly when group covers all its elements
+                if sorted(src_indices) == list(range(n_src_var)):
+                    chain_in = var
+                elif G == 1:
+                    chain_in = f"index({var}, {src_indices[0]})"
                 else:
-                    var_prev_idx = var_prev
+                    src_name = f"{var}_src{chain_id}{buffer_id}"
+                    var_dict[src_name] = {'vtype': 'constant', 'dtype': 'int',
+                                          'value': np.asarray(src_indices, dtype='int'),
+                                          'shape': (G,)}
+                    chain_in = f"index({var}, {src_name})"
 
-                # create new ODE string and corresponding variable definitions
-                buffer_eqs.append(f"d/dt * {var_next} = {rate} * ({var_prev_idx} - {var_next})")
-                var_dict[var_next] = {'vtype': 'state_var',
-                                      'dtype': 'float',
-                                      'shape': var_shape,
-                                      'value': 0.}
-                var_dict[rate] = {'vtype': 'constant',
-                                  'dtype': 'float',
-                                  'value': val}
+                # Build the ODE chain (n_order stages, one shared rate constant)
+                chain_shape = (G,) if G > 1 else ()
+                if n_order > 0:
+                    rate_name = f"k_d{chain_id}{buffer_id}"
+                    var_dict[rate_name] = {'vtype': 'constant', 'dtype': 'float', 'value': rate_val}
+                    prev = chain_in
+                    for k in range(1, n_order + 1):
+                        zk = f"{var}_d{chain_id}_{k}{buffer_id}"
+                        var_dict[zk] = {'vtype': 'state_var', 'dtype': 'float',
+                                        'shape': chain_shape, 'value': 0.}
+                        buffer_eqs.append(f"d/dt * {zk} = {rate_name} * ({prev} - {zk})")
+                        prev = zk
+                else:
+                    prev = chain_in  # zero-order: pass-through (no ODE stages)
 
-                # store indices that are required to fill the edge buffer variable
-                if idx_apply:
-
-                    # right-hand side index
-                    if len(orders_tmp) < 2:
-                        idx_rhs_str = ''
-                    elif i == 0:
-                        idx_rhs = np.asarray(source_idx_tmp)[orders_tmp == i]
-                        n_idx = len(idx_rhs)
-                        if n_idx > 1:
-                            idx_rhs_str = f"source_idx2{buffer_id}"
-                            var_dict[f"source_idx2{buffer_id}"] = {'vtype': 'constant',
-                                                                   'dtype': 'int',
-                                                                   'shape': (n_idx,),
-                                                                   'value': idx_rhs}
-                        else:
-                            idx_rhs_str = f"{idx_rhs[0]}"
-                    else:
-                        _, idx_rhs_str, _ = self._bool_to_idx(orders_tmp == i)
-
-                    # left-hand side index
-                    if len(delays) > 1:
-                        _, idx_lhs_str, _ = self._bool_to_idx(orders_sorted == i)
-                    else:
-                        idx_lhs_str = ''
-                    final_idx.append((i, idx_lhs_str, idx_rhs_str))
-
-                # reduce lists of orders and rates by the ones that are fully implemented by the current ODE set
-                if idx_apply:
-                    orders_tmp = orders_tmp[idx]
-                    rates_tmp = rates_tmp[idx]
-                if not orders_tmp.shape:
-                    orders_tmp = np.asarray([orders_tmp], dtype='int')
-                    rates_tmp = np.asarray([rates_tmp])
-
-            # remove unnecessary ODEs
-            for _ in range(len(buffer_eqs) - final_idx[-1][0]):
-                i = len(buffer_eqs)
-                var_dict.pop(f"{var}_d{i}{buffer_id}")
-                var_dict.pop(f"k_d{i}{buffer_id}")
-                buffer_eqs.pop(-1)
-
-            # create edge buffer variable
-            buffer_length = len(delays)
-            for i, idx_l, idx_r in final_idx:
-                lhs = _get_indexed_var_str(f"{var}_buffered{buffer_id}", idx_l, var_length=buffer_length)
-                rhs = _get_indexed_var_str(f"{var}_d{i}{buffer_id}" if i != 0 else var, idx_r, var_length=buffer_length)
-                buffer_eqs.append(f"{lhs} = {rhs}")
-            var_dict[f"{var}_buffered{buffer_id}"] = {'vtype': 'variable',
-                                                      'dtype': 'float',
-                                                      'shape': (buffer_length,),
-                                                      'value': 0.0}
-
-            # re-order buffered variable if necessary
-            if any(np.diff(order_idx) != 1):
-                buffer_eqs.append(f"{var}_buffered{buffer_id} = index({var}_buffered{buffer_id}, "
-                                  f"{var}_buffered_idx{buffer_id})")
-                var_dict[f"{var}_buffered_idx{buffer_id}"] = {'vtype': 'constant',
-                                                              'dtype': 'int',
-                                                              'shape': (len(order_idx),),
-                                                              'value': np.argsort(order_idx, kind='stable')}
+                # Write chain output into the correct slots of the buffer
+                all_slots = (slot_indices == list(range(len(delays))))
+                if all_slots:
+                    buffer_eqs.append(f"{buf_var} = {prev}")
+                elif G == 1:
+                    buffer_eqs.append(f"index({buf_var}, {slot_indices[0]}) = {prev}")
+                else:
+                    slot_name = f"{var}_slots{chain_id}{buffer_id}"
+                    var_dict[slot_name] = {'vtype': 'constant', 'dtype': 'int',
+                                           'value': np.asarray(slot_indices, dtype='int'),
+                                           'shape': (len(slot_indices),)}
+                    buffer_eqs.append(f"index({buf_var}, {slot_name}) = {prev}")
 
         # discretized edge buffers
         ##########################
@@ -575,6 +638,13 @@ class NetworkGraph(AbstractBaseIR):
 
         # add buffer equations to node operator
         op_info = node_ir[op]
+        existing_vars = set(op_info.get('variables', {}).keys())
+        conflicts = existing_vars & set(var_dict.keys())
+        if conflicts:
+            raise PyRatesException(
+                f"Buffer variable name collision in operator '{op}' on node '{node}': {conflicts}. "
+                f"Use a unique buffer_id to avoid this."
+            )
         op_info['equations'] += buffer_eqs
         op_info['variables'].update(var_dict)
         op_info['output'] = f"{var}_buffered{buffer_id}"
@@ -610,17 +680,144 @@ class NetworkGraph(AbstractBaseIR):
 
         # step 1: collect all inputs
         weights, source_indices, target_indices, sources = [], [], [], []
+        edge_irs, edge_var_maps = [], []
         for snode, sinfo in inputs.items():
             weights.append(sinfo['weight'])
             source_indices.append(sinfo['source_idx'])
             target_indices.append(sinfo['target_idx'])
             sources.append((snode,) + tuple(sinfo['source_var'].split('/')))
+            edge_irs.append(sinfo.get('edge_ir'))
+            edge_var_maps.append(sinfo.get('edge_var_map') or {})
 
         # step 2: process incoming edges
         source_vars, args = {}, {}
         eqs, in_vars = [], []
-        for i, (weight, sidx, tidx, (snode, sop, svar)) in \
-                enumerate(zip(weights, source_indices, target_indices, sources)):
+        for i, (weight, sidx, tidx, (snode, sop, svar), edge_ir, edge_var_map) in \
+                enumerate(zip(weights, source_indices, target_indices, sources, edge_irs, edge_var_maps)):
+
+            # define variable name strings (adjusted when multiple inputs share same target var)
+            if multiple_inputs:
+                in_shape = (tsize,)
+                t_str = f'{tvar}_in{i}'
+                w_str = f'weight_in{i}'
+                s_str = f'{svar}_in{i}'
+                sidx_str = f'source_idx_in{i}'
+                tidx_str = f'target_idx_in{i}'
+                args[t_str] = {'value': np.zeros(in_shape), 'dtype': 'float', 'vtype': 'variable',
+                               'shape': in_shape}
+            else:
+                t_str = tvar
+                w_str = 'weight'
+                s_str = svar
+                sidx_str = 'source_idx'
+                tidx_str = 'target_idx'
+
+            # case 0: matrix edge — weight is a 2-D numpy array supplied directly
+            # (used by Connectivity; no scalar expansion needed)
+            if isinstance(weight, np.ndarray) and weight.ndim == 2:
+                args[w_str] = {'vtype': 'constant', 'value': weight, 'dtype': 'float', 'shape': weight.shape}
+                source_vars[s_str] = {'sources': [sop], 'node': snode, 'var': svar}
+
+                if edge_ir is None:
+                    # case 0a: simple matvec — no coupling function
+                    eqs.append(f"{t_str} = matvec({w_str}, {s_str})")
+                else:
+                    # case 0b / 0c: matrix coupling with custom edge equations
+
+                    def _subst(text, subst_map):
+                        for var, repl in subst_map.items():
+                            text = _re.sub(r'\b' + _re.escape(var) + r'\b', repl, text)
+                        return text
+
+                    def _de_lhs_var(lhs):
+                        """Extract bare variable name from a DE left-hand side."""
+                        return _re.sub(r"d/dt\s*\*?\s*|'", "", lhs).strip()
+
+                    Nt, Ns = weight.shape
+
+                    # Detect which edge variables are state variables (have DEs)
+                    edge_de_sv_names = set()
+                    for _ok in edge_ir.op_graph.nodes:
+                        for _eq in edge_ir.op_graph.nodes[_ok].get('equations', []):
+                            _lhs = _eq.split('=')[0].strip()
+                            if "d/dt" in _lhs or "'" in _lhs:
+                                edge_de_sv_names.add(_de_lhs_var(_lhs))
+
+                    # Build broadcast substitution map for edge input variables
+                    expr_map = {}
+                    for ev, info in edge_var_map.items():
+                        if info['role'] == 'source':
+                            expr_map[ev] = f'broadcast_pre({s_str})'
+                        else:
+                            post_var = info['var']
+                            post_op = info['op']
+                            expr_map[ev] = f'broadcast_post({post_var})'
+                            source_vars[post_var] = {'sources': [post_op], 'node': tnode, 'var': post_var}
+
+                    if edge_de_sv_names:
+                        # case 0c: dynamic edge
+                        # State variables are stored flat (Nt*Ns,) in the global state vector.
+                        # reshape2d / flatten1d views are used in generated equations so that
+                        # the ODE operates in (Nt, Ns) space while the solver sees a 1-D vector.
+
+                        for _ok in edge_ir.op_graph.nodes:
+                            for vk, vi in edge_ir.op_graph.nodes[_ok].get('variables', {}).items():
+                                vi_dict = vi if isinstance(vi, dict) else {}
+                                vtype = vi_dict.get('vtype', 'constant')
+
+                                if vk in edge_de_sv_names:
+                                    sv_flat = f'{vk}_edge{i}_flat'
+                                    sv_init = vi_dict.get('value', 0.0)
+                                    if isinstance(sv_init, list):
+                                        sv_init = sv_init[0]
+                                    expr_map[vk] = f'reshape2d({sv_flat}, {Nt}, {Ns})'
+                                    args[sv_flat] = {
+                                        'vtype': 'state_var', 'dtype': 'float',
+                                        'value': [float(sv_init)] * (Nt * Ns),
+                                        'shape': (Nt * Ns,),
+                                    }
+                                elif vtype == 'constant' and vk not in edge_var_map:
+                                    const_name = f'{vk}_edge{i}'
+                                    val = vi_dict.get('value', 0.0)
+                                    if isinstance(val, list):
+                                        val = val[0]
+                                    args[const_name] = {
+                                        'vtype': 'constant', 'dtype': 'float',
+                                        'value': float(val), 'shape': (1,),
+                                    }
+                                    expr_map[vk] = const_name
+
+                        last_out = None
+                        for _ok in topological_sort(edge_ir.op_graph):
+                            _od = edge_ir.op_graph.nodes[_ok]
+                            for _eq in _od.get('equations', []):
+                                _lhs, _rhs = (_s.strip() for _s in _eq.split('=', 1))
+                                _rhs_s = _subst(_rhs, expr_map)
+                                if "d/dt" in _lhs or "'" in _lhs:
+                                    sv_flat = f'{_de_lhs_var(_lhs)}_edge{i}_flat'
+                                    eqs.append(f"{sv_flat}' = flatten1d({_rhs_s})")
+                                else:
+                                    expr_map[_lhs] = _rhs_s
+                            last_out = _od.get('output')
+
+                        final_expr = expr_map.get(last_out, last_out)
+                        eqs.append(f"{t_str} = wsum({w_str}, {final_expr})")
+
+                    else:
+                        # case 0b: non-dynamic (algebraic) edge — inline and reduce
+                        last_out = None
+                        for _ok in topological_sort(edge_ir.op_graph):
+                            _od = edge_ir.op_graph.nodes[_ok]
+                            for _eq in _od.get('equations', []):
+                                _lhs, _rhs = (_s.strip() for _s in _eq.split('=', 1))
+                                expr_map[_lhs] = _subst(_rhs, expr_map)
+                            last_out = _od.get('output')
+
+                        final_expr = expr_map.get(last_out, last_out)
+                        eqs.append(f"{t_str} = wsum({w_str}, {final_expr})")
+
+                in_vars.append(t_str)
+                continue
 
             # get source variable size
             sval = self[f"{snode}/{sop}/{svar}"]
@@ -643,23 +840,6 @@ class NetworkGraph(AbstractBaseIR):
                 dot_edge = len(weight) / (n * m) > matrix_sparseness
             else:
                 dot_edge = False
-
-            # define new input variable if necessary
-            if multiple_inputs:
-                in_shape = (tsize,)
-                t_str = f'{tvar}_in{i}'
-                w_str = f'weight_in{i}'
-                s_str = f'{svar}_in{i}'
-                sidx_str = f'source_idx_in{i}'
-                tidx_str = f'target_idx_in{i}'
-                args[t_str] = {'value': np.zeros(in_shape), 'dtype': 'float', 'vtype': 'variable',
-                               'shape': in_shape}
-            else:
-                t_str = tvar
-                w_str = 'weight'
-                s_str = svar
-                sidx_str = 'source_idx'
-                tidx_str = 'target_idx'
 
             # case I: realize edge projection via a matrix product
             if dot_edge:
@@ -1266,6 +1446,8 @@ class CircuitIR(AbstractBaseIR):
         if v['dtype'] != 'float':
             return v
         if 'shape' in v and len(v['shape']) > 1:
+            return v
+        if 'shape' in v and np.prod(v['shape']) > 1:
             return v
         if len(np.unique(v['value'])) > 1:
             return v
