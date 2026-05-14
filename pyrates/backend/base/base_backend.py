@@ -166,7 +166,14 @@ class BaseBackend(CodeGen):
                 dtype = f'float{dtype[7:]}'
         else:
             dtype = self._int_precision
-        return np.asarray(v.value, dtype=dtype)
+        result = np.asarray(v.value, dtype=dtype)
+        # Squeeze single-element constants to 0-d scalars.
+        # PyRates stores scalar parameters internally as shape (1,) but
+        # numpy 2.3+ raises an error when a (1,) array is assigned to a scalar
+        # state-vector slot (e.g. dy[i] = (1,)_param * expr).
+        if result.shape == (1,) and v.vtype == 'constant':
+            result = result.squeeze()
+        return result
 
     def get_op(self, name: str, **kwargs) -> dict:
 
