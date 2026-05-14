@@ -536,3 +536,36 @@ def test_2_7_backends():
                           clear=True, simulation_time=T, sampling_step_size=dts, file_name=f'm{i+1}', vectorize=False)
 
             assert np.mean(r0.values - r.values) == pytest.approx(0.0, rel=accuracy, abs=accuracy)
+
+
+def test_2_8_dde():
+    """Tests delay-differential equation integration using the x(t-d) syntax.
+
+    Model: x' = -x(t-d), x(t)=1 for t<=0, d=0.1 s.
+    For t < d, the RHS is approximately -1, so x decays linearly from 1.
+    """
+
+    dt = 1e-3
+    T = 0.5
+    model = "model_templates.test_resources.test_backend.net16"
+    out = {'x': 'p1/op_dde/x'}
+
+    r = integrate(model, simulation_time=T, step_size=dt, solver='euler',
+                  outputs=out, clear=True, vectorize=False, file_name='net16_dde')
+
+    assert 'x' in r
+    x = r['x'].values.squeeze()
+    n_steps = int(round(T / dt))
+    assert x.shape[0] == n_steps
+
+    # initial value should be 1.0
+    assert x[0] == pytest.approx(1.0, abs=1e-5)
+
+    # For t < d=0.1s (first 100 steps), x' ≈ -1 so x ≈ 1 - t
+    # Check ~linear decay in the pre-delay window
+    t_early = np.arange(100) * dt
+    x_early_expected = 1.0 - t_early
+    np.testing.assert_allclose(x[:100], x_early_expected, atol=5e-3)
+
+    # x should oscillate and not blow up
+    assert np.all(np.abs(x) < 5.0)

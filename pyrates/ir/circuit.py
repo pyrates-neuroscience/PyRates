@@ -1269,7 +1269,8 @@ class CircuitIR(AbstractBaseIR):
 
         if not file_name:
             file_name = f"pyrates_func"
-        return self.graph.to_func(func_name=func_name, file_name=file_name, dt_adapt=self._dt_adapt, **kwargs)
+        return self.graph.to_func(func_name=func_name, file_name=file_name, dt_adapt=self._dt_adapt,
+                                   dt=self._dt, **kwargs)
 
     def network_to_computegraph(self, graph: NetworkGraph, inplace_vectorfield: bool = True, **kwargs):
 

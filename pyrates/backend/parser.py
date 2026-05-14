@@ -32,6 +32,7 @@ operations.
 
 # external _imports
 import math
+import re
 import typing as tp
 from numbers import Number
 
@@ -44,6 +45,29 @@ from sympy import Expr, Symbol, sympify
 from pyrates.backend.computegraph import ComputeGraph, ComputeNode
 
 _sympify_cache: dict = {}
+
+# math function names that must not be transformed by the x(t-d) → past(x, d) substitution
+_DDE_EXCLUDE = {
+    'sin', 'cos', 'tan', 'tanh', 'sinh', 'cosh', 'exp', 'log', 'sqrt', 'abs',
+    'arcsin', 'arccos', 'arctan', 'real', 'imag', 'round', 'sign', 'maximum',
+    'minimum', 'mean', 'sum', 'dot', 'roll', 'interp', 'interp_rows', 'randn',
+    'sigmoid', 'broadcast_pre', 'broadcast_post', 'wsum', 'reshape2d', 'flatten1d',
+    'past', 'index', 'index_1d', 'index_2d', 'index_range', 'index_axis', 'identity',
+    'concatenate',
+}
+
+_DDE_PATTERN = re.compile(r'(\w+)\(\s*t\s*-\s*([^)]+)\)')
+
+
+def _preprocess_dde_syntax(rhs: str) -> str:
+    """Transforms x(t-d) delay notation into past(x, d) for downstream parsing."""
+    def _replace(match):
+        varname = match.group(1)
+        delay = match.group(2).strip()
+        if varname in _DDE_EXCLUDE:
+            return match.group(0)
+        return f'past({varname}, {delay})'
+    return _DDE_PATTERN.sub(_replace, rhs)
 
 
 def _cached_sympify(s: str):
@@ -356,6 +380,9 @@ class ExpressionParser:
 
         # split equation into lhs and rhs and assign type
         lhs, rhs, assign_type = split_equation(expr)
+
+        # transform x(t-d) DDE notation to past(x, d)
+        rhs = _preprocess_dde_syntax(rhs)
 
         if not assign_type:
             self.vars['x'] = {'vtype': 'variable', 'value': 0.0, 'dtype': 'float', 'shape': ()}
