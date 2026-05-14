@@ -1293,6 +1293,12 @@ class CircuitTemplate(AbstractBaseTemplate):
 
     def _add_input(self, target: str, inp: np.ndarray, adaptive: bool, sim_time: float, vectorized_net: bool):
 
+        # Canonicalise shape: (N, 1) → (N,) so that inp[t] always returns a scalar
+        # for single-target inputs. Multi-column inputs (N, n) with n>1 are kept as-is.
+        inp = np.asarray(inp)
+        if inp.ndim > 1 and inp.shape[-1] == 1:
+            inp = inp.squeeze(-1)
+
         # extract target nodes from network
         *node_id, op, var = target.split('/')
         target_nodes = self.get_nodes(node_id, var_identifier=(op, var))
@@ -1303,8 +1309,11 @@ class CircuitTemplate(AbstractBaseTemplate):
         # ensure that inputs match the CircuitTemplate hierarchy
         node_key, net = self._add_input_node(node_key, in_node, self._depth)
 
-        # connect input node to target nodes
-        if inp.shape[-1] == len(target_nodes):
+        # connect input node to target nodes:
+        # if the input has one column per target node, wire them with per-node source indices
+        # so each node receives its own column; otherwise broadcast the full timed-input
+        n_cols = inp.shape[-1] if inp.ndim > 1 else 1
+        if n_cols == len(target_nodes) and n_cols > 1:
             edges = [(f"{node_key}/{op_key}/{var_key}", f"{t}/{op}/{var}", None, {'weight': 1.0, 'source_idx': i})
                      for i, t in enumerate(target_nodes)]
         else:
@@ -1554,29 +1563,51 @@ input_labels = {}
 
 
 def create_input_node(var: str, inp: np.ndarray, continuous: bool, T: float, vectorized_net: bool) -> tuple:
+    """Build a NodeTemplate that drives *var* from a pre-recorded time-series array.
+
+    Parameters
+    ----------
+    var:
+        Name of the target variable in the receiving operator.
+    inp:
+        Time-series array.  Canonical shapes after normalisation in ``_add_input``:
+          - ``(N_steps,)``        — scalar target
+          - ``(N_steps, n_cols)`` — vector target with *n_cols* elements
+    continuous:
+        If True (adaptive / scipy solvers) the current value is obtained via
+        linear interpolation so that fractional time values are handled correctly.
+        If False (euler / heun) the array is indexed directly with an integer step.
+    T:
+        Total simulation time (used to build the interpolation time grid).
+    vectorized_net:
+        Whether the calling circuit uses variable vectorisation.
+    """
 
     # create input equation and variables
     #####################################
 
-    # create left-hand side of input assignment
     var_name, input_labels_tmp = get_unique_label(f"{var}_timed_input", input_labels)
-    # For N=1 target, use direct assignment rather than index(var, 0) so that the
-    # timed-input variable holds a scalar value. index(var, 0) would produce a (1,)
-    # buffer that then causes numpy 2.3+ errors on scalar dy[i] assignment.
     lhs = var_name
-    lhs_shape = (inp.shape[-1],) if vectorized_net and len(inp.shape) > 1 and inp.shape[-1] > 1 else ()
+    # lhs is a scalar for 1-D (or post-normalised) inputs; a vector for multi-column
+    n_cols = inp.shape[-1] if inp.ndim > 1 else 1
+    lhs_shape = (n_cols,) if vectorized_net and n_cols > 1 else ()
+    init_val = np.zeros(lhs_shape) if lhs_shape else 0.0
     input_labels.update(input_labels_tmp)
 
     if continuous:
 
-        # case I: interpolate input variable if time steps can vary
-        inp = inp.squeeze()
-        inp = inp.squeeze()
+        # case I: interpolate so fractional (adaptive-step) time values are handled
         time = np.linspace(0, T, inp.shape[0])
-        y_new = np.interp(0.0, time, inp)
-        eqs = [f"{lhs} = interp(t, time, {var}_input)"]
+        if inp.ndim > 1:
+            # vector input — interpolate each column independently
+            y_new = np.array([np.interp(0.0, time, inp[:, k]) for k in range(n_cols)])
+            eqs = [f"{lhs} = interp_rows(t, time, {var}_input)"]
+        else:
+            # scalar input
+            y_new = float(np.interp(0.0, time, inp))
+            eqs = [f"{lhs} = interp(t, time, {var}_input)"]
         var_dict = {
-            var_name: {'vtype': 'output', 'value': float(y_new), 'shape': lhs_shape, 'dtype': 'float'},
+            var_name: {'vtype': 'output', 'value': y_new, 'shape': lhs_shape, 'dtype': 'float'},
             f"{var}_input": {'vtype': 'constant', 'value': inp, 'shape': inp.shape, 'dtype': 'float'},
             't': {'vtype': 'variable', 'value': 0.0, 'dtype': 'float', 'shape': ()},
             'time': {'vtype': 'input', 'value': time, 'shape': time.shape, 'dtype': 'float'}
@@ -1584,10 +1615,10 @@ def create_input_node(var: str, inp: np.ndarray, continuous: bool, T: float, vec
 
     else:
 
-        # case II: simply index the input variable with fixed time steps
+        # case II: direct integer indexing — inp[t] returns scalar or (n_cols,) row
         eqs = [f"{lhs} = index({var}_input,t)"]
         var_dict = {
-            var_name: {'vtype': 'output', 'value': 0.0, 'shape': lhs_shape, 'dtype': 'float'},
+            var_name: {'vtype': 'output', 'value': init_val, 'shape': lhs_shape, 'dtype': 'float'},
             f"{var}_input": {'vtype': 'constant', 'value': inp, 'shape': inp.shape, 'dtype': 'float'},
             't': {'vtype': 'variable', 'value': 0, 'dtype': 'int', 'shape': ()}
         }

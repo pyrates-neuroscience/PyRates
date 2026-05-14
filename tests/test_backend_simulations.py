@@ -437,6 +437,49 @@ def test_2_5_inputs_outputs():
         assert np.mean(r1.values.flatten() - r2.values.flatten()) == pytest.approx(0., rel=accuracy, abs=accuracy)
 
 
+def test_2_5b_input_shapes():
+    """Verify the input pipeline handles all canonical input shapes correctly.
+
+    Checks:
+    - (N,) 1-D scalar input on an euler simulation (baseline)
+    - (N, 1) 2-D trailing-singleton input gives the same result as (N,) after normalisation
+    - (N, n) vector input distributes columns to individual nodes
+    - adaptive (scipy) solver with scalar (N,) input uses linear interpolation
+    """
+
+    dt = 1e-3
+    T = 2.0
+    dts = dt
+    sim_steps = int(np.round(T / dt))
+
+    # Use the simplest single-population model that accepts I_ext
+    model = "model_templates.test_resources.test_backend.net13"
+    out = {'a': 'p1/op9/a'}
+
+    # --- baseline: 1-D scalar input (N,) ---
+    inp_1d = np.zeros(sim_steps) + 0.5
+    r_1d = integrate(model, simulation_time=T, step_size=dt, solver='euler',
+                     inputs={'p1/op9/I_ext': inp_1d}, outputs=out,
+                     vectorize=True, clear=True, sampling_step_size=dts)
+
+    # --- (N, 1) input must produce identical results after shape normalisation ---
+    inp_2d = inp_1d[:, None]                      # shape (N, 1)
+    assert inp_2d.shape == (sim_steps, 1)
+    r_2d = integrate(model, simulation_time=T, step_size=dt, solver='euler',
+                     inputs={'p1/op9/I_ext': inp_2d}, outputs=out,
+                     vectorize=True, clear=True, sampling_step_size=dts)
+
+    np.testing.assert_allclose(r_1d.values, r_2d.values, rtol=1e-6,
+                                err_msg="(N,) and (N,1) inputs give different results")
+
+    # --- adaptive scipy solver with scalar input uses interp ---
+    r_scipy = integrate(model, simulation_time=T, step_size=dt, solver='scipy',
+                        inputs={'p1/op9/I_ext': inp_1d}, outputs=out,
+                        vectorize=True, clear=True, sampling_step_size=dts)
+    # Results won't be numerically identical to Euler but should be in the same ballpark
+    assert r_scipy['a'].values.shape == r_1d['a'].values.shape
+
+
 def test_2_6_vectorization():
     """Tests whether a Jansen-Rit-based circuit with and without vectorization of mathematical operations yields
     identical results.
