@@ -79,6 +79,10 @@ class MatlabBackend(JuliaBackend):
         self._matlab = matlab.engine.start_matlab()
 
         self._nlags = 1
+        self._is_dde = False
+        self._lag_names = {}
+        self._param_names = []
+        self._fcall = None
 
     def add_var_update(self, lhs: ComputeVar, rhs: str, lhs_idx: Optional[str] = None, rhs_shape: Optional[tuple] = ()):
 
@@ -90,13 +94,20 @@ class MatlabBackend(JuliaBackend):
         self.add_code_line(f"{lhs} = {rhs};")
 
     def add_var_hist(self, lhs: str, delay: Union[ComputeVar, float], state_idx: Union[int, tuple], **kwargs):
+        self._is_dde = True
         idx = self._process_idx(state_idx)
+        delay_name = None
         if type(delay) is ComputeVar:
-            delay = float(delay.value[0] if delay.shape else delay.value)
-        if delay not in self.lags:
-            self.lags[delay] = self._nlags
+            delay_name = delay.name
+            delay_val = float(delay.value[0] if delay.shape else delay.value)
+        else:
+            delay_val = float(delay)
+        if delay_val not in self.lags:
+            self.lags[delay_val] = self._nlags
             self._nlags += 1
-        delay_idx = self.lags[delay]
+        delay_idx = self.lags[delay_val]
+        if delay_name is not None and delay_idx not in self._lag_names:
+            self._lag_names[delay_idx] = delay_name
 
         self.add_code_line(f"{lhs} = hist({idx}, {delay_idx});")
 
@@ -124,6 +135,14 @@ class MatlabBackend(JuliaBackend):
 
     def generate_func(self, func_name: str, to_file: bool = True, **kwargs):
 
+        self._fcall = func_name
+
+        # capture parameter names for DDE-BIFTOOL wrapper generation
+        func_args = kwargs.pop('func_args', None)
+        if func_args is not None:
+            self._param_names = [a if isinstance(a, str) else a.name for a in func_args]
+        kwargs.pop('state_vars', None)
+
         # generate the current function string via the code generator
         func_str = self.generate()
 
@@ -133,12 +152,15 @@ class MatlabBackend(JuliaBackend):
             file = f'{self.fdir}/{self._fname}{self._fend}' if self.fdir else f"{self._fname}{self._fend}"
             with open(file, 'w') as f:
                 f.writelines(func_str)
-                f.close()
 
             # import function from file
             if self.fdir:
                 self._matlab.addpath(self.fdir, nargout=0)
             rhs_eval = eval(f"self._matlab.{self._fname}")
+
+            # generate DDE-BIFTOOL compatibility files when needed
+            if self._is_dde:
+                self.generate_biftool_funcs(func_name)
 
         else:
 
@@ -153,13 +175,63 @@ class MatlabBackend(JuliaBackend):
 
         return rhs_eval
 
+    def generate_biftool_funcs(self, func_name: str):
+        """Generate DDE-BIFTOOL-compatible sys_rhs and sys_tau wrapper files.
+
+        DDE-BIFTOOL sys_rhs convention: f(xx, par) where xx(:,1) = y(t) and
+        xx(:,k+1) = y(t - tau_k).  sys_tau returns the 1-based indices of the
+        delay parameters inside the par vector.
+        """
+        base = f'{self.fdir}/{func_name}' if self.fdir else func_name
+
+        # 1-based index of each parameter in the par vector
+        param_idx = {name: i + 1 for i, name in enumerate(self._param_names)}
+
+        # delay parameter indices in par, ordered by lag index
+        tau_indices = []
+        for lag_idx in sorted(self._lag_names.keys()):
+            dname = self._lag_names[lag_idx]
+            if dname in param_idx:
+                tau_indices.append(param_idx[dname])
+
+        # extract parameters from par inside the biftool wrapper
+        param_assigns = '\n'.join(
+            f'    {name} = par({i + 1});'
+            for i, name in enumerate(self._param_names)
+        )
+        param_call = ', '.join(self._param_names)
+
+        biftool_rhs = (
+            f"function dy = {func_name}_biftool(xx, par)\n"
+            f"    % DDE-BIFTOOL sys_rhs wrapper: xx(:,1)=y(t), xx(:,k+1)=y(t-tau_k)\n"
+            f"    y = xx(:, 1);\n"
+            f"    hist = xx(:, 2:end);\n"
+            f"{param_assigns}\n"
+            f"    dy = zeros(size(y));\n"
+            f"    dy = {func_name}(0.0, y, hist, dy, {param_call});\n"
+            f"end\n"
+        )
+
+        tau_inds_str = ', '.join(str(i) for i in tau_indices)
+        biftool_tau = (
+            f"function tau_inds = {func_name}_tau()\n"
+            f"    % 1-based indices of delay parameters in the par vector\n"
+            f"    tau_inds = [{tau_inds_str}];\n"
+            f"end\n"
+        )
+
+        with open(f'{base}_biftool.m', 'w') as f:
+            f.write(biftool_rhs)
+        with open(f'{base}_tau.m', 'w') as f:
+            f.write(biftool_tau)
+
     @staticmethod
     def to_file(fn: str, **kwargs):
         from scipy.io import savemat
         savemat(f"{fn}.mat", mdict=kwargs)
 
     @staticmethod
-    def get_hist_func(y: np.ndarray):
+    def get_hist_func(y: np.ndarray, t0: float = 0.0):
         return lambda t: y[:]
 
     def _solve(self, solver: str, func: Callable, args: tuple, T: float, dt: float, dts: float, y0: np.ndarray,

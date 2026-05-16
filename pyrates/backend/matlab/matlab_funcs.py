@@ -54,7 +54,17 @@ end
 
 matmul = """
 function z = matmul(x,y)
-    z = mtimes(y,x');
+    z = x * y;
+end
+"""
+
+interp_rows = """
+function z = interp_rows(x_new, x, y)
+    n = size(y, 2);
+    z = zeros(n, 1);
+    for k = 1:n
+        z(k) = interp(x_new, x, y(:,k));
+    end
 end
 """
 
@@ -76,6 +86,7 @@ matlab_funcs = {
     'randn': {'call': 'randn', 'func': np.random.randn, 'imports': []},
     'sigmoid': {'call': 'sigmoid', 'func': sigmoid_func, 'def': sigmoid_def, 'imports': []},
     'interp': {'call': 'interp', 'func': np.interp, 'def': interp, 'imports': []},
+    'interp_rows': {'call': 'interp_rows', 'func': np.interp, 'def': interp_rows, 'imports': []},
     'conj': {'call': 'conj', 'func': np.conjugate, 'imports': []},
     'concatenate': {'call': 'concatenate', 'func': np.concatenate, 'def': concat}
 }
