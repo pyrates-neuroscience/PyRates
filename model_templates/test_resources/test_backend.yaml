@@ -289,3 +289,22 @@ net15:
   edges:
     - [p1/op9/b, p2/op10/I_syn, DummyEdge, {weight: 1.0}]
     - [p2/op10/b, p1/op9/I_syn, DummyEdge, {weight: 2.0}]
+
+# DDE test model: x' = -x(t-d) with constant pre-history x(t)=1 for t<=0
+op_dde:
+  base: OperatorTemplate
+  equations:
+    - "x' = -x(t-d)"
+  variables:
+    x: output(1.0)
+    d: 0.1
+
+pop_dde:
+  base: NodeTemplate
+  operators:
+    - op_dde
+
+net16:
+  base: CircuitTemplate
+  nodes:
+    p1: pop_dde

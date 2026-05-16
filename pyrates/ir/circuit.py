@@ -601,9 +601,13 @@ class NetworkGraph(AbstractBaseIR):
 
             # create buffer equations
             if len(target_shape) < 1 or (len(target_shape) == 1 and target_shape[0] == 1):
+                # For a single delay, inline the literal so buffer[int] returns a 0-d scalar
+                # rather than buffer[(1,)_array] which returns a (1,) array and causes
+                # numpy 2.3+ errors when assigned to a scalar dy[i] slot.
+                delay_ref = str(delays[0]) if len(delays) == 1 else f"{var}_delays{buffer_id}"
                 buffer_eqs = [f"index_axis({var}_buffer{buffer_id}) = roll({var}_buffer{buffer_id}, 1)",
                               f"index({var}_buffer{buffer_id}, 0) = {var}",
-                              f"{var}_buffered{buffer_id} = index({var}_buffer{buffer_id}, {var}_delays{buffer_id})"]
+                              f"{var}_buffered{buffer_id} = index({var}_buffer{buffer_id}, {delay_ref})"]
             else:
                 buffer_eqs = [f"index_axis({var}_buffer{buffer_id}) = roll({var}_buffer{buffer_id}, 1, 1)",
                               f"index_axis({var}_buffer{buffer_id}, 0, 1) = {var}",
@@ -715,12 +719,23 @@ class NetworkGraph(AbstractBaseIR):
             # case 0: matrix edge — weight is a 2-D numpy array supplied directly
             # (used by Connectivity; no scalar expansion needed)
             if isinstance(weight, np.ndarray) and weight.ndim == 2:
-                args[w_str] = {'vtype': 'constant', 'value': weight, 'dtype': 'float', 'shape': weight.shape}
                 source_vars[s_str] = {'sources': [sop], 'node': snode, 'var': svar}
+                # Always register the full 2-D weight for cases 0b/0c (wsum uses it);
+                # case 0a may override with a 1-D vector for the single-source path.
+                args[w_str] = {'vtype': 'constant', 'value': weight, 'dtype': 'float', 'shape': weight.shape}
 
                 if edge_ir is None:
                     # case 0a: simple matvec — no coupling function
-                    eqs.append(f"{t_str} = matvec({w_str}, {s_str})")
+                    # When n_source == 1 the source variable is a scalar at runtime.
+                    # np.dot((n,1), scalar) returns (n,1) which causes shape errors
+                    # when assigned to an (n,) target. Squeeze axis=1 to a 1-D weight
+                    # vector and use broadcast multiply instead.
+                    if weight.shape[1] == 1:
+                        w_1d = weight.squeeze(axis=1)
+                        args[w_str] = {'vtype': 'constant', 'value': w_1d, 'dtype': 'float', 'shape': w_1d.shape}
+                        eqs.append(f"{t_str} = {w_str} * {s_str}")
+                    else:
+                        eqs.append(f"{t_str} = matvec({w_str}, {s_str})")
                 else:
                     # case 0b / 0c: matrix coupling with custom edge equations
 
@@ -856,7 +871,16 @@ class NetworkGraph(AbstractBaseIR):
                 # define edge projection equation
                 s_str_final = _get_indexed_var_str(s_str, sidx_unique, ssize, idx_str=sidx_str, arg_dict=args)
                 t_str_final = _get_indexed_var_str(t_str, tidx_unique, tsize, idx_str=tidx_str, arg_dict=args)
-                eq = f"{t_str_final} = matvec({w_str}, {s_str_final})"
+                if len(sidx_unique) == 1:
+                    # Single-source: the source variable is a scalar at runtime
+                    # (time-series arrays are squeezed to 1D so arr[t] returns 0-d).
+                    # Use broadcast multiply with a 1D weight vector so that
+                    # weight_vec * scalar = (n_targets,) rather than the (n_targets,1)
+                    # result that numpy's dot gives for a 2D matrix times a scalar.
+                    weight_mat = weight_mat.squeeze(axis=1)
+                    eq = f"{t_str_final} = {w_str} * {s_str_final}"
+                else:
+                    eq = f"{t_str_final} = matvec({w_str}, {s_str_final})"
                 args[w_str] = {'vtype': 'constant', 'value': weight_mat, 'dtype': 'float', 'shape': weight_mat.shape}
 
             # case II: realize edge projection via source and target indexing
@@ -1245,7 +1269,8 @@ class CircuitIR(AbstractBaseIR):
 
         if not file_name:
             file_name = f"pyrates_func"
-        return self.graph.to_func(func_name=func_name, file_name=file_name, dt_adapt=self._dt_adapt, **kwargs)
+        return self.graph.to_func(func_name=func_name, file_name=file_name, dt_adapt=self._dt_adapt,
+                                   dt=self._dt, **kwargs)
 
     def network_to_computegraph(self, graph: NetworkGraph, inplace_vectorfield: bool = True, **kwargs):
 

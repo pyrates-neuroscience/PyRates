@@ -58,6 +58,36 @@ from shutil import rmtree
 ##############################
 
 
+import bisect
+
+
+class DDEHistory:
+    """Callable history buffer for delay-differential equations.
+
+    Stores (time, state) pairs and returns linearly-interpolated past state.
+    Pre-history (t <= t0) always returns the initial condition.
+    """
+
+    def __init__(self, y0: np.ndarray, t0: float = 0.0):
+        self._t = [float(t0)]
+        self._y = [y0.copy()]
+
+    def update(self, t: float, y: np.ndarray):
+        self._t.append(float(t))
+        self._y.append(y.copy())
+
+    def __call__(self, t: float) -> np.ndarray:
+        t = float(t)
+        if t <= self._t[0]:
+            return self._y[0]
+        if t >= self._t[-1]:
+            return self._y[-1]
+        idx = bisect.bisect_right(self._t, t) - 1
+        t0_, t1_ = self._t[idx], self._t[idx + 1]
+        alpha = (t - t0_) / (t1_ - t0_)
+        return self._y[idx] + alpha * (self._y[idx + 1] - self._y[idx])
+
+
 class CodeGen:
     """Generates python code. Can add code lines, line-breaks, indents and remove indents.
     """
@@ -166,7 +196,14 @@ class BaseBackend(CodeGen):
                 dtype = f'float{dtype[7:]}'
         else:
             dtype = self._int_precision
-        return np.asarray(v.value, dtype=dtype)
+        result = np.asarray(v.value, dtype=dtype)
+        # Squeeze single-element constants to 0-d scalars.
+        # PyRates stores scalar parameters internally as shape (1,) but
+        # numpy 2.3+ raises an error when a (1,) array is assigned to a scalar
+        # state-vector slot (e.g. dy[i] = (1,)_param * expr).
+        if result.shape == (1,) and v.vtype == 'constant':
+            result = result.squeeze()
+        return result
 
     def get_op(self, name: str, **kwargs) -> dict:
 
@@ -220,10 +257,14 @@ class BaseBackend(CodeGen):
             lhs = f"{lhs}{idx}"
         self.add_code_line(f"{lhs} = {rhs}")
 
-    def add_var_hist(self, lhs: str, delay: Union[ComputeVar, float], state_idx: str, **kwargs):
+    def add_var_hist(self, lhs: str, delay: Union[ComputeVar, float], state_idx: str,
+                     dt: Optional[float] = None, dt_adapt: bool = True, **kwargs):
         idx = self._process_idx(state_idx)
         d = self._process_delay(delay)
-        self.add_code_line(f"{lhs} = hist(t-{d})[{idx}]")
+        if dt is not None and not dt_adapt:
+            self.add_code_line(f"{lhs} = hist(t*{dt:.10e}-{d})[{idx}]")
+        else:
+            self.add_code_line(f"{lhs} = hist(t-{d})[{idx}]")
 
     def add_import(self, line: str):
         if line not in self._imports:
@@ -398,8 +439,8 @@ class BaseBackend(CodeGen):
         return expr
 
     @staticmethod
-    def get_hist_func(y: np.ndarray):
-        return lambda t: y
+    def get_hist_func(y: np.ndarray, t0: float = 0.0) -> DDEHistory:
+        return DDEHistory(y, t0=t0)
 
     def _get_func_info(self, name: str, **kwargs):
         return self._funcs[name]
@@ -423,23 +464,19 @@ class BaseBackend(CodeGen):
     def _solve(self, solver: str, func: Callable, args: tuple, T: float, dt: float, dts: float, y0: np.ndarray,
                t0: np.ndarray, times: np.ndarray, **kwargs) -> np.ndarray:
 
-        # perform integration via scipy solver (mostly Runge-Kutta methods)
         if solver == 'euler':
-
-            # solve ivp via forward euler method (fixed integration step-size)
             results = self._solve_euler(func, args, T, dt, dts, y0, t0)
 
         elif solver == 'heun':
-
-            # solve ivp via forward Heun's method (fixed integration step-size)
             results = self._solve_heun(func, args, T, dt, dts, y0, t0)
 
         elif solver == 'scipy':
-
-            results = self._solve_scipy(func, args, T, dt, y0, t0, times, **kwargs)
+            if len(args) > 0 and isinstance(args[0], DDEHistory):
+                results = self._solve_scipy_dde(func, args, T, dt, y0, t0, times, **kwargs)
+            else:
+                results = self._solve_scipy(func, args, T, dt, y0, t0, times, **kwargs)
 
         else:
-
             raise PyRatesException('Invalid option for keyword `solver`. Please check the documentation of the '
                                    '`CircuitTemplate.run` method for valid options.')
 
@@ -457,6 +494,7 @@ class BaseBackend(CodeGen):
         store_steps = int(np.round(T / dts))
         store_step = int(np.round(dts / dt))
         state_rec = np.zeros((store_steps, y.shape[0]) if y.shape else (store_steps, 1), dtype=y.dtype)
+        has_dde = len(args) > 0 and isinstance(args[0], DDEHistory)
 
         # solve ivp for forward Euler method
         for step in range(t0, steps+t0):
@@ -465,6 +503,8 @@ class BaseBackend(CodeGen):
                 idx += 1
             rhs = func(step, y, *args)
             y += dt * rhs
+            if has_dde:
+                args[0].update((step - t0 + 1) * dt, y)
 
         return state_rec
 
@@ -477,8 +517,9 @@ class BaseBackend(CodeGen):
         store_steps = int(np.round(T / dts))
         store_step = int(np.round(dts / dt))
         state_rec = np.zeros((store_steps, y.shape[0]) if y.shape else (store_steps, 1), dtype=y.dtype)
+        has_dde = len(args) > 0 and isinstance(args[0], DDEHistory)
 
-        # solve ivp for forward Euler method
+        # solve ivp via Heun's method
         for step in range(t0, steps + t0):
             if step % store_step == t0:
                 state_rec[idx, :] = y
@@ -486,6 +527,38 @@ class BaseBackend(CodeGen):
             rhs = func(step, y, *args)
             y_0 = y + dt * rhs
             y += dt/2 * (rhs + func(step, y_0, *args))
+            if has_dde:
+                args[0].update((step - t0 + 1) * dt, y)
+
+        return state_rec
+
+    @staticmethod
+    def _solve_scipy_dde(func: Callable, args: tuple, T: float, dt: float, y: np.ndarray, t0: np.ndarray,
+                         times: np.ndarray, **kwargs):
+
+        from scipy.integrate import ode
+
+        hist = args[0]
+        kwargs.pop('method', None)
+
+        def rhs(t, y_):
+            return func(t, y_, *args)
+
+        solver = ode(rhs).set_integrator('dopri5', first_step=dt, nsteps=50000)
+        solver.set_initial_value(y, float(t0))
+
+        def solout(t, y_):
+            hist.update(t, y_.copy())
+            return 0
+
+        solver.set_solout(solout)
+
+        state_rec = np.zeros((len(times), y.shape[0]), dtype=y.dtype)
+        for i, t_out in enumerate(times):
+            if not solver.successful():
+                break
+            solver.integrate(t_out)
+            state_rec[i, :] = solver.y
 
         return state_rec
 

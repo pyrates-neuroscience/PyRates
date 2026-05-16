@@ -361,7 +361,7 @@ class ComputeGraph(MultiDiGraph):
 
         return self
 
-    def to_func(self, func_name: str, to_file: bool = True, dt_adapt: bool = True, **kwargs):
+    def to_func(self, func_name: str, to_file: bool = True, dt_adapt: bool = True, dt: float = None, **kwargs):
 
         # finalize compute graph
         self.compile()
@@ -427,7 +427,8 @@ class ComputeGraph(MultiDiGraph):
                 if idx[1]-idx[0] < 2:
                     idx = idx[0]
             for delay, v_hist in delays.items():  # type: ComputeVar, str
-                code_gen.add_var_hist(lhs=v_hist, delay=delay, state_idx=idx, var=var)
+                code_gen.add_var_hist(lhs=v_hist, delay=delay, state_idx=idx, var=var,
+                                      dt=dt, dt_adapt=dt_adapt)
 
         # add lines from function body after function head
         code_gen.add_linebreak()

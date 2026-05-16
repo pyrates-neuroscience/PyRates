@@ -119,6 +119,16 @@ def _flatten1d(x):
     return x.reshape(-1)
 
 
+interp_rows = """
+def interp_rows(t, time, inp):
+    return array([interp(t, time, inp[:, k]) for k in range(inp.shape[1])])
+"""
+
+
+def _interp_rows(t, time, inp):
+    return np.array([np.interp(t, time, inp[:, k]) for k in range(inp.shape[1])])
+
+
 # dictionary for backend import
 ###############################
 
@@ -143,6 +153,8 @@ base_funcs = {
     'tan': {'call': 'tan', 'func': np.tan, 'imports': ['numpy.tan']},
     'exp': {'call': 'exp', 'func': np.exp, 'imports': ['numpy.exp']},
     'interp': {'call': 'interp', 'func': np.interp, 'imports': ['numpy.interp']},
+    'interp_rows': {'call': 'interp_rows', 'func': _interp_rows, 'def': interp_rows,
+                    'imports': ['numpy.interp', 'numpy.array']},
     'sigmoid': {'call': 'sigmoid', 'def': sigmoid, 'imports': ['numpy.exp']},
     'broadcast_pre': {'call': 'broadcast_pre', 'def': broadcast_pre, 'func': _broadcast_pre},
     'broadcast_post': {'call': 'broadcast_post', 'def': broadcast_post, 'func': _broadcast_post},
