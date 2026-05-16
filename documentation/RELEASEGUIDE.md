@@ -7,25 +7,32 @@ Please note any major changes in the CHANGELOG.md.
 ## 2. Update Version with bump2version
 
 To update the version number of PyRates, please use [bump2version](https://github.com/c4urself/bump2version) to ensure
-consistency. 
-The version number consists of the following components `<major>.<minor>.<patch>-<build>`. 
+consistency.
+The version number follows the pattern `<major>.<minor>.<patch>[-<release><build>]`, where the release
+suffix is optional and cycles through `dev → rc → (stable)`.
 
-For example, to start the next "patch" version, type
+`bump2version` auto-creates a commit for every version change.
+
+**Typical release workflow for a new patch version:**
+
 ```
-bump2version patch  # updates "0.0.0" to "0.0.1-dev0"
+# 1. Start development build
+bump2version patch                            # e.g. 1.0.10 → 1.1.0-dev1
+
+# 2. Iterate on the development build as needed
+bump2version build                            # e.g. 1.1.0-dev1 → 1.1.0-dev2
+
+# 3. Promote to release candidate for final testing
+bump2version --new-version 1.1.0-rc1 patch   # e.g. 1.1.0-dev2 → 1.1.0-rc1
+
+# 4. Mark as stable once tests pass
+bump2version --new-version 1.1.0 patch       # e.g. 1.1.0-rc1 → 1.1.0
 ```
 
-This will increase the patch number and append a "-dev0" to indicate this is a development build. 
-`bump2version` also auto-creates a commit, indicating in the commit message how the version was modified.  
-
-The following command updates the build number of the development build (`-dev#`).
+Use `--allow-dirty` if you have uncommitted local changes that should be included in the bump commit
+(e.g. an edited `.bumpversion.cfg`):
 ```
-bump2version build  # updates "0.0.1-dev0" to "0.0.1-dev1"
-```
-
-To mark the current version as stable, type
-```
-bump2version release  # updates "0.0.1-dev1" to "0.0.1"
+bump2version --new-version 1.1.0-rc1 --allow-dirty patch
 ```
 
 ## 3. Make a release using github.com
