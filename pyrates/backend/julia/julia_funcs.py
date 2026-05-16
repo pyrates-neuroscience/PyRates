@@ -48,13 +48,17 @@ end
 
 interp = """
 function interp(x_new, x, y)
-    idx = argmin(abs.(x.-x_new))
-    if x[idx] > x_new
-        i1, i2 = max(idx-1, 1), idx
-    else
-        i1, i2 = idx, min(idx+1, length(y))
-    end
-    return (y[i1] + y[i2])*0.5
+    if x_new <= x[1]; return y[1]; end
+    if x_new >= x[end]; return y[end]; end
+    idx = searchsortedlast(x, x_new)
+    t = (x_new - x[idx]) / (x[idx+1] - x[idx])
+    return y[idx] + t * (y[idx+1] - y[idx])
+end
+"""
+
+interp_rows = """
+function interp_rows(x_new, x, y)
+    return [interp(x_new, x, y[:, k]) for k in 1:size(y, 2)]
 end
 """
 
@@ -63,13 +67,13 @@ end
 
 julia_funcs = {
     'maxi': {'call': 'maximum', 'func': np.maximum, 'imports': []},
-    'mini': {'call': 'mininum', 'func': np.minimum, 'imports': []},
+    'mini': {'call': 'minimum', 'func': np.minimum, 'imports': []},
     'round': {'call': 'round', 'func': np.round, 'imports': []},
     'sum': {'call': 'sum', 'func': np.sum, 'imports': []},
     'mean': {'call': 'mean', 'func': np.mean, 'imports': []},
     'matmul': {'call': '*', 'func': np.dot, 'imports': []},
     'matvec': {'call': '*', 'func': np.dot, 'imports': []},
-    'roll': {'call': 'roll', 'func': np.roll, 'imports': []},
+    'roll': {'call': 'circshift', 'func': np.roll, 'imports': []},
     'randn': {'call': 'normal', 'func': np.random.randn, 'imports': []},
     'tanh': {'call': 'tanh', 'func': np.tanh, 'imports': []},
     'sinh': {'call': 'sinh', 'func': np.sinh, 'imports': []},
@@ -83,6 +87,7 @@ julia_funcs = {
     'exp': {'call': 'exp', 'func': np.exp, 'imports': []},
     'sigmoid': {'call': 'sigmoid', 'func': sigmoid_func, 'def': sigmoid_def, 'imports': []},
     'interp': {'call': 'interp', 'func': np.interp, 'def': interp, 'imports': []},
+    'interp_rows': {'call': 'interp_rows', 'func': np.interp, 'def': interp_rows, 'imports': []},
     'real': {'call': 'real', 'func': np.real, 'imports': []},
     'imag': {'call': 'imag', 'func': np.imag, 'imports': []},
     'conj': {'call': 'conj', 'func': np.conjugate, 'imports': []},

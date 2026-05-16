@@ -79,8 +79,10 @@ class JuliaBackend(BaseBackend):
         jl = Julia(runtime=kwargs.pop('julia_path'), compiled_modules=False)
         from julia import Main
         self._jl = Main
-        self._no_vectorization = ["*(", "interp("]
+        self._no_vectorization = ["*(", "interp(", "hist("]
         self._fcall = None
+        self._is_dde = False
+        self._lags = []
 
     def get_var(self, v: ComputeVar):
         v = super().get_var(v)
@@ -105,11 +107,19 @@ class JuliaBackend(BaseBackend):
             self.add_code_line(f"{lhs} = {rhs}")
 
     def add_var_hist(self, lhs: str, delay: Union[ComputeVar, float], state_idx: Union[int, tuple], **kwargs):
+        self._is_dde = True
+        if isinstance(delay, float):
+            self._lags.append(delay)
+        elif type(delay) is ComputeVar and np.ndim(delay.value) == 0:
+            self._lags.append(float(delay.value))
         idx = self._process_idx(state_idx)
         d = self._process_delay(delay)
         self.add_code_line(f"{lhs} = hist((), t-{d}; idxs={idx})")
 
-    def get_hist_func(self, y: np.ndarray):
+    def get_hist_func(self, y: np.ndarray, t0: float = 0.0):
+        # Julia DDE pre-history: constant initial condition for t <= t0.
+        # During integration DifferentialEquations.jl provides its own
+        # interpolant as `h`; this function is only called for t < t0.
         self._jl.eval(f"y_init = {y.tolist()}")
         hist = """
         function hist(p, t; idxs=nothing)
@@ -139,22 +149,26 @@ class JuliaBackend(BaseBackend):
     def generate_func(self, func_name: str, to_file: bool = True, **kwargs):
 
         self._fcall = func_name
+        kwargs.pop('julia_ode', None)  # legacy flags, now auto-generated
+        kwargs.pop('julia_dde', None)
 
-        # generate the current function string via the code generator
-        if kwargs.pop('julia_ode', False):
-            self.add_linebreak()
-            self.add_code_line(f"function {func_name}_julia(dy, y, p, t)")
-            self.add_indent()
-            self.add_code_line(f"return {func_name}(t, y, dy, p...)")
-            self.remove_indent()
-            self.add_code_line("end")
-        if kwargs.pop('julia_dde', False):
-            self.add_linebreak()
+        # append a DifferentialEquations.jl-compatible wrapper function.
+        # For DDEs the wrapper exposes `h` (the solver interpolant) so the
+        # RHS can call hist(p, t-d; idxs=i).  For plain ODEs it is omitted.
+        self.add_linebreak()
+        if self._is_dde:
             self.add_code_line(f"function {func_name}_julia(dy, y, h, p, t)")
             self.add_indent()
             self.add_code_line(f"return {func_name}(t, y, h, dy, p...)")
             self.remove_indent()
             self.add_code_line("end")
+        else:
+            self.add_code_line(f"function {func_name}_julia(dy, y, p, t)")
+            self.add_indent()
+            self.add_code_line(f"return {func_name}(t, y, dy, p...)")
+            self.remove_indent()
+            self.add_code_line("end")
+
         func_str = self.generate()
 
         if to_file:
@@ -163,15 +177,17 @@ class JuliaBackend(BaseBackend):
             file = f'{self.fdir}/{self._fname}{self._fend}' if self.fdir else f"{self._fname}{self._fend}"
             with open(file, 'w') as f:
                 f.writelines(func_str)
-                f.close()
 
-            # import function from file
-            rhs_eval = self._jl.include(file)
+            # import all functions from file into Julia Main
+            self._jl.include(file)
 
         else:
 
-            # just execute the function string, without writing it to file
-            rhs_eval = self._jl.eval(func_str)
+            # execute the function string directly
+            self._jl.eval(func_str)
+
+        # return the main RHS function object (wrapper is accessed via _fcall in _solve)
+        rhs_eval = getattr(self._jl, func_name)
 
         # apply function decorator
         decorator = kwargs.pop('decorator', None)
@@ -189,46 +205,50 @@ class JuliaBackend(BaseBackend):
             # solve via DifferentialEquations.jl
             self._jl.eval('using DifferentialEquations')
 
-            if 'dde' in solver:
+            # retrieve the pre-generated DifferentialEquations.jl-compatible wrapper
+            wrapper = getattr(self._jl, f'{self._fcall}_julia')
 
-                # define wrapper function and solver family
-                jfunc = f"""
-                function julia_dderun(du,u,h,p,t)
-                    return {self._fcall}(t,u,h,du,p...)
-                end
-                """
+            method = kwargs.pop('method', 'Tsit5')
+            atol, rtol = kwargs.pop('atol', 1e-6), kwargs.pop('rtol', 1e-3)
 
-                # solve ivp via DifferentialEquations.jl solver
-                self._jl.eval(jfunc)
-                model = self._jl.DDEProblem(self._jl.julia_dderun, y0, args[0], [0.0, T], args[2:])
-                method = kwargs.pop('method', 'Tsit5')
-                solver = getattr(self._jl, method)
-                solver = self._jl.MethodOfSteps(solver())
-                atol, rtol = kwargs.pop('atol', 1e-6), kwargs.pop('rtol', 1e-3)
-                results = self._jl.solve(model, solver, saveat=times, atol=atol, rtol=rtol)
+            # auto-detect DDE: _is_dde is set when add_var_hist was called,
+            # or the user can still explicitly request it with solver='julia_dde'
+            is_dde = self._is_dde or 'dde' in solver
+
+            if is_dde:
+
+                # args layout: (hist_julia_func, dy_zeros, p1, p2, ...)
+                # hist_julia_func   → h argument of DDEProblem
+                # dy_zeros          → internal buffer, not passed to Julia
+                # p1, p2, ...       → parameter tuple for DDEProblem
+                hist_func = args[0]
+                params = args[2:]
+
+                # pass constant_lags for discontinuity tracking when available
+                lags = kwargs.pop('constant_lags', self._lags if self._lags else None)
+                solve_kwargs = dict(saveat=times, atol=atol, rtol=rtol)
+                if lags:
+                    model = self._jl.DDEProblem(wrapper, y0, hist_func, [float(t0), T], params,
+                                                constant_lags=list(lags))
+                else:
+                    model = self._jl.DDEProblem(wrapper, y0, hist_func, [float(t0), T], params)
+                jl_solver = self._jl.MethodOfSteps(getattr(self._jl, method)())
+                results = self._jl.solve(model, jl_solver, **solve_kwargs)
 
             else:
 
-                # define wrapper function and solver family
-                jfunc = f"""
-                function julia_oderun(du,u,p,t)
-                    return {self._fcall}(t,u,du,p...)
-                end
-                """
-
-                # solve ivp via DifferentialEquations.jl solver
-                self._jl.eval(jfunc)
-                model = self._jl.ODEProblem(self._jl.julia_oderun, y0, [0.0, T], args[1:])
-                method = kwargs.pop('method', 'Tsit5')
-                solver = getattr(self._jl, method)
-                atol, rtol = kwargs.pop('atol', 1e-6), kwargs.pop('rtol', 1e-3)
-                results = self._jl.solve(model, solver(), saveat=times, atol=atol, rtol=rtol)
+                # args layout: (dy_zeros, p1, p2, ...)
+                # dy_zeros is skipped; p1, p2, ... form the parameter tuple
+                params = args[1:]
+                model = self._jl.ODEProblem(wrapper, y0, [float(t0), T], params)
+                jl_solver = getattr(self._jl, method)()
+                results = self._jl.solve(model, jl_solver, saveat=times, atol=atol, rtol=rtol)
 
             results = np.asarray(results).T
 
         else:
 
-            # non-julia solver
+            # non-julia solver — fall back to Python/scipy solvers
             results = super()._solve(solver=solver, func=func, args=args, T=T, dt=dt, dts=dts, y0=y0, t0=t0,
                                      times=times, **kwargs)
 
