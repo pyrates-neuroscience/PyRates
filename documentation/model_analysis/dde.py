@@ -25,8 +25,12 @@ with additional delayed feedback:
 with delayed feedback strength k. For a detailed introduction of the Van der Pol oscillator model, see the gallery
 example in the model introduction section.
 
-Below, we will show how such a DDE model can be implemented and how it can be solved using PyRates'
-built-in solvers, as well as how to interface the generated DDE function with third-party tools.
+Below, we will show three ways to define a DDE in PyRates, and how to solve it using the built-in
+fixed-step (Euler) and adaptive (scipy/dopri5) solvers, the Julia :code:`DifferentialEquations.jl`
+backend, and how to interface the generated function with third-party tools.
+
+As of PyRates 1.1.0, DDEs can also be written using the compact :math:`x(t-\\tau)` notation directly
+inside equation strings, which PyRates automatically rewrites to :code:`past(x, tau)` before parsing.
 """
 from pyrates import CircuitTemplate, OperatorTemplate, clear
 import matplotlib.pyplot as plt
@@ -36,9 +40,9 @@ import matplotlib.pyplot as plt
 # Step 1: DDE definition
 # ^^^^^^^^^^^^^^^^^^^^^^
 #
-# DDEs can be defined in two different ways in PyRates. The first way would be the usage of the `past(y, tau)` function
-# call that indicates to PyRates that :math:`y(t-tau)` should be evaluated instead of :math:`y(t)`. An example of how to
-# implement an `OperatorTemplate` representing the delayed Van der Pol equations is provided below.
+# DDEs can be defined in three different ways in PyRates. The first is the :code:`past(y, tau)` function
+# call, which explicitly tells PyRates to evaluate :math:`y(t-\tau)` instead of :math:`y(t)`. An example
+# :code:`OperatorTemplate` for the delayed Van der Pol model is shown below.
 
 # define parameters
 k = 1.0
@@ -59,14 +63,27 @@ variables = {
 op = OperatorTemplate(name='vdp_delayed', equations=eqs, variables=variables)
 
 # %%
-# This `OperatorTemplate` could then be used to define a PyRates model (see the examples in the model introduction
-# section of the gallery for a tutorial on how to do that).
+# **New in PyRates 1.1.0** — A second, more compact way to write the same DDE is to use the
+# :code:`x(t-tau)` notation directly in the equation string. PyRates automatically rewrites any
+# expression of the form :code:`varname(t-delay)` to :code:`past(varname, delay)` before parsing,
+# so both forms produce identical models. The delayed Van der Pol equations become:
+
+eqs_compact = [
+    "x' = z",
+    "z' = mu*(1-x**2)*z - x + k*x(t-tau)"
+]
+op_compact = OperatorTemplate(name='vdp_compact', equations=eqs_compact, variables=variables)
+
+# %%
+# This shorthand is purely syntactic sugar — the same :code:`DDEHistory` mechanism and all solvers
+# apply equally to both forms. It is especially convenient when transcribing mathematical DDE notation
+# straight into code without mentally replacing every :math:`x(t-\tau)` with :code:`past(x, tau)`.
 #
-# Alternatively, it is also possible to add an edge to a `CircuitTemplate`, including a discrete delay. This edge will
-# then automatically translated into a corresponding `past` call by PyRates. Note that this only works if the edge
-# source variable is a variable defined by a differential equation. So in the case of the Van der Pol model, both
-# :math:`x` and :math:`z` would be valid variables for such an edge definition. Below, we show how to do that using the
-# Van der Pol model that is already implemented in PyRates:
+# A third way to introduce a delay is to add an edge to a :code:`CircuitTemplate` with a discrete
+# :code:`delay` attribute. PyRates translates this edge into a corresponding :code:`past` call
+# automatically. Note that this only works when the edge source variable is defined by a differential
+# equation (both :math:`x` and :math:`z` qualify in the Van der Pol model). Below we use the
+# pre-implemented Van der Pol template to show this approach:
 
 vdp = CircuitTemplate.from_yaml("model_templates.oscillators.vanderpol.vdp")
 vdp.update_template(edges=[('p/vdp_op/x', 'p/vdp_op/inp', None, {'weight': k, 'delay': tau})], in_place=True)
@@ -115,11 +132,32 @@ plt.show()
 # %%
 # The dynamics agree closely; small quantitative differences arise from the discretization error of the
 # fixed-step Euler method.
+
+# %%
+# Step 3: Julia backend — DifferentialEquations.jl
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
-# The Julia backend additionally exposes the full suite of algorithms available in
-# :code:`DifferentialEquations.jl`. To use it, pass :code:`backend='julia'` and
-# :code:`solver='julia_dde'` to :code:`run`. PyRates will automatically generate a
-# :code:`MethodOfSteps` wrapper and solve the problem via an adaptive algorithm (default: Tsit5).
+# If the Julia backend is installed (:code:`pip install pyrates[backends]` pulls in the Julia bindings),
+# PyRates exposes the full suite of adaptive DDE solvers available in :code:`DifferentialEquations.jl`.
+# The call is identical to the scipy case — only :code:`backend` and :code:`solver` change.
+# PyRates automatically generates a :code:`MethodOfSteps` wrapper and solves via Tsit5 by default:
+#
+# .. code-block:: python
+#
+#     res_julia = vdp.run(
+#         step_size=step_size, simulation_time=T,
+#         outputs={'x': 'p/vdp_op/x', 'z': 'p/vdp_op/z'},
+#         backend='julia', solver='julia_dde',
+#         in_place=False, clear=False,
+#         julia_path='julia',   # path to the Julia executable; adjust if not on PATH
+#     )
+#
+# A different adaptive algorithm can be requested via the :code:`method` keyword, e.g.
+# :code:`method='RosShamp4'` for stiff systems.  PyRates passes the list of known constant delays
+# to :code:`DDEProblem` as :code:`constant_lags` automatically, enabling discontinuity tracking.
+#
+# The result is a :code:`pandas.DataFrame` with the same structure as the scipy/Euler outputs, so
+# all subsequent analysis and plotting code is backend-agnostic.
 
 # %%
 # Inspecting the generated DDE function
