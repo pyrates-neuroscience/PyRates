@@ -1189,7 +1189,7 @@ class CircuitIR(AbstractBaseIR):
             solver: str = 'euler',
             **kwargs
             ) -> dict:
-        """Simulate the backend behavior over time via a tensorflow session.
+        """Simulate the backend behavior over time.
 
         Parameters
         ----------

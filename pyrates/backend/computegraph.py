@@ -230,10 +230,7 @@ class ComputeGraph(MultiDiGraph):
         super().__init__()
 
         # choose a backend
-        if backend == 'tensorflow':
-            from pyrates.backend.tensorflow import TensorflowBackend
-            backend = TensorflowBackend
-        elif backend == 'torch':
+        if backend == 'torch':
             from pyrates.backend.torch import TorchBackend
             backend = TorchBackend
         elif backend == 'fortran':

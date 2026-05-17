@@ -199,8 +199,8 @@ def test_1_5_expression_parser_indexing():
     :class:`LambdaExpressionParser`: Documentation of a non-symbolic expression parser.
     """
 
-    # test indexing ability of tensorflow-based parser
-    ##################################################
+    # test indexing ability of the parser
+    #####################################
 
     A = np.array(np.random.randn(10, 10), dtype=np.float32)
     B = np.asarray([0, 2, 4], dtype=np.int32)

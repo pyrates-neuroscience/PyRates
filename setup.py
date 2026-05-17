@@ -24,7 +24,7 @@ CLASSIFIERS = ["Programming Language :: Python :: 3",
                "Topic :: Scientific/Engineering",
                ]
 
-EXTRAS = {"backends": ["tensorflow>=2.0", "torch"],
+EXTRAS = {"backends": ["torch"],
           "dev": ["pytest", "bump2version"]}
 
 EXTRAS["all"] = [item for sublist in EXTRAS.values() for item in sublist]

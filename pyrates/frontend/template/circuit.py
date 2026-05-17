@@ -421,8 +421,6 @@ class CircuitTemplate(AbstractBaseTemplate):
             Name of the backend that should be used for implementing the system equations. Possible choices are:
                 - 'default' or 'numpy': A backend based on `numpy` functions, representing all system variables as
                     `np.ndarray`.
-                - 'tensorflow': A backend that represents the system equations as a `tensorflow` graph, in which all
-                    system variables are stored as `tf.constant` or `tf.Variable`.
                 - 'torch': A backend based on `pytorch` which represents all variables as `torch.tensor`.
                 - 'fortran': Translates all system variables and equations into Fortran90 equivalents and uses
                     `numpy.f2py` to make them available via Python. Requires `vectorize` to be set to `False`.
@@ -569,8 +567,6 @@ class CircuitTemplate(AbstractBaseTemplate):
             Name of the backend that should be used for implementing the system equations. Possible choices are:
                 - 'default' or 'numpy': A backend based on `numpy` functions, representing all system variables as
                     `np.ndarray`.
-                - 'tensorflow': A backend that represents the system equations as a `tensorflow` graph, in which all
-                    system variables are stored as `tf.constant` or `tf.Variable`.
                 - 'torch': A backend based on `pytorch` which represents all variables as `torch.tensor`.
                 - 'fortran': Translates all system variables and equations into Fortran90 equivalents and uses
                     `numpy.f2py` to make them available via Python. Requires `vectorize` to be set to `False`.

@@ -37,8 +37,10 @@ A new backend needs to implement the following methods:
 
 Currently supported backends:
 - Numpy: BaseBackend.
-- Tensorflow: TensorflowBackend.
+- Torch: TorchBackend.
 - Fortran: FortranBackend (experimental).
+- Julia: JuliaBackend.
+- Matlab: MatlabBackend.
 
 """
 
