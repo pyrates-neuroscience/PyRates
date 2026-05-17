@@ -422,6 +422,8 @@ class CircuitTemplate(AbstractBaseTemplate):
                 - 'default' or 'numpy': A backend based on `numpy` functions, representing all system variables as
                     `np.ndarray`.
                 - 'torch': A backend based on `pytorch` which represents all variables as `torch.tensor`.
+                - 'jax': A backend based on `jax.numpy` that JIT-compiles the generated RHS via `jax.jit` and
+                    integrates ODEs with `diffrax` (when `solver='diffrax'`). Requires `pip install 'jax[cpu]' diffrax`.
                 - 'fortran': Translates all system variables and equations into Fortran90 equivalents and uses
                     `numpy.f2py` to make them available via Python. Requires `vectorize` to be set to `False`.
                 - 'julia': Translates all system variables and equations into Julia equivalents and uses `PyJulia` to
@@ -568,6 +570,8 @@ class CircuitTemplate(AbstractBaseTemplate):
                 - 'default' or 'numpy': A backend based on `numpy` functions, representing all system variables as
                     `np.ndarray`.
                 - 'torch': A backend based on `pytorch` which represents all variables as `torch.tensor`.
+                - 'jax': A backend based on `jax.numpy` that JIT-compiles the generated RHS via `jax.jit` and
+                    integrates ODEs with `diffrax` (when `solver='diffrax'`). Requires `pip install 'jax[cpu]' diffrax`.
                 - 'fortran': Translates all system variables and equations into Fortran90 equivalents and uses
                     `numpy.f2py` to make them available via Python. Requires `vectorize` to be set to `False`.
                 - 'julia': Translates all system variables and equations into Julia equivalents and uses `PyJulia` to

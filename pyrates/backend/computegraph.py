@@ -233,6 +233,9 @@ class ComputeGraph(MultiDiGraph):
         if backend == 'torch':
             from pyrates.backend.torch import TorchBackend
             backend = TorchBackend
+        elif backend == 'jax':
+            from pyrates.backend.jax import JaxBackend
+            backend = JaxBackend
         elif backend == 'fortran':
             from pyrates.backend.fortran import FortranBackend
             backend = FortranBackend
