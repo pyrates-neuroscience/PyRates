@@ -270,8 +270,8 @@ class CircuitTemplate(AbstractBaseTemplate):
         node_vars
             Dictionary with keys being pointers to variable names on nodes, using the `*circuit/node/op/var` notation.
         edge_vars
-            List with edge tuples that contain: (1) a source node name, (2) a target node name, (3) an edge index,
-            and (4) a dictionary with edge attributes. The latter can be used to update edge attributes.
+            List with edge tuples that contain: (1) a source node name, (2) a target node name, and (3) a dictionary
+            with edge attributes. The latter can be used to update edge attributes.
 
         Returns
         -------
