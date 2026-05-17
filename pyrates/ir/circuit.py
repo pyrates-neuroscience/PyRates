@@ -1272,6 +1272,13 @@ class CircuitIR(AbstractBaseIR):
         return self.graph.to_func(func_name=func_name, file_name=file_name, dt_adapt=self._dt_adapt,
                                    dt=self._dt, **kwargs)
 
+    def get_jacobian_func(self, func_name: str, file_name: Optional[str] = None, **kwargs) -> tuple:
+
+        if not file_name:
+            file_name = "pyrates_func"
+        return self.graph.get_jacobian_func(func_name=func_name, file_name=file_name,
+                                             dt_adapt=self._dt_adapt, dt=self._dt, **kwargs)
+
     def network_to_computegraph(self, graph: NetworkGraph, inplace_vectorfield: bool = True, **kwargs):
 
         # initialize compute graph

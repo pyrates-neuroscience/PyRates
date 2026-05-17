@@ -630,12 +630,7 @@ class CircuitTemplate(AbstractBaseTemplate):
             for key in net.compute_graph.state_vars:
                 self._state_var_values[key] = net.compute_graph.get_var(key).value
 
-        # clear the network temporary files
-        if clear:
-            net.clear()
-        self._ir = net._ir
-
-        # map the backend variable names to the frontend variable names
+        # map the backend variable names to the frontend variable names (must happen before clear)
         state_var_map = {}
         for v, idx in state_var_indices.items():
             v_new = net._ir.get_frontend_varname(v)
@@ -646,6 +641,105 @@ class CircuitTemplate(AbstractBaseTemplate):
                 args_mapped.append(net._ir.get_frontend_varname(arg))
             except (ValueError, KeyError):
                 args_mapped.append(arg)
+
+        # clear the network temporary files
+        if clear:
+            net.clear()
+        self._ir = net._ir
+
+        return func, args, tuple(args_mapped), state_var_map
+
+    def get_jacobian_func(self, func_name: str, step_size: float, inputs: Optional[dict] = None,
+                          backend: str = None, vectorize: bool = True, verbose: bool = True,
+                          clear: bool = False, in_place: bool = True, sparse: bool = False, **kwargs
+                          ) -> Tuple[Callable, tuple, tuple, dict]:
+        """Generate a function that evaluates the Jacobian of the dynamical system's vector field.
+
+        For ODE systems the generated function has signature ``J(t, y, *params) -> ndarray (n, n)``.
+        For DDE systems it returns ``(J0, [J_tau1, ...])`` where ``J0`` is the instantaneous Jacobian
+        and each ``J_tauK`` is the partial derivative with respect to ``y(t - tau_k)``.
+        If ``sparse=True`` each matrix is a ``scipy.sparse.csr_matrix`` instead.
+
+        Parameters
+        ----------
+        func_name
+            Name of the generated Jacobian function.
+        step_size
+            Integration step-size (required for input preprocessing).
+        inputs
+            Extrinsic, time-dependent inputs (same format as ``get_run_func``).
+        backend
+            Backend used for code generation (same choices as ``get_run_func``).
+        vectorize
+            If true, vectorize operators over identical nodes.
+        verbose
+            Print compilation progress.
+        clear
+            If true, free cached variables and temporary files after generation.
+        in_place
+            If false, work on a deep copy of this template.
+        sparse
+            Return ``scipy.sparse.csr_matrix`` matrices instead of dense arrays.
+        kwargs
+            Additional keyword arguments forwarded to the backend.
+
+        Returns
+        -------
+        Tuple[Callable, tuple, tuple, dict]
+            The Jacobian function, its positional arguments, the argument keys, and the
+            indices of the state variables in the state vector.
+        """
+
+        # add extrinsic inputs to network
+        if "adaptive" in kwargs:
+            adaptive_steps = kwargs.pop("adaptive")
+        else:
+            adaptive_steps = is_integration_adaptive(kwargs.pop('solver', 'euler'), **kwargs)
+        net = self if in_place else deepcopy(self)
+        if inputs:
+            for target, in_array in inputs.items():
+                net = net._add_input(target, in_array, adaptive_steps, in_array.shape[0] * step_size, vectorize)
+
+        # validate backend settings
+        net._validate_backend_args(backend, vectorize, **kwargs)
+
+        # translate circuit template into a graph representation
+        net.apply(adaptive_steps=adaptive_steps, verbose=verbose, backend=backend, step_size=step_size,
+                  vectorize=vectorize, **kwargs)
+
+        # impose initial condition
+        for key, val in self._state_var_values.items():
+            v = net.compute_graph.get_var(key)
+            v.set_value(np.reshape(val, v.shape))
+
+        # generate the Jacobian function
+        func, args, arg_names, state_var_indices = net._ir.get_jacobian_func(func_name=func_name,
+                                                                               step_size=step_size,
+                                                                               sparse=sparse, **kwargs)
+        self._state_var_indices = state_var_indices
+
+        # set current network state if it was empty before
+        if not self.state:
+            for key in net.compute_graph.state_vars:
+                self._state_var_values[key] = net.compute_graph.get_var(key).value
+
+        # map the backend variable names to the frontend variable names (must happen before clear)
+        state_var_map = {}
+        for v, idx in state_var_indices.items():
+            v_new = net._ir.get_frontend_varname(v)
+            state_var_map[v_new] = idx
+        args_mapped = []
+        for arg in arg_names:
+            try:
+                args_mapped.append(net._ir.get_frontend_varname(arg))
+            except (ValueError, KeyError):
+                args_mapped.append(arg)
+
+        # clear the network temporary files
+        if clear:
+            net.clear()
+        self._ir = net._ir
+
         return func, args, tuple(args_mapped), state_var_map
 
     def apply(self, adaptive_steps: bool = None, label: str = None, node_values: dict = None, edge_values: dict = None,

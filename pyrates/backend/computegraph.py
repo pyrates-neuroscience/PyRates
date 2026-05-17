@@ -498,6 +498,414 @@ class ComputeGraph(MultiDiGraph):
 
         return outputs
 
+    def get_jacobian_func(self, func_name: str, to_file: bool = True, sparse: bool = False,
+                          dt_adapt: bool = True, dt: float = None, **kwargs) -> tuple:
+        """Generate a function that evaluates the Jacobian of the vector field.
+
+        For ODE systems the generated function has signature ``J(t, y, *params) -> ndarray (n, n)``.
+        For DDE systems it returns ``(J0, [J_tau1, J_tau2, ...])`` where ``J0`` is the instantaneous
+        Jacobian and ``J_tauK`` is the partial derivative with respect to ``y(t - tau_k)``.
+        If ``sparse=True`` each matrix is a ``scipy.sparse.csr_matrix`` instead.
+
+        The Jacobian entries are computed symbolically via ``sympy.diff`` using the reconstructed
+        vector-field expressions from the compute graph.  Vector-valued state variables fall back to
+        zero blocks (a ``UserWarning`` lists the affected indices).
+
+        Parameters
+        ----------
+        func_name
+            Name of the generated function.
+        to_file
+            Write source to a file (same semantics as ``to_func``).
+        sparse
+            Return ``scipy.sparse.csr_matrix`` instead of dense ``ndarray``.
+        dt_adapt
+            Whether the circuit uses adaptive time-stepping (controls ``t`` dtype).
+        dt
+            Fixed time-step (passed through to backend).
+
+        Returns
+        -------
+        tuple
+            ``(func, args, arg_names, state_var_indices)`` — same structure as ``to_func``.
+        """
+        import sympy as sp
+        from warnings import warn
+
+        # ── 1. Finalise graph and build state-vector structure (mirrors to_func) ──
+        self.compile()
+        variables, idx = [], 0
+        for var, update in self.var_updates['DEs'].items():
+            lhs, _ = self._process_var_update(var, update)
+            variables.append(lhs.value)
+            vshape = sum(lhs.shape)
+            if vshape > 1:
+                self._state_var_indices[var] = (idx, idx + vshape)
+                idx += vshape
+            else:
+                self._state_var_indices[var] = idx
+                idx += 1
+        n = idx
+        try:
+            state_vec = np.concatenate(variables, axis=0)
+        except ValueError:
+            try:
+                state_vec = np.asarray(variables)
+            except ValueError:
+                state_vec = np.asarray([np.squeeze(v) for v in variables])
+        dtype = 'complex' if 'complex' in state_vec.dtype.name else 'float'
+        state_var_key, y_var = self.add_var(label='y', vtype='state_var', value=state_vec, dtype=dtype)
+        try:
+            t_var = self.get_var('t')
+        except KeyError:
+            _, t_var = self.add_var(label='t', vtype='state_var',
+                                    value=0.0 if dt_adapt else 0,
+                                    dtype='float' if dt_adapt else 'int', shape=())
+        self.backend.register_vars([t_var, y_var])
+
+        # ── 2. Rebuild symbolic vector field ──
+        f_exprs, y_syms, past_map, func_args, var_is_vector = self._get_symbolic_rhs()
+
+        # map state sym → y-index
+        sym_to_y_idx = {sym: self._state_var_indices[var]
+                        for var, sym in zip(self.var_updates['DEs'].keys(), y_syms)}
+
+        is_dde = bool(past_map)
+        start = self.backend._start_idx  # 0 for Python, 1 for Julia/MATLAB
+
+        # group past symbols by delay string for history-Jacobian computation
+        # delay_str → [(fresh_sym, var_sym, state_idx)]
+        delay_groups: dict = {}
+        for (var_sym, delay_sym), fresh_sym in past_map.items():
+            d_str = str(delay_sym)
+            if d_str not in delay_groups:
+                delay_groups[d_str] = []
+            for sym, vidx in sym_to_y_idx.items():
+                if sym == var_sym:
+                    delay_groups[d_str].append((fresh_sym, var_sym, vidx))
+                    break
+
+        # fresh past sym → code string used in generated Jacobian expressions
+        past_sym_to_str: dict = {}
+        for d_str, group in delay_groups.items():
+            d_safe = d_str.replace('.', 'p').replace('-', 'm')
+            for fresh_sym, _, vidx in group:
+                if isinstance(vidx, tuple):
+                    past_sym_to_str[fresh_sym] = f'_yhist_{d_safe}[{vidx[0]+start}:{vidx[1]}]'
+                else:
+                    past_sym_to_str[fresh_sym] = f'_yhist_{d_safe}[{vidx+start}]'
+
+        # ── 3. Compute symbolic Jacobian entries via sympy.diff ──
+        J0_entries: dict = {}   # (i_row, j_col) → sympy Expr
+        J_hist: dict = {}       # delay_str → {(i_row, j_col) → sympy Expr}
+        numerical_blocks = []
+
+        for d_str in delay_groups:
+            J_hist[d_str] = {}
+
+        i_row = 0
+        for f_i, yi_sym, fi_is_vec in zip(f_exprs, y_syms, var_is_vector):
+            fi_idx = sym_to_y_idx[yi_sym]
+            fi_nrows = (fi_idx[1] - fi_idx[0]) if isinstance(fi_idx, tuple) else 1
+
+            j_col = 0
+            for yj_sym, fj_is_vec in zip(y_syms, var_is_vector):
+                fj_idx = sym_to_y_idx[yj_sym]
+                fj_ncols = (fj_idx[1] - fj_idx[0]) if isinstance(fj_idx, tuple) else 1
+                if fi_is_vec or fj_is_vec:
+                    numerical_blocks.append((i_row, i_row + fi_nrows, j_col, j_col + fj_ncols))
+                else:
+                    d = sp.diff(f_i, yj_sym)
+                    if d != 0:
+                        J0_entries[(i_row, j_col)] = d
+                j_col += fj_ncols
+
+            # history Jacobians
+            for d_str, group in delay_groups.items():
+                j_col = 0
+                for fresh_sym, _, fj_idx in group:
+                    fj_ncols = (fj_idx[1] - fj_idx[0]) if isinstance(fj_idx, tuple) else 1
+                    if not fi_is_vec and fj_ncols == 1:
+                        d = sp.diff(f_i, fresh_sym)
+                        if d != 0:
+                            J_hist[d_str][(i_row, j_col)] = d
+                    j_col += fj_ncols
+
+            i_row += fi_nrows
+
+        if numerical_blocks:
+            warn(
+                f"get_jacobian_func: {len(numerical_blocks)} vector-valued Jacobian block(s) set to zero "
+                f"(analytical differentiation not supported for vector DEs). "
+                f"Affected y-index ranges: {numerical_blocks}",
+                UserWarning
+            )
+
+        # ── 4. Generate code ──
+        code_gen = self.backend
+        code_gen.code.clear()
+
+        # ensure zeros (and optionally csr_matrix) are imported
+        code_gen.add_import("from numpy import zeros")
+        if sparse:
+            code_gen.add_import("from scipy.sparse import csr_matrix")
+
+        # determine return-variable name(s) for MATLAB function signature
+        if J_hist:
+            d_safes = [d_str.replace('.', 'p').replace('-', 'm') for d_str in J_hist]
+            jk_names = [f'J_hist_{s}' for s in d_safes]
+            return_var_name = f'J0'   # Julia/MATLAB named outputs handled below
+        else:
+            jk_names = []
+            return_var_name = 'J0'
+
+        func_args_objects = [self.get_var(a) for a in func_args]
+        all_arg_names = code_gen.generate_func_head(
+            func_name=func_name,
+            state_var=state_var_key,
+            return_var=return_var_name,
+            func_args=func_args_objects,
+            add_hist_func=is_dde and code_gen.add_hist_arg,
+        )
+
+        # past-state extraction for DDE
+        if is_dde:
+            code_gen.add_linebreak()
+            for d_str, group in delay_groups.items():
+                d_safe = d_str.replace('.', 'p').replace('-', 'm')
+                code_gen.add_code_line(f"_yhist_{d_safe} = hist(t - {d_str})")
+
+        # allocate instantaneous Jacobian
+        code_gen.add_linebreak()
+        dtype_str = code_gen._float_precision
+        code_gen.add_code_line(f"J0 = zeros(({n}, {n}), dtype='{dtype_str}')")
+
+        # fill non-zero J0 entries
+        for (i_r, j_c), d_expr in sorted(J0_entries.items()):
+            d_str_code = self._expr_to_jac_str(d_expr, sym_to_y_idx, {})
+            if d_str_code is None:
+                code_gen.add_code_line(
+                    f"# WARNING: could not differentiate J0[{i_r},{j_c}] analytically — entry left as 0")
+            else:
+                code_gen.add_code_line(f"J0[{i_r + start}, {j_c + start}] = {d_str_code}")
+
+        # history Jacobians
+        code_gen.add_linebreak()
+        for d_str, entries in J_hist.items():
+            d_safe = d_str.replace('.', 'p').replace('-', 'm')
+            jk = f'J_hist_{d_safe}'
+            code_gen.add_code_line(f"{jk} = zeros(({n}, {n}), dtype='{dtype_str}')")
+            for (i_r, j_c), d_expr in sorted(entries.items()):
+                d_str_code = self._expr_to_jac_str(d_expr, sym_to_y_idx, past_sym_to_str)
+                if d_str_code is None:
+                    code_gen.add_code_line(
+                        f"# WARNING: could not differentiate {jk}[{i_r},{j_c}] analytically — entry left as 0")
+                else:
+                    code_gen.add_code_line(f"{jk}[{i_r + start}, {j_c + start}] = {d_str_code}")
+            code_gen.add_linebreak()
+
+        # return statement (replaces generate_func_tail so we control the return value)
+        if sparse:
+            j0_ret = "csr_matrix(J0)"
+            jk_rets = [f"csr_matrix({jk})" for jk in jk_names]
+        else:
+            j0_ret = "J0"
+            jk_rets = jk_names
+
+        if jk_names:
+            ret_str = f"{j0_ret}, [{', '.join(jk_rets)}]"
+        else:
+            ret_str = j0_ret
+        code_gen.generate_func_tail(rhs_var=ret_str)
+
+        # compile / write to file
+        param_arg_names = [a for a in all_arg_names if a not in ('t', state_var_key, 'hist')]
+        func = code_gen.generate_func(
+            func_name=func_name, to_file=to_file,
+            func_args=param_arg_names,
+            state_vars=self.state_vars,
+            **kwargs
+        )
+
+        # assemble actual argument values
+        fargs = [0.0, state_vec.copy()]
+        if is_dde and code_gen.add_hist_arg:
+            fargs.append(code_gen.get_hist_func(state_vec.copy()))
+        for a in all_arg_names:
+            if a not in ('t', state_var_key, 'hist'):
+                fargs.append(self.get_var(a, from_backend=True))
+
+        return func, tuple(fargs), tuple(all_arg_names), self._state_var_indices.copy()
+
+    def _get_symbolic_rhs(self) -> tuple:
+        """Reconstruct the full symbolic vector field from the compute graph.
+
+        Must be called after ``compile()``.
+
+        Returns
+        -------
+        f_exprs : list[sympy.Expr]
+        y_syms : list[sympy.Symbol]
+        past_map : dict  ``{(var_sym, delay_sym): fresh_sym}``
+        func_args : list[str]  constant node names (function parameters)
+        var_is_vector : list[bool]
+        """
+        import sympy as sp
+
+        # Build symbolic expressions for all non-DE (algebraic) variables so that
+        # delayed inputs routed via buffer operators can be expanded into the DE
+        # expressions and their past() calls can be detected.
+        non_de_exprs: dict = {}
+        non_de_args: list = []
+        for var, update in self.var_updates['non-DEs'].items():
+            nde_var = self.get_var(var)
+            try:
+                args, expr = self._node_to_expr(update)
+            except Exception:
+                continue
+            non_de_exprs[nde_var.symbol] = expr
+            non_de_args.extend(args)
+
+        def _expand_non_de(expr):
+            """Substitute non-DE symbols with their full expressions."""
+            changed = True
+            while changed:
+                changed = False
+                subs = {}
+                for sym in expr.free_symbols:
+                    if sym in non_de_exprs:
+                        subs[sym] = non_de_exprs[sym]
+                if subs:
+                    new_expr = expr.subs(subs)
+                    if new_expr != expr:
+                        expr = new_expr
+                        changed = True
+            return expr
+
+        all_func_args = list(non_de_args)
+        f_exprs, y_syms, past_map, var_is_vector = [], [], {}, []
+        for var, update in self.var_updates['DEs'].items():
+            lhs_node = self.get_var(var)
+            args, expr = self._node_to_expr(update)
+            all_func_args.extend(args)
+            # expand non-DE symbols to reveal any past() calls
+            expr = _expand_non_de(expr)
+            expr, new_past = self._extract_past_terms(expr)
+            past_map.update(new_past)
+            f_exprs.append(expr)
+            y_syms.append(lhs_node.symbol)
+            var_is_vector.append(sum(lhs_node.shape) > 1)
+
+        seen, ordered = set(), []
+        for a in all_func_args:
+            if a not in seen:
+                seen.add(a)
+                ordered.append(a)
+        return f_exprs, y_syms, past_map, ordered, var_is_vector
+
+    def _extract_past_terms(self, expr) -> tuple:
+        """Replace every ``past(var, delay)`` call in *expr* with a fresh Symbol.
+
+        Returns ``(new_expr, past_map)`` where ``past_map`` maps
+        ``(var_sym, delay_sym) → fresh_sym``.
+        """
+        from sympy import Symbol
+        past_map: dict = {}
+
+        def _visit(e):
+            if not e.args:
+                return e
+            if e.func.__name__ == 'past' and len(e.args) == 2:
+                key = (e.args[0], e.args[1])
+                if key not in past_map:
+                    safe = str(e.args[1]).replace('.', 'p').replace('-', 'm')
+                    past_map[key] = Symbol(f'_past_{e.args[0]}_{safe}')
+                return past_map[key]
+            new_args = tuple(_visit(a) for a in e.args)
+            if new_args != e.args:
+                return e.func(*new_args)
+            return e
+
+        return _visit(expr), past_map
+
+    def _resolve_derivatives(self, expr):
+        """Replace ``Derivative(f(x), x)`` with known analytical forms.
+
+        Currently handles: ``identity`` (pass-through), ``sigmoid``, and ``absv``.
+        """
+        import sympy as sp
+        from sympy import Derivative, Function
+
+        # identity(x) = x  →  d/dx = 1
+        expr = expr.replace(
+            lambda e: isinstance(e, Derivative) and e.expr.func.__name__ == 'identity',
+            lambda e: sp.Integer(1)
+        )
+        expr = expr.replace(
+            lambda e: isinstance(e, Derivative) and e.expr.func.__name__ == 'sigmoid',
+            lambda e: (lambda s: s * (1 - s))(Function('sigmoid')(e.expr.args[0]))
+        )
+        expr = expr.replace(
+            lambda e: isinstance(e, Derivative) and e.expr.func.__name__ == 'absv',
+            lambda e: Function('sign')(e.expr.args[0])
+        )
+        return expr
+
+    def _expr_to_jac_str(self, expr, sym_to_y_idx: dict, past_sym_to_str: dict):
+        """Convert a symbolic Jacobian entry to a backend code string.
+
+        Parameters
+        ----------
+        expr : sympy.Expr
+        sym_to_y_idx : dict
+            ``{state_sym: int_or_tuple_idx}`` — maps state-variable symbols to their
+            position in the flat state vector ``y``.
+        past_sym_to_str : dict
+            ``{fresh_past_sym: code_string}`` — maps past-state placeholders to the
+            code that evaluates them (e.g. ``'_yhist_0p5[0]'``).
+
+        Returns
+        -------
+        str or None
+            ``None`` signals that unevaluated ``Derivative`` nodes remain and a
+            numerical fallback should be used for this entry.
+        """
+        import sympy as sp
+        from sympy import Derivative
+
+        # resolve known analytical derivative rules (sigmoid, absv, …)
+        expr = self._resolve_derivatives(expr)
+
+        if expr.atoms(Derivative):
+            return None
+
+        start = self.backend._start_idx
+
+        # build placeholder substitution: state sym / past sym → unique temp sym
+        subs: dict = {}
+        ph_to_code: dict = {}
+        for i, (sym, idx) in enumerate(sym_to_y_idx.items()):
+            ph = sp.Symbol(f'_ypl{i}_')
+            subs[sym] = ph
+            if isinstance(idx, tuple):
+                ph_to_code[str(ph)] = f'y[{idx[0]+start}:{idx[1]}]'
+            else:
+                ph_to_code[str(ph)] = f'y[{idx+start}]'
+        for i, (psym, code_str) in enumerate(past_sym_to_str.items()):
+            ph = sp.Symbol(f'_ppl{i}_')
+            subs[psym] = ph
+            ph_to_code[str(ph)] = code_str
+
+        expr_subst = expr.subs(subs)
+        expr_str = str(expr_subst)
+
+        # replace placeholders with actual code strings (longest first to avoid
+        # partial substring collisions)
+        for ph_str in sorted(ph_to_code.keys(), key=len, reverse=True):
+            expr_str = expr_str.replace(ph_str, ph_to_code[ph_str])
+
+        return expr_str
+
     def clear(self) -> None:
         """Deletes build directory and removes all compute graph nodes
         """
