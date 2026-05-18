@@ -259,11 +259,7 @@ class FortranBackend(BaseBackend):
         exec(f"rhs_eval = {self._fname}.{func_name}", globals())
         rhs_eval = globals().pop('rhs_eval')
 
-        # apply function decorator
-        decorator = kwargs.pop('decorator', None)
-        if decorator:
-            decorator_kwargs = kwargs.pop('decorator_kwargs', dict())
-            rhs_eval = decorator(rhs_eval, **decorator_kwargs)
+        rhs_eval = self._apply_decorator(rhs_eval, **kwargs)
 
         if not to_file:
             os.remove(file)

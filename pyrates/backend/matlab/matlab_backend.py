@@ -185,13 +185,7 @@ class MatlabBackend(JuliaBackend):
             # just execute the function string, without writing it to file
             rhs_eval = self._matlab.eval(func_str)
 
-        # apply function decorator
-        decorator = kwargs.pop('decorator', None)
-        if decorator:
-            decorator_kwargs = kwargs.pop('decorator_kwargs', dict())
-            rhs_eval = decorator(rhs_eval, **decorator_kwargs)
-
-        return rhs_eval
+        return self._apply_decorator(rhs_eval, **kwargs)
 
     def generate_biftool_funcs(self, func_name: str):
         """Generate DDE-BIFTOOL-compatible sys_rhs and sys_tau wrapper files.

@@ -196,14 +196,7 @@ class JuliaBackend(BaseBackend):
 
         # return the main RHS function object (wrapper is accessed via _fcall in _solve)
         rhs_eval = getattr(self._jl, func_name)
-
-        # apply function decorator
-        decorator = kwargs.pop('decorator', None)
-        if decorator:
-            decorator_kwargs = kwargs.pop('decorator_kwargs', dict())
-            rhs_eval = decorator(rhs_eval, **decorator_kwargs)
-
-        return rhs_eval
+        return self._apply_decorator(rhs_eval, **kwargs)
 
     def _validate_solver(self, solver: str) -> None:
         # Accept any "julia*" string (the dispatch below uses ``'julia' in

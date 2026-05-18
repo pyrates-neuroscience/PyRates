@@ -389,13 +389,22 @@ class BaseBackend(CodeGen):
             exec(func_str, globals())
 
         rhs_eval = globals().pop(func_name)
+        return self._apply_decorator(rhs_eval, **kwargs)
 
-        # apply function decorator
+    @staticmethod
+    def _apply_decorator(rhs_eval: Callable, **kwargs) -> Callable:
+        """Optionally wrap the generated function with a user-supplied decorator.
+
+        Looks for ``decorator`` (callable) and ``decorator_kwargs`` (dict) in
+        ``kwargs``; pops them out and applies ``decorator(rhs_eval,
+        **decorator_kwargs)`` when present.  Returns ``rhs_eval`` unchanged
+        otherwise.  Centralised here so backend subclasses with their own
+        ``generate_func`` don't each have to repeat the same four lines.
+        """
         decorator = kwargs.pop('decorator', None)
         if decorator:
             decorator_kwargs = kwargs.pop('decorator_kwargs', dict())
             rhs_eval = decorator(rhs_eval, **decorator_kwargs)
-
         return rhs_eval
 
     def run(self, func: Callable, func_args: tuple, T: float, dt: float, dts: float, solver: str, **kwargs) -> tuple:
