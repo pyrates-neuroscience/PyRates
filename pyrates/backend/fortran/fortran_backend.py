@@ -38,8 +38,11 @@ from ..parser import replace
 # external _imports
 import subprocess
 import os
-from numpy import f2py
 import numpy as np
+# Note: `from numpy import f2py` is deferred to FortranBackend.__init__.
+# In numpy >= 2.0 the f2py module pulls in distutils / meson eagerly, which
+# adds noticeable startup latency and an extra hard dependency that should
+# only matter for users who actually instantiate this backend.
 from typing import Optional, Dict, List, Union, Tuple, Iterable, Callable
 
 # meta infos
@@ -65,6 +68,22 @@ class FortranBackend(BaseBackend):
                  ) -> None:
         """Instantiates Fortran backend.
         """
+
+        # Lazy availability check: importing f2py at module-top forces the
+        # numpy.f2py / distutils / meson chain to load for every user of
+        # pyrates, including those who never touch the fortran backend.
+        # We do the import here so that:
+        #   (a) `import pyrates` (and even `from pyrates.backend.fortran ...`)
+        #       stays cheap when numpy.f2py is unavailable;
+        #   (b) instantiating FortranBackend without f2py raises a clear
+        #       ImportError instead of a cryptic subprocess failure later.
+        try:
+            from numpy import f2py  # noqa: F401
+        except ImportError as e:
+            raise ImportError(
+                "FortranBackend requires `numpy.f2py`. On numpy >= 2.0 you may "
+                "also need `pip install meson meson-python ninja`."
+            ) from e
 
         # add user-provided operations to function dict
         fort_ops = fortran_funcs.copy()
