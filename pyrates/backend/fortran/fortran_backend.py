@@ -37,6 +37,7 @@ from ..parser import replace
 
 # external _imports
 import subprocess
+import sys
 import os
 import numpy as np
 # Note: `from numpy import f2py` is deferred to FortranBackend.__init__.
@@ -235,9 +236,23 @@ class FortranBackend(BaseBackend):
             f.writelines(func_file)
             f.close()
 
-        # compile fortran function and write it to file
-        subprocess.run(f"python -m numpy.f2py -c -m {self._fname} {file}", shell=True,
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        # compile fortran function via f2py.  Use sys.executable so we hit
+        # the same interpreter (and therefore the same numpy) the caller is
+        # running, drop shell=True (small command-injection surface around
+        # `self._fname`), and surface any compiler errors as a Python
+        # exception instead of letting the next `import` line fail with an
+        # opaque ImportError.
+        completed = subprocess.run(
+            [sys.executable, '-m', 'numpy.f2py', '-c', '-m', self._fname, file],
+            capture_output=True, text=True,
+        )
+        if completed.returncode != 0:
+            stderr_tail = (completed.stderr or '').strip().splitlines()
+            tail = '\n'.join(stderr_tail[-30:]) if stderr_tail else '<no stderr>'
+            raise RuntimeError(
+                f"f2py compilation of {file} failed (exit {completed.returncode}). "
+                f"Last lines of stderr:\n{tail}"
+            )
 
         # import function from temporary file
         exec(f"from {self._fname} import {self._fname}", globals())
