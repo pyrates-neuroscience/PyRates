@@ -52,6 +52,14 @@ def interp(x_new, x, y):
     return (y[i1] + y[i1])*0.5
 """
 
+# Weighted sum: einsum-based, identical algebra to base_funcs.wsum but using
+# torch.einsum so the operation runs on the active torch device and keeps the
+# autograd graph intact.
+wsum = """
+def wsum(weight, coupling):
+    return einsum('ij,ij->i', weight, coupling)
+"""
+
 # dictionary for backend import
 ###############################
 
@@ -77,6 +85,7 @@ torch_funcs = {
     'exp': {'call': 'exp', 'func': np.exp, 'imports': ['torch.exp']},
     'sigmoid': {'call': 'sigmoid', 'func': sigmoid, 'imports': ['torch.sigmoid']},
     'interp': {'call': 'interp', 'func': np.interp, 'def': interp, 'imports': ['torch.abs', 'torch.argmin']},
+    'wsum':   {'call': 'wsum',   'def': wsum, 'imports': ['torch.einsum']},
     'real': {'call': 'real', 'func': np.real, 'imports': ['torch.real']},
     'imag': {'call': 'imag', 'func': np.imag, 'imports': ['torch.imag']},
     'conj': {'call': 'conj', 'func': np.conjugate, 'imports': ['torch.conj']},

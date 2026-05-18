@@ -56,6 +56,20 @@ def interp(x_new, x, y):
     return (y[i1] + y[i2]) * 0.5
 """
 
+# Weighted sum: einsum-based, identical algebra to base_funcs.wsum but using
+# the jax.numpy einsum so the call stays inside the JIT trace.
+wsum = """
+def wsum(weight, coupling):
+    return einsum('ij,ij->i', weight, coupling)
+"""
+
+# Per-row 1-D interpolation.  Same algebra as base_funcs.interp_rows; relies
+# on jax.numpy's interp and array imports.
+interp_rows = """
+def interp_rows(t, time, inp):
+    return array([interp(t, time, inp[:, k]) for k in range(inp.shape[1])])
+"""
+
 
 # Function registry — same schema as torch_funcs / base_funcs
 # -----------------------------------------------------------
@@ -81,6 +95,9 @@ jax_funcs = {
     'exp':         {'call': 'exp',      'func': np.exp,          'imports': ['jax.numpy.exp']},
     'sigmoid':     {'call': 'sigmoid',  'func': sigmoid,         'imports': ['jax.nn.sigmoid']},
     'interp':      {'call': 'interp',   'func': np.interp, 'def': interp, 'imports': ['jax.numpy.abs', 'jax.numpy.argmin']},
+    'interp_rows': {'call': 'interp_rows', 'func': np.interp, 'def': interp_rows,
+                    'imports': ['jax.numpy.interp', 'jax.numpy.array']},
+    'wsum':        {'call': 'wsum',     'def': wsum, 'imports': ['jax.numpy.einsum']},
     'real':        {'call': 'real',     'func': np.real,         'imports': ['jax.numpy.real']},
     'imag':        {'call': 'imag',     'func': np.imag,         'imports': ['jax.numpy.imag']},
     'conj':        {'call': 'conj',     'func': np.conjugate,    'imports': ['jax.numpy.conj']},
