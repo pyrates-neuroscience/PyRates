@@ -51,6 +51,11 @@ __status__ = "development"
 
 class TorchBackend(BaseBackend):
 
+    # `heun` falls back to BaseBackend._solve_heun, which writes to a numpy
+    # state-record buffer and would silently sever the autograd graph.
+    # Declare it unsupported until a tensor-native heun is added.
+    SUPPORTED_SOLVERS = ('euler', 'scipy')
+
     def __init__(self,
                  ops: Optional[Dict[str, str]] = None,
                  imports: Optional[List[str]] = None,

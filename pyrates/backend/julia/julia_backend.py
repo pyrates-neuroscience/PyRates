@@ -51,6 +51,14 @@ __status__ = "development"
 
 class JuliaBackend(BaseBackend):
 
+    # Adds two Julia-native paths on top of the inherited euler/heun/scipy:
+    #   'julia_ode' → DifferentialEquations.jl ODEProblem
+    #   'julia_dde' → DifferentialEquations.jl DDEProblem (MethodOfSteps)
+    # ``_validate_solver`` is overridden below to accept arbitrary
+    # "julia_*" identifiers (any string containing 'julia') so users can pick
+    # specific algorithms via the existing ``method=`` keyword.
+    SUPPORTED_SOLVERS = ('euler', 'heun', 'scipy', 'julia_ode', 'julia_dde')
+
     def __init__(self,
                  ops: Optional[Dict[str, str]] = None,
                  imports: Optional[List[str]] = None,
@@ -197,8 +205,18 @@ class JuliaBackend(BaseBackend):
 
         return rhs_eval
 
+    def _validate_solver(self, solver: str) -> None:
+        # Accept any "julia*" string (the dispatch below uses ``'julia' in
+        # solver``); fall through to the base check otherwise so plain
+        # ``euler`` / ``heun`` / ``scipy`` keep working.
+        if 'julia' in solver:
+            return
+        super()._validate_solver(solver)
+
     def _solve(self, solver: str, func: Callable, args: tuple, T: float, dt: float, dts: float, y0: np.ndarray,
                t0: np.ndarray, times: np.ndarray, **kwargs) -> np.ndarray:
+
+        self._validate_solver(solver)
 
         if 'julia' in solver:
 

@@ -80,6 +80,10 @@ class JaxBackend(BaseBackend):
     for the whole process automatically.
     """
 
+    # In addition to the base trio, JaxBackend ships a JIT-compiled
+    # adaptive integrator via diffrax.diffeqsolve (solver='diffrax').
+    SUPPORTED_SOLVERS = ('euler', 'heun', 'scipy', 'diffrax')
+
     def __init__(self,
                  ops: Optional[Dict[str, str]] = None,
                  imports: Optional[List[str]] = None,
@@ -160,6 +164,8 @@ class JaxBackend(BaseBackend):
     def _solve(self, solver: str, func: Callable, args: tuple, T: float, dt: float, dts: float,
                y0: np.ndarray, t0: np.ndarray, times: np.ndarray, **kwargs) -> np.ndarray:
 
+        self._validate_solver(solver)
+
         # cast initial value to JAX so the JIT-compiled function gets the right type
         y0 = jnp.asarray(y0)
 
@@ -177,11 +183,8 @@ class JaxBackend(BaseBackend):
         if solver == 'euler':
             return self._solve_euler(func, args, T, dt, dts, y0, t0)
 
-        if solver == 'heun':
-            return self._solve_heun(func, args, T, dt, dts, y0, t0)
-
-        raise ValueError(f"Unknown solver `{solver}` for JaxBackend. "
-                         f"Supported: 'diffrax', 'scipy', 'euler', 'heun'.")
+        # solver == 'heun' (the only remaining case after _validate_solver)
+        return self._solve_heun(func, args, T, dt, dts, y0, t0)
 
     def _solve_diffrax(self, func: Callable, args: tuple, T: float, dt: float,
                        y0: 'jnp.ndarray', t0: 'np.ndarray', times: np.ndarray, **kwargs):

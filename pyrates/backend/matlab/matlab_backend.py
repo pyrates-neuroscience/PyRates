@@ -52,6 +52,24 @@ __status__ = "development"
 
 class MatlabBackend(JuliaBackend):
 
+    # Matlab inherits from JuliaBackend for the code-generation helpers but
+    # does not have a Julia runtime — `_solve` delegates straight to the base
+    # path.  Override SUPPORTED_SOLVERS to drop the julia_* options so users
+    # get a clear error if they ask for one.
+    SUPPORTED_SOLVERS = ('euler', 'heun', 'scipy')
+
+    def _validate_solver(self, solver: str) -> None:
+        # Skip JuliaBackend's "accept any julia_*" override — Matlab has no
+        # Julia runtime, so those names would only fail later with a cryptic
+        # AttributeError on ``self._jl``.
+        # Use BaseBackend's strict membership check directly.
+        if solver not in self.SUPPORTED_SOLVERS:
+            from .. import PyRatesException
+            raise PyRatesException(
+                f"Backend `{type(self).__name__}` does not support solver "
+                f"`{solver}`. Supported solvers: {list(self.SUPPORTED_SOLVERS)}."
+            )
+
     def __init__(self,
                  ops: Optional[Dict[str, str]] = None,
                  imports: Optional[List[str]] = None,
@@ -236,6 +254,8 @@ class MatlabBackend(JuliaBackend):
 
     def _solve(self, solver: str, func: Callable, args: tuple, T: float, dt: float, dts: float, y0: np.ndarray,
                t0: np.ndarray, times: np.ndarray, **kwargs) -> np.ndarray:
+
+        self._validate_solver(solver)
 
         # transform function arguments into matlab variables
         args_m = tuple([self._transform_to_mat(arg) for arg in args])

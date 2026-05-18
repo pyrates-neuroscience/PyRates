@@ -483,6 +483,8 @@ class FortranBackend(BaseBackend):
     def _solve(self, solver: str, func: Callable, args: tuple, T: float, dt: float, dts: float, y0: np.ndarray,
                t0: np.ndarray, times: np.ndarray, **kwargs) -> np.ndarray:
 
+        self._validate_solver(solver)
+
         # extract delta vector
         dy = args[0]
 

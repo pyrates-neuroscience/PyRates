@@ -144,6 +144,15 @@ class BaseBackend(CodeGen):
     generator.
     """
 
+    # ----------------------------------------------------------------------
+    # Class attribute: which `solver=` values does this backend accept?
+    # Subclasses override (or extend) this tuple.  Validated early via
+    # ``_validate_solver`` so the user sees a clear error instead of the
+    # current "the call silently took a wrong branch and produced numpy
+    # output" failure mode.
+    # ----------------------------------------------------------------------
+    SUPPORTED_SOLVERS: Tuple[str, ...] = ('euler', 'heun', 'scipy')
+
     def __init__(self,
                  ops: Optional[Dict[str, str]] = None,
                  imports: Optional[List[str]] = None,
@@ -463,26 +472,36 @@ class BaseBackend(CodeGen):
     def _process_delay(self, delay: Union[ComputeVar, float]) -> str:
         return f"{delay}[{self._start_idx}]" if type(delay) is ComputeVar and delay.shape else f"{delay}"
 
+    def _validate_solver(self, solver: str) -> None:
+        """Raise a helpful error if the requested solver is not supported.
+
+        Called by every ``_solve`` override (in this class and subclasses) so
+        users get a clear "solver X is not supported by backend Y; supported
+        are Z" message instead of the previous fall-through into a generic
+        ``PyRatesException`` (or, worse, a silent dispatch into a method
+        that happened to share a prefix).
+        """
+        if solver not in self.SUPPORTED_SOLVERS:
+            raise PyRatesException(
+                f"Backend `{type(self).__name__}` does not support solver "
+                f"`{solver}`. Supported solvers: {list(self.SUPPORTED_SOLVERS)}."
+            )
+
     def _solve(self, solver: str, func: Callable, args: tuple, T: float, dt: float, dts: float, y0: np.ndarray,
                t0: np.ndarray, times: np.ndarray, **kwargs) -> np.ndarray:
 
+        self._validate_solver(solver)
+
         if solver == 'euler':
-            results = self._solve_euler(func, args, T, dt, dts, y0, t0)
+            return self._solve_euler(func, args, T, dt, dts, y0, t0)
 
-        elif solver == 'heun':
-            results = self._solve_heun(func, args, T, dt, dts, y0, t0)
+        if solver == 'heun':
+            return self._solve_heun(func, args, T, dt, dts, y0, t0)
 
-        elif solver == 'scipy':
-            if len(args) > 0 and isinstance(args[0], DDEHistory):
-                results = self._solve_scipy_dde(func, args, T, dt, y0, t0, times, **kwargs)
-            else:
-                results = self._solve_scipy(func, args, T, dt, y0, t0, times, **kwargs)
-
-        else:
-            raise PyRatesException('Invalid option for keyword `solver`. Please check the documentation of the '
-                                   '`CircuitTemplate.run` method for valid options.')
-
-        return results
+        # solver == 'scipy'
+        if len(args) > 0 and isinstance(args[0], DDEHistory):
+            return self._solve_scipy_dde(func, args, T, dt, y0, t0, times, **kwargs)
+        return self._solve_scipy(func, args, T, dt, y0, t0, times, **kwargs)
 
     def _add_func_call(self, name: str, args: Iterable, return_var: str = 'dy'):
         self.add_code_line(f"def {name}({','.join(args)}):")
