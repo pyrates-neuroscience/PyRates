@@ -19,12 +19,13 @@ def _qif_scalar_circuit(weight: float = 15.0):
     return from_yaml("model_templates.neural_mass_models.qif.qif")
 
 
-def _run(circuit, T=10.0, dt=1e-3, solver='euler'):
+def _run(circuit, T=10.0, dt=1e-3, solver='euler', backend='default'):
     return circuit.run(
         simulation_time=T,
         step_size=dt,
         solver=solver,
         outputs={'r': 'p/qif_op/r'},
+        backend=backend,
         clear=True,
         verbose=False,
     )
@@ -34,7 +35,7 @@ def _run(circuit, T=10.0, dt=1e-3, solver='euler'):
 # test 1: PopulationTemplate with n=1 matches scalar QIF
 # ---------------------------------------------------------------------------
 
-def test_population_n1_matches_scalar():
+def test_population_n1_matches_scalar(backend):
     """n=1 PopulationTemplate + scalar Connectivity should match the legacy circuit."""
     from pyrates.frontend.template import from_yaml
     from pyrates.frontend.template.population import PopulationTemplate, Connectivity
@@ -45,7 +46,7 @@ def test_population_n1_matches_scalar():
 
     # --- reference: legacy scalar circuit ---
     ref_circuit = _qif_scalar_circuit(weight=15.0)
-    ref_result = _run(ref_circuit)
+    ref_result = _run(ref_circuit, backend=backend)
 
     clear_ir_caches()
 
@@ -73,6 +74,7 @@ def test_population_n1_matches_scalar():
         step_size=1e-3,
         solver='euler',
         outputs={'r': 'p/qif_op/r'},
+        backend=backend,
         clear=True,
         verbose=False,
     )
@@ -89,7 +91,7 @@ def test_population_n1_matches_scalar():
 # test 2: PopulationTemplate with n=4, identity weight matrix
 # ---------------------------------------------------------------------------
 
-def test_population_n4_identity_weight():
+def test_population_n4_identity_weight(backend):
     """4-unit population with identity weight matrix: each unit is independent,
     so each unit should match the scalar QIF with weight 1.0."""
     from pyrates.frontend.template import from_yaml, CircuitTemplate
@@ -107,7 +109,7 @@ def test_population_n4_identity_weight():
     ref_circuit = CircuitTemplate(name='ref', populations={'p': ref_pop}, connections=[ref_conn])
     ref_result = ref_circuit.run(
         simulation_time=5.0, step_size=1e-3, solver='euler',
-        outputs={'r': 'p/qif_op/r'}, clear=True, verbose=False,
+        outputs={'r': 'p/qif_op/r'}, backend=backend, clear=True, verbose=False,
     )
 
     clear_ir_caches()
@@ -119,7 +121,7 @@ def test_population_n4_identity_weight():
     circuit4 = CircuitTemplate(name='pop4', populations={'p': pop4}, connections=[conn4])
     result4 = circuit4.run(
         simulation_time=5.0, step_size=1e-3, solver='euler',
-        outputs={'r': 'p/qif_op/r'}, clear=True, verbose=False,
+        outputs={'r': 'p/qif_op/r'}, backend=backend, clear=True, verbose=False,
     )
 
     # All 4 units should evolve identically (same initial conditions, same coupling).
@@ -141,7 +143,7 @@ def test_population_n4_identity_weight():
 # test 3: heterogeneous eta in PopulationTemplate
 # ---------------------------------------------------------------------------
 
-def test_population_heterogeneous_params():
+def test_population_heterogeneous_params(backend):
     """Verify that per-unit parameter arrays are stored and applied correctly."""
     from pyrates.frontend.template import from_yaml, CircuitTemplate
     from pyrates.frontend.template.population import PopulationTemplate, Connectivity
@@ -165,7 +167,7 @@ def test_population_heterogeneous_params():
     circuit = CircuitTemplate(name='het', populations={'p': pop}, connections=[conn])
     result = circuit.run(
         simulation_time=5.0, step_size=1e-3, solver='euler',
-        outputs={'r': 'p/qif_op/r'}, clear=True, verbose=False,
+        outputs={'r': 'p/qif_op/r'}, backend=backend, clear=True, verbose=False,
     )
 
     # result['r'] is a multi-index DataFrame: ('r', 0), ('r', 1), ('r', 2), ('r', 3)
@@ -181,7 +183,7 @@ def test_population_heterogeneous_params():
 # test 4: Connectivity with an identity EdgeTemplate matches plain matvec
 # ---------------------------------------------------------------------------
 
-def test_connectivity_edge_identity():
+def test_connectivity_edge_identity(backend):
     """EdgeTemplate with identity coupling ('s = theta_s') must produce identical
     results to a plain Connectivity with the same weight matrix."""
     from pyrates.frontend.template.node import NodeTemplate
@@ -209,7 +211,8 @@ def test_connectivity_edge_identity():
                             weights=W, edge=edge, edge_var_map=edge_var_map)
         circuit = CircuitTemplate(name='ktest', populations={'e': pop}, connections=[conn])
         return circuit.run(simulation_time=T, step_size=dt, solver='euler',
-                           outputs={'theta': 'e/phase_op/theta'}, clear=True, verbose=False)
+                           outputs={'theta': 'e/phase_op/theta'}, backend=backend,
+                           clear=True, verbose=False)
 
     # Reference: plain matvec (no EdgeTemplate)
     ref = _run_kuramoto(edge=None, edge_var_map=None)
@@ -232,7 +235,7 @@ def test_connectivity_edge_identity():
 # test 5: Kuramoto sine coupling with N=2 — numerical correctness
 # ---------------------------------------------------------------------------
 
-def test_connectivity_edge_kuramoto_sine():
+def test_connectivity_edge_kuramoto_sine(backend):
     """Matrix Connectivity with sin(theta_s - theta_t) coupling matches hand-computed
     Euler step for N=2 Kuramoto oscillators."""
     from pyrates.frontend.template.node import NodeTemplate
@@ -264,7 +267,8 @@ def test_connectivity_edge_kuramoto_sine():
 
     # Run 2 steps; row at index 1 (t=dt) is the state after the first Euler step.
     result = circuit.run(simulation_time=2 * dt, step_size=dt, solver='euler',
-                         outputs={'theta': 'e/phase_op/theta'}, clear=True, verbose=False)
+                         outputs={'theta': 'e/phase_op/theta'}, backend=backend,
+                         clear=True, verbose=False)
 
     theta_step1 = result['theta'].values[1]  # state after 1st Euler step
 
@@ -283,7 +287,7 @@ def test_connectivity_edge_kuramoto_sine():
 # test 6: dynamic (DE-bearing) EdgeTemplate matches a pure-Python reference loop
 # ---------------------------------------------------------------------------
 
-def test_connectivity_dynamic_edge():
+def test_connectivity_dynamic_edge(backend):
     """Lowpass-filter edge u' = (-u + r_pre)/tau_u, s = u, with N=2 and off-diagonal
     weight matrix.  The PyRates Euler trajectory must match a hand-rolled Euler loop."""
     from pyrates.frontend.template.node import NodeTemplate
@@ -327,7 +331,8 @@ def test_connectivity_dynamic_edge():
     )
     circuit = CircuitTemplate(name='dyn_edge_test', populations={'p': pop}, connections=[conn])
     result = circuit.run(simulation_time=n_steps * dt, step_size=dt, solver='euler',
-                         outputs={'r': 'p/rate_op/r'}, clear=True, verbose=False)
+                         outputs={'r': 'p/rate_op/r'}, backend=backend,
+                         clear=True, verbose=False)
 
     r_pyrates = result['r'].values  # shape (n_steps, 2), rows at t=0, dt, 2*dt, ...
 
@@ -353,7 +358,7 @@ def test_connectivity_dynamic_edge():
 # test 7: discrete matrix delay — trajectory matches reference loop
 # ---------------------------------------------------------------------------
 
-def test_matrix_discrete_delay():
+def test_matrix_discrete_delay(backend):
     """Discrete ring-buffer delay on a matrix Connectivity: full Euler trajectory
     matches a hand-rolled reference that applies the same d-step delay."""
     from pyrates.frontend.template.operator import OperatorTemplate
@@ -386,7 +391,8 @@ def test_matrix_discrete_delay():
                         weights=W, delays=delay)
     circuit = CircuitTemplate(name='dtest', populations={'p': pop}, connections=[conn])
     result = circuit.run(simulation_time=n_run * dt, step_size=dt, solver='euler',
-                         outputs={'r': 'p/rate_op_d/r'}, clear=True, verbose=False)
+                         outputs={'r': 'p/rate_op_d/r'}, backend=backend,
+                         clear=True, verbose=False)
     r_pyrates = result['r'].values  # shape (n_run, N)
 
     # Reference Euler loop with explicit d-step ring buffer.
@@ -410,7 +416,7 @@ def test_matrix_discrete_delay():
 # test 8: gamma-kernel matrix delay — ODE cascade trajectory
 # ---------------------------------------------------------------------------
 
-def test_matrix_gamma_kernel_delay():
+def test_matrix_gamma_kernel_delay(backend):
     """Gamma-kernel delay (ODE cascade) on a matrix Connectivity: full Euler trajectory
     matches a hand-rolled reference cascade."""
     from pyrates.frontend.template.operator import OperatorTemplate
@@ -444,7 +450,8 @@ def test_matrix_gamma_kernel_delay():
                         weights=W, delays=delay, spread=spread)
     circuit = CircuitTemplate(name='gtest', populations={'p': pop}, connections=[conn])
     result = circuit.run(simulation_time=n_run * dt, step_size=dt, solver='euler',
-                         outputs={'r': 'p/rate_op_g/r'}, clear=True, verbose=False)
+                         outputs={'r': 'p/rate_op_g/r'}, backend=backend,
+                         clear=True, verbose=False)
     r_pyrates = result['r'].values  # shape (n_run, N)
 
     # Reference Euler loop with ODE cascade

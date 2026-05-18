@@ -17,8 +17,8 @@ __status__ = "Development"
 # Utility #
 ###########
 
-# set backends to run the tests for
-backends = ['default']
+# Backends to run the per-backend tests against are supplied at runtime via
+# the ``--backends`` pytest CLI flag (see tests/conftest.py).
 
 # set accuracy for all tests
 accuracy = 1e-4
@@ -58,7 +58,7 @@ def nmrse(x: np.ndarray,
 #########
 
 
-def test_2_1_operator():
+def test_2_1_operator(backend):
     """Testing operator functionality of compute graph class:
 
     See Also
@@ -72,7 +72,7 @@ def test_2_1_operator():
     sim_steps = int(sim_time / dt)
     inp = np.zeros((sim_steps,)) + 0.5
 
-    for b in backends:
+    for b in [backend]:
 
         # test correct numerical evaluation of operator with two coupled simple, linear equations
         #########################################################################################
@@ -145,7 +145,7 @@ def test_2_1_operator():
         assert np.mean(np.abs(diff)) == pytest.approx(0., rel=accuracy, abs=accuracy)
 
 
-def test_2_2_node():
+def test_2_2_node(backend):
     """Testing node functionality of compute graph class.
 
     See Also
@@ -157,7 +157,7 @@ def test_2_2_node():
     sim_time = 10.
     sim_steps = int(np.round(sim_time/dt))
 
-    for b in backends:
+    for b in [backend]:
 
         # test correct numerical evaluation of node with 2 operators, where op1 projects to op2
         #######################################################################################
@@ -235,7 +235,7 @@ def test_2_2_node():
         assert diff == pytest.approx(0., rel=accuracy, abs=accuracy)
 
 
-def test_2_3_edge():
+def test_2_3_edge(backend):
     """Testing edge functionality of compute graph class.
 
     See Also
@@ -250,7 +250,7 @@ def test_2_3_edge():
     inp = np.zeros((sim_steps, 1)) + 0.5
 
     final_results_comparison = []
-    for b in backends:
+    for b in [backend]:
 
         # test correct numerical evaluation of graph with 1 source projecting unidirectional to 2 target nodes
         ######################################################################################################
@@ -338,7 +338,7 @@ def test_2_3_edge():
         assert final_comparison == pytest.approx(0.0, rel=accuracy, abs=accuracy)
 
 
-def test_2_4_solver():
+def test_2_4_solver(backend):
     """Testing different numerical solvers of pyrates.
 
     See Also
@@ -355,7 +355,7 @@ def test_2_4_solver():
     sim_steps = int(np.round(sim_time / dt, decimals=0))
     inp = np.zeros((sim_steps, 1)) + 0.5
 
-    for b in backends:
+    for b in [backend]:
 
         # standard euler solver (trusted)
         r = integrate("model_templates.test_resources.test_backend.net13", simulation_time=sim_time,
@@ -379,7 +379,7 @@ def test_2_4_solver():
         assert np.mean(r.loc[:, 'a2'].values - r3.loc[:, 'a2'].values) == pytest.approx(0., rel=accuracy, abs=accuracy)
 
 
-def test_2_5_inputs_outputs():
+def test_2_5_inputs_outputs(backend):
     """Tests the input-output interface of the run method in circuits of different hierarchical depth.
 
     See Also
@@ -394,7 +394,7 @@ def test_2_5_inputs_outputs():
     sim_steps = int(np.round(sim_time / dt, decimals=0))
     inp = np.zeros((sim_steps, 1)) + 0.5
 
-    for b in backends:
+    for b in [backend]:
 
         # define inputs and outputs for each population separately
         ##########################################################
@@ -480,7 +480,7 @@ def test_2_5b_input_shapes():
     assert r_scipy['a'].values.shape == r_1d['a'].values.shape
 
 
-def test_2_6_vectorization():
+def test_2_6_vectorization(backend):
     """Tests whether a Jansen-Rit-based circuit with and without vectorization of mathematical operations yields
     identical results.
 
@@ -494,7 +494,7 @@ def test_2_6_vectorization():
     T = 1.0
     inp = np.zeros((int(np.round(T/dt)),)) + 220.0
 
-    for i, b in enumerate(backends):
+    for i, b in enumerate([backend]):
 
         # simulation without vectorization of the network equations
         r1 = integrate("model_templates.neural_mass_models.jansenrit.JRC_2delaycoupled", vectorize=False,
@@ -511,7 +511,7 @@ def test_2_6_vectorization():
         assert np.mean(r1.values - r2.values) == pytest.approx(0.0, rel=accuracy, abs=accuracy)
 
 
-def test_2_7_backends():
+def test_2_7_backends(backend):
     """Tests the whether different backends produce comparable results when simulating the dynamics of different models.
 
     See Also
@@ -527,15 +527,12 @@ def test_2_7_backends():
                    inputs=None, outputs={"r": "p/qif_sfa_op/r"}, solver='euler', step_size=dt, clear=True,
                    file_name='m0', vectorize=False)
 
-    for i, b in enumerate(backends):
-
-        if b != 'default':
-
-            r = integrate("model_templates.neural_mass_models.qif.qif_sfa",
-                          inputs=None, outputs={"r": "p/qif_sfa_op/r"}, backend=b, solver='euler', step_size=dt,
-                          clear=True, simulation_time=T, sampling_step_size=dts, file_name=f'm{i+1}', vectorize=False)
-
-            assert np.mean(r0.values - r.values) == pytest.approx(0.0, rel=accuracy, abs=accuracy)
+    if backend != 'default':
+        r = integrate("model_templates.neural_mass_models.qif.qif_sfa",
+                      inputs=None, outputs={"r": "p/qif_sfa_op/r"}, backend=backend, solver='euler', step_size=dt,
+                      clear=True, simulation_time=T, sampling_step_size=dts,
+                      file_name=f'm_{backend}', vectorize=False)
+        assert np.mean(r0.values - r.values) == pytest.approx(0.0, rel=accuracy, abs=accuracy)
 
 
 def test_2_8_dde():

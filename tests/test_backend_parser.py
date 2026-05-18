@@ -28,8 +28,8 @@ def setup_module():
     print("==============================")
 
 
-# list parsers to be tested and their backends
-backends = ['default']
+# list of parser classes to be tested.  The set of backends is supplied at
+# runtime via the ``--backends`` pytest CLI flag (see tests/conftest.py).
 parsers = [ExpressionParser]
 
 # test accuracy
@@ -40,7 +40,7 @@ accuracy = 1e-4
 #########
 
 
-def test_1_1_expression_parser_init():
+def test_1_1_expression_parser_init(backend):
     """Testing initializations of different expression parsers:
 
     See Also
@@ -52,13 +52,13 @@ def test_1_1_expression_parser_init():
     # test minimal minimal call example
     ###################################
 
-    for Parser, backend in zip(parsers, backends):
+    for Parser in parsers:
         cg = ComputeGraph(backend=backend)
         parser = Parser("a + b", {'a': np.ones((3, 3)), 'b': 5.}, cg=cg)
         assert isinstance(parser, Parser)
 
 
-def test_1_2_expression_parser_parsing_exceptions():
+def test_1_2_expression_parser_parsing_exceptions(backend):
     """Testing error handling of different erroneous parser instantiations:
 
     See Also
@@ -70,7 +70,7 @@ def test_1_2_expression_parser_parsing_exceptions():
     # test expected exceptions
     ##########################
 
-    for Parser, backend in zip(parsers, backends):
+    for Parser in parsers:
 
         # undefined variables
         with pytest.raises(KeyError):
@@ -102,7 +102,7 @@ def test_1_2_expression_parser_parsing_exceptions():
             cg.eval_graph()
 
 
-def test_1_3_expression_parser_math_ops():
+def test_1_3_expression_parser_math_ops(backend):
     """Testing handling of mathematical operations by expression parsers:
 
     See Also
@@ -128,7 +128,7 @@ def test_1_3_expression_parser_math_ops():
     ##############################################
 
     # define backends
-    for backend, parser in zip(backends, parsers):
+    for parser in parsers:
 
         # evaluate expressions
         for expr, target in math_expressions:
@@ -139,7 +139,7 @@ def test_1_3_expression_parser_math_ops():
             assert result == pytest.approx(target, rel=accuracy, abs=accuracy)
 
 
-def test_1_4_expression_parser_funcs():
+def test_1_4_expression_parser_funcs(backend):
     """Testing handling of function calls by expression parsers:
 
     See Also
@@ -173,7 +173,7 @@ def test_1_4_expression_parser_funcs():
     # test function calling on different backends
     #############################################
 
-    for backend, parser in zip(backends, parsers):
+    for parser in parsers:
 
         # start testing: valid cases
         for expr, target in expressions:
@@ -190,7 +190,7 @@ def test_1_4_expression_parser_funcs():
                 cg.eval_node(cg.var_updates['non-DEs']['x'])
 
 
-def test_1_5_expression_parser_indexing():
+def test_1_5_expression_parser_indexing(backend):
     """Testing handling of indexing operations by expression parsers:
 
     See Also
@@ -235,7 +235,7 @@ def test_1_5_expression_parser_indexing():
     # test indexing ability of numpy-based parser
     #############################################
 
-    for backend, parser in zip(backends, parsers):
+    for parser in parsers:
 
         # test expression parsers on expression results
         for expr, target in indexed_expressions:
@@ -252,7 +252,7 @@ def test_1_5_expression_parser_indexing():
                 cg.eval_node(cg.var_updates['non-DEs']['x'])
 
 
-def test_1_7_equation_parsing():
+def test_1_7_equation_parsing(backend):
     """Tests equation parsing functionalities.
 
     See Also
@@ -277,7 +277,7 @@ def test_1_7_equation_parsing():
     # test equation solving of parser
     #################################
 
-    for backend, parser in zip(backends, parsers):
+    for parser in parsers:
 
         # test equation parser on different test equations
         for eq, target, tvar in zip(equations, results, result_vars):

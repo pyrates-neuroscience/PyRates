@@ -61,12 +61,12 @@ def _vdp_circuit():
 # Test 1: ODE Jacobian — dimensions
 # ---------------------------------------------------------------------------
 
-def test_jacobian_ode_dimensions():
+def test_jacobian_ode_dimensions(backend):
     """Generated ODE Jacobian has shape (n, n)."""
     vdp = _vdp_circuit()
     jac_func, jac_args, _, sv_indices = vdp.get_jacobian_func(
         func_name='vdp_jac', step_size=1e-3, solver='euler', in_place=False, clear=True,
-        vectorize=False
+        vectorize=False, backend=backend,
     )
     clear_ir_caches()
 
@@ -80,7 +80,7 @@ def test_jacobian_ode_dimensions():
 # Test 2: ODE Jacobian vs finite difference
 # ---------------------------------------------------------------------------
 
-def test_jacobian_ode_vs_finite_difference():
+def test_jacobian_ode_vs_finite_difference(backend):
     """Symbolic Jacobian matches finite-difference approximation for Van der Pol.
 
     The run_func writes into a float32 `dy` buffer, so we use a perturbation
@@ -91,14 +91,14 @@ def test_jacobian_ode_vs_finite_difference():
     vdp_run = _vdp_circuit()
     run_func, run_args, _, _ = vdp_run.get_run_func(
         func_name='vdp_run', step_size=1e-3, solver='euler', in_place=False, clear=True,
-        vectorize=False
+        vectorize=False, backend=backend,
     )
     clear_ir_caches()
 
     vdp_jac = _vdp_circuit()
     jac_func, jac_args, _, _ = vdp_jac.get_jacobian_func(
         func_name='vdp_jac_fd', step_size=1e-3, solver='euler', in_place=False, clear=True,
-        vectorize=False
+        vectorize=False, backend=backend,
     )
     clear_ir_caches()
 
@@ -118,7 +118,7 @@ def test_jacobian_ode_vs_finite_difference():
 # Test 3: ODE Jacobian exact analytical values
 # ---------------------------------------------------------------------------
 
-def test_jacobian_ode_analytical_values():
+def test_jacobian_ode_analytical_values(backend):
     """Verify exact entries of Van der Pol Jacobian at y = [0, 1] with mu = 1.
 
     f = [z,  mu*(1-x^2)*z - x + inp]
@@ -128,7 +128,7 @@ def test_jacobian_ode_analytical_values():
     vdp = _vdp_circuit()
     jac_func, jac_args, _, sv_indices = vdp.get_jacobian_func(
         func_name='vdp_jac_val', step_size=1e-3, solver='euler', in_place=False, clear=True,
-        vectorize=False
+        vectorize=False, backend=backend,
     )
     clear_ir_caches()
 
@@ -159,21 +159,21 @@ def test_jacobian_ode_analytical_values():
 # Test 4: Sparse ODE Jacobian
 # ---------------------------------------------------------------------------
 
-def test_jacobian_sparse():
+def test_jacobian_sparse(backend):
     """sparse=True returns scipy.sparse.csr_matrix with identical numerical content."""
     from scipy.sparse import issparse
 
     vdp_d = _vdp_circuit()
     jac_dense, jargs_d, _, _ = vdp_d.get_jacobian_func(
         func_name='vdp_jac_dense', step_size=1e-3, solver='euler', sparse=False,
-        in_place=False, clear=True, vectorize=False
+        in_place=False, clear=True, vectorize=False, backend=backend,
     )
     clear_ir_caches()
 
     vdp_s = _vdp_circuit()
     jac_sparse, jargs_s, _, _ = vdp_s.get_jacobian_func(
         func_name='vdp_jac_sparse', step_size=1e-3, solver='euler', sparse=True,
-        in_place=False, clear=True, vectorize=False
+        in_place=False, clear=True, vectorize=False, backend=backend,
     )
     clear_ir_caches()
 
@@ -192,7 +192,7 @@ def test_jacobian_sparse():
 # Test 5: DDE Jacobian — structure and finite-difference for J0
 # ---------------------------------------------------------------------------
 
-def test_jacobian_dde_structure():
+def test_jacobian_dde_structure(backend):
     """DDE Jacobian returns (J0, [J_hist]) with correct shapes."""
     vdp = _vdp_circuit()
     k, tau = 0.5, 0.1
@@ -203,7 +203,7 @@ def test_jacobian_dde_structure():
 
     jac_func, jac_args, _, sv_indices = vdp.get_jacobian_func(
         func_name='vdp_dde_jac', step_size=1e-3, solver='scipy', in_place=False, clear=True,
-        vectorize=False
+        vectorize=False, backend=backend,
     )
     clear_ir_caches()
 
@@ -224,7 +224,7 @@ def test_jacobian_dde_structure():
     assert J_hist.shape == (n, n), f"J_hist shape {J_hist.shape} != ({n}, {n})"
 
 
-def test_jacobian_dde_j0_vs_finite_difference():
+def test_jacobian_dde_j0_vs_finite_difference(backend):
     """J0 from DDE Jacobian matches finite-difference Jacobian of the instantaneous part."""
     k, tau = 0.5, 0.1
 
@@ -235,7 +235,7 @@ def test_jacobian_dde_j0_vs_finite_difference():
     )
     run_func, run_args, _, _ = vdp_run.get_run_func(
         func_name='vdp_dde_run', step_size=1e-3, solver='scipy', in_place=False, clear=True,
-        vectorize=False
+        vectorize=False, backend=backend,
     )
     clear_ir_caches()
 
@@ -246,7 +246,7 @@ def test_jacobian_dde_j0_vs_finite_difference():
     )
     jac_func, jac_args, _, _ = vdp_jac.get_jacobian_func(
         func_name='vdp_dde_jac2', step_size=1e-3, solver='scipy', in_place=False, clear=True,
-        vectorize=False
+        vectorize=False, backend=backend,
     )
     clear_ir_caches()
 

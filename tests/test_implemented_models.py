@@ -17,8 +17,9 @@ __status__ = "Development"
 # Utility #
 ###########
 
-# define backends for which to run the tests
-backends = ['default', 'default']
+# Each test runs once per selected backend (via the ``--backends`` CLI flag,
+# see tests/conftest.py) and additionally cycles through the per-call
+# vectorisation / kwargs / complex-compat options listed below.
 vectorization = [True, False]
 backend_kwargs = [{}, {}]
 complex_compat = [True, False]
@@ -61,7 +62,7 @@ def nmrse(x: np.ndarray,
 #########
 
 
-def test_3_1_jansenrit():
+def test_3_1_jansenrit(backend):
     """Testing accuracy of Jansen-Rit model implementations:
     """
 
@@ -69,7 +70,8 @@ def test_3_1_jansenrit():
     dt = 1e-4
     dts = 1e-2
 
-    for b, v, kwargs in zip(backends, vectorization, backend_kwargs):
+    for v, kwargs in zip(vectorization, backend_kwargs):
+        b = backend
 
         # compare single operator JRC implementation with multi-node JRC implementation
         ###############################################################################
@@ -87,7 +89,7 @@ def test_3_1_jansenrit():
         assert np.mean(r1.values.flatten() - r2.values.flatten()) == pytest.approx(0., rel=accuracy, abs=accuracy)
 
 
-def test_3_2_qif_theta():
+def test_3_2_qif_theta(backend):
     """Testing accuracy of mean-field representation of QIF population and theta neuron model.
     """
 
@@ -100,7 +102,8 @@ def test_3_2_qif_theta():
     inp = np.zeros((int(np.round(T/dt)),))
     inp[in_start:in_start+in_dur] = 5.0
 
-    for b, kwargs, c in zip(backends, backend_kwargs, complex_compat):
+    for kwargs, c in zip(backend_kwargs, complex_compat):
+        b = backend
 
         # compare qif population dynamics with and without plasticity
         #############################################################
@@ -172,7 +175,7 @@ def test_3_2_qif_theta():
         assert np.mean(r5['r'].values - r6["r"].values) == pytest.approx(0., rel=1e-2, abs=1e-2)
 
 
-def test_3_3_wilson_cowan():
+def test_3_3_wilson_cowan(backend):
     """Test accuracy of wilson cowan neural mass model implementation.
     """
 
@@ -188,7 +191,8 @@ def test_3_3_wilson_cowan():
     inp = np.zeros((int(np.round(T / dt)),))
     inp[in_start:in_start + in_dur] = 1.0
 
-    for b, v, kwargs in zip(backends, vectorization, backend_kwargs):
+    for v, kwargs in zip(vectorization, backend_kwargs):
+        b = backend
 
         # standard wilson-cowan model
         r1 = integrate("model_templates.neural_mass_models.wilsoncowan.WC", simulation_time=T,
@@ -207,7 +211,7 @@ def test_3_3_wilson_cowan():
             assert r2.iloc[idx, 0] > r1.iloc[idx, 0]
 
 
-def test_3_4_kuramoto():
+def test_3_4_kuramoto(backend):
     """Tests accurate behavior of kuramoto oscillator model.
     """
 
@@ -220,7 +224,8 @@ def test_3_4_kuramoto():
     inp = np.zeros((int(np.round(T / dt)),))
     inp[in_start:in_start + in_dur] = 1.0
 
-    for b, v, kwargs, c in zip(backends, vectorization, backend_kwargs, complex_compat):
+    for v, kwargs, c in zip(vectorization, backend_kwargs, complex_compat):
+        b = backend
 
         # assess correct response of single base oscillator
         ###################################################
