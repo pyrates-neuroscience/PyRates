@@ -286,6 +286,13 @@ class BaseBackend(CodeGen):
         # `_no_funcs` lives on the class (see top of class body).  Do not
         # shadow it here — subclasses extend the class attribute.
 
+        # Tracks which ComputeVars have already had `_start_idx` baked into
+        # their `.value` by `_process_idx`.  Prevents double-application when
+        # the same ComputeVar is processed more than once (review §4.3).
+        # Keyed by ``id(ComputeVar)`` — safe because ComputeVars live as long
+        # as the backend itself (owned by the ComputeGraph that wraps it).
+        self._offsetted_var_ids: set = set()
+
         # file-creation-related attributes
         fdir, *fname = self.get_fname(kwargs.pop('file_name', 'pyrates_run'))
         cwdir = os.getcwd()
@@ -584,7 +591,15 @@ class BaseBackend(CodeGen):
 
     def _process_idx(self, idx: Union[Tuple[int, int], int, str, ComputeVar], **kwargs) -> str:
         if type(idx) is ComputeVar:
-            idx.set_value(idx.value + self._start_idx)
+            # Idempotent offset: bake `self._start_idx` into `idx.value` only
+            # the first time we see this particular ComputeVar.  The previous
+            # implementation re-added the offset on every call, which forced
+            # Julia (and indirectly Matlab) to temporarily toggle
+            # `self._start_idx = 0` around calls that could touch an already
+            # processed var — fragile and easy to break (review §4.3).
+            if self._start_idx and id(idx) not in self._offsetted_var_ids:
+                idx.set_value(idx.value + self._start_idx)
+                self._offsetted_var_ids.add(id(idx))
             return idx.name
         if type(idx) is tuple:
             return f"{idx[0] + self._start_idx}:{idx[1]}"

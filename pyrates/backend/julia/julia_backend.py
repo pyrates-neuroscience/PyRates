@@ -269,17 +269,17 @@ class JuliaBackend(BaseBackend):
     def _process_idx(self, idx: Union[Tuple[int, int], int, str, ComputeVar], **kwargs) -> str:
 
         if type(idx) is str and idx != ':' and ':' in idx:
+            # Parse "a:b" range bounds with start_idx=0 (raw ints), then format
+            # the tuple at start_idx=1 (Julia's 1-based, inclusive range).
             idx0, idx1 = idx.split(':')
             self._start_idx = 0
             idx0 = int(self._process_idx(idx0))
             idx1 = int(self._process_idx(idx1))
             self._start_idx = 1
             return self._process_idx((idx0, idx1))
-        if type(idx) is ComputeVar and idx.name == "t" and idx.value >= self._start_idx:
-            self._start_idx = 0
-            idx_processed = super()._process_idx(idx=idx, **kwargs)
-            self._start_idx = 1
-            return idx_processed
+        # No longer need the `idx.name == "t" and idx.value >= self._start_idx`
+        # double-offset guard: BaseBackend._process_idx is now idempotent for
+        # ComputeVar inputs (review §4.3).
         return super()._process_idx(idx=idx, **kwargs)
 
     @staticmethod
