@@ -88,13 +88,7 @@ class TorchBackend(BaseBackend):
         # solve ivp via scipy methods (solvers of various orders with adaptive step-size)
         from scipy.integrate import solve_ivp
         kwargs['t_eval'] = times
-        if y.dtype.is_complex:
-            dtype = y.dtype
-        else:
-            try:
-                dtype = getattr(torch, self._float_precision)
-            except AttributeError:
-                dtype = torch.get_default_dtype()
+        dtype = self._torch_float_dtype(y)
 
         # wrapper to rhs function: use torch.as_tensor for a zero-copy view of
         # the numpy arrays scipy hands us (a copy only occurs when the dtypes
@@ -107,19 +101,96 @@ class TorchBackend(BaseBackend):
         results = solve_ivp(fun=f, t_span=(t0, T), y0=y, first_step=dt, **kwargs)
         return results['y'].T
 
-    @staticmethod
-    def _solve_euler(func: Callable, args: tuple, T: float, dt: float, dts: float, y: torch.Tensor, idx: int
-                     ) -> torch.Tensor:
+    def _solve_scipy_dde(self, func: Callable, args: tuple, T: float, dt: float, y: torch.Tensor,
+                         t0: torch.Tensor, times: np.ndarray, **kwargs):
+        """DDE integration via scipy.integrate.ode.
 
+        Closes the silent-fallback flagged in review §1.2: when a model with
+        ``delay`` edges is run on TorchBackend with ``solver='scipy'``, the
+        BaseBackend implementation called the compiled torch function with
+        raw numpy inputs (it happened to work for purely-arithmetic RHS but
+        was undefined for tensor ops).  This override wraps the RHS with the
+        same :code:`torch.as_tensor` boundary conversion used by
+        :meth:`_solve_scipy`.
+
+        Note: autograd does not flow through the scipy step; the returned
+        trajectory is plain numpy.  A tensor-native DDE solver would be
+        needed for differentiable simulation.
+        """
+        from scipy.integrate import ode
+        from ..base.base_backend import DDEHistory
+
+        hist = args[0]
+        if not isinstance(hist, DDEHistory):
+            raise TypeError("_solve_scipy_dde expects args[0] to be a DDEHistory instance.")
+        kwargs.pop('method', None)
+        dtype = self._torch_float_dtype(y)
+
+        # rhs wrapper that crosses the numpy ↔ torch boundary cleanly
+        def rhs(t, y_):
+            out = func(torch.as_tensor(t, dtype=dtype), torch.as_tensor(y_, dtype=dtype), *args)
+            return out.numpy() if hasattr(out, 'numpy') else np.asarray(out)
+
+        y_np = y.numpy() if hasattr(y, 'numpy') else np.asarray(y)
+
+        solver = ode(rhs).set_integrator('dopri5', first_step=dt, nsteps=50000)
+        solver.set_initial_value(y_np, float(t0))
+
+        def solout(t, y_):
+            hist.update(t, y_.copy())
+            return 0
+        solver.set_solout(solout)
+
+        # np.zeros (not np.empty): the loop may break early on integrator
+        # failure, leaving unwritten rows that must remain defined.
+        state_rec = np.zeros((len(times), y_np.shape[0]), dtype=y_np.dtype)
+        for i, t_out in enumerate(times):
+            if not solver.successful():
+                break
+            solver.integrate(t_out)
+            state_rec[i, :] = solver.y
+
+        return state_rec
+
+    def _torch_float_dtype(self, y: torch.Tensor) -> torch.dtype:
+        """Resolve the torch dtype used inside scipy-bridged RHS wrappers."""
+        if y.dtype.is_complex:
+            return y.dtype
+        try:
+            return getattr(torch, self._float_precision)
+        except AttributeError:
+            return torch.get_default_dtype()
+
+    @staticmethod
+    def _solve_euler(func: Callable, args: tuple, T: float, dt: float, dts: float, y: torch.Tensor, t0: int
+                     ) -> np.ndarray:
+        """Forward-Euler integration with tensor-valued state.
+
+        Mirrors :code:`BaseBackend._solve_euler`'s control flow: the write
+        cursor (``idx``) and the time index (``step``) are separate variables.
+        The previous implementation conflated them, which broke any nonzero
+        ``t0`` (review §4.1) — the first stored sample landed at
+        ``state_rec[t0, :]`` instead of ``state_rec[0, :]``.
+
+        DDE history updates from :code:`BaseBackend._solve_euler` are not
+        replicated here because :class:`DDEHistory.update` calls
+        :code:`y.copy()`, which is not a method on torch tensors.  A
+        tensor-native DDE+Euler path would need its own ring buffer; until
+        then DDE simulation on the torch backend should use ``solver='scipy'``
+        (see :meth:`_solve_scipy_dde` below).
+        """
         # preparations for fixed step-size integration
+        idx = 0
         steps = int(np.round(T / dt))
         store_steps = int(np.round(T / dts))
         store_step = int(np.round(dts / dt))
-        state_rec = torch.zeros((store_steps, y.shape[0]) if y.shape else (store_steps, 1), dtype=y.dtype)
+        # state_rec is fully overwritten row-by-row; torch.empty skips the
+        # zero-fill (safe now that the idx-shadow bug is fixed).
+        state_rec = torch.empty((store_steps, y.shape[0]) if y.shape else (store_steps, 1), dtype=y.dtype)
 
-        # solve ivp for forward Euler method
-        for step in torch.arange(int(idx), steps):
-            if step % store_step == 0:
+        # solve ivp via forward Euler
+        for step in range(int(t0), steps + int(t0)):
+            if step % store_step == int(t0):
                 state_rec[idx, :] = y
                 idx += 1
             rhs = func(step, y, *args)
