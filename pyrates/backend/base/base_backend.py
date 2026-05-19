@@ -366,11 +366,25 @@ class BaseBackend(CodeGen):
 
     def add_var_update(self, lhs: ComputeVar, rhs: str, lhs_idx: Optional[str] = None, rhs_shape: Optional[tuple] = ()):
 
-        lhs = lhs.name
+        lhs_str = lhs.name
         if lhs_idx:
             idx, _ = self.create_index_str(lhs_idx, apply=True)
-            lhs = f"{lhs}{idx}"
-        self.add_code_line(f"{lhs} = {rhs}")
+            lhs_str = f"{lhs_str}{idx}"
+        indexed = bool(lhs_idx) or bool(rhs_shape)
+        self.add_code_line(self._format_assignment(lhs_str, rhs, indexed))
+
+    def _format_assignment(self, lhs: str, rhs: str, indexed: bool) -> str:
+        """Render a single ``lhs = rhs`` assignment for the target language.
+
+        Subclasses override this hook to splice in language-specific syntax
+        (Julia's broadcast prefix ``@.``, Matlab's ``vectorize`` + trailing
+        ``;``, …) instead of the old pop-and-rewrite pattern that
+        ``super().add_var_update`` then ``self.code.pop() / line.split(' = ')``
+        used to implement.  ``indexed`` is True iff the assignment writes to
+        an index expression (``lhs[idx] = rhs``) or the rhs has non-scalar
+        shape — i.e. the cases where broadcasting matters.
+        """
+        return f"{lhs} = {rhs}"
 
     def add_var_hist(self, lhs: str, delay: Union[ComputeVar, float], state_idx: str,
                      dt: Optional[float] = None, dt_adapt: bool = True, **kwargs):

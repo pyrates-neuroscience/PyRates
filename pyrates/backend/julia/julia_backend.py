@@ -31,6 +31,7 @@
 
 # pyrates internal _imports
 from ..base import BaseBackend
+from .._one_based import OneBasedCodegenMixin
 from ..computegraph import ComputeVar
 from .julia_funcs import julia_funcs
 
@@ -47,7 +48,7 @@ __status__ = "development"
 #################
 
 
-class JuliaBackend(BaseBackend):
+class JuliaBackend(OneBasedCodegenMixin, BaseBackend):
 
     # Adds two Julia-native paths on top of the inherited euler/heun/scipy:
     #   'julia_ode' → DifferentialEquations.jl ODEProblem
@@ -90,27 +91,14 @@ class JuliaBackend(BaseBackend):
         self._is_dde = False
         self._lags = []
 
-    def get_var(self, v: ComputeVar):
-        v = super().get_var(v)
-        dtype = v.dtype.name
-        s = sum(v.shape)
-        if s > 0:
-            return v
-        if 'float' in dtype:
-            return float(v)
-        if 'complex' in dtype:
-            return complex(np.real(v), np.imag(v))
-        return int(v)
-
-    def add_var_update(self, lhs: ComputeVar, rhs: str, lhs_idx: Optional[str] = None, rhs_shape: Optional[tuple] = ()):
-
-        super().add_var_update(lhs=lhs, rhs=rhs, lhs_idx=lhs_idx, rhs_shape=rhs_shape)
-        if rhs_shape or lhs_idx:
-            line = self.code.pop()
-            lhs, rhs = line.split(' = ')
-            if not any([rhs[:len(expr)] == expr for expr in self._no_vectorization]):
-                rhs = f"@. {rhs}"
-            self.add_code_line(f"{lhs} = {rhs}")
+    def _format_assignment(self, lhs: str, rhs: str, indexed: bool) -> str:
+        """Add Julia's broadcast prefix ``@.`` for indexed / shaped assignments,
+        except for a few RHS expressions where broadcasting would be wrong
+        (matrix multiplication, ``interp``, ``hist``).
+        """
+        if indexed and not any(rhs.startswith(expr) for expr in self._no_vectorization):
+            rhs = f"@. {rhs}"
+        return f"{lhs} = {rhs}"
 
     def add_var_hist(self, lhs: str, delay: Union[ComputeVar, float], state_idx: Union[int, tuple], **kwargs):
         self._is_dde = True
@@ -134,17 +122,6 @@ class JuliaBackend(BaseBackend):
         """
         self._jl.eval(hist)
         return self._jl.hist
-
-    def create_index_str(self, idx: Union[str, int, tuple], separator: str = ',', apply: bool = True,
-                         **kwargs) -> Tuple[str, dict]:
-
-        if not apply:
-            self._start_idx = 0
-            idx, idx_dict = super().create_index_str(idx, separator, apply, **kwargs)
-            self._start_idx = 1
-            return idx, idx_dict
-        else:
-            return super().create_index_str(idx, separator, apply, **kwargs)
 
     def generate_func_tail(self, rhs_var: str = 'dy'):
 
@@ -266,28 +243,5 @@ class JuliaBackend(BaseBackend):
     def _add_func_call(self, name: str, args: Iterable, return_var: str = 'dy'):
         self.add_code_line(f"function {name}({','.join(args)})")
 
-    def _process_idx(self, idx: Union[Tuple[int, int], int, str, ComputeVar], **kwargs) -> str:
-
-        if type(idx) is str and idx != ':' and ':' in idx:
-            # Parse "a:b" range bounds with start_idx=0 (raw ints), then format
-            # the tuple at start_idx=1 (Julia's 1-based, inclusive range).
-            idx0, idx1 = idx.split(':')
-            self._start_idx = 0
-            idx0 = int(self._process_idx(idx0))
-            idx1 = int(self._process_idx(idx1))
-            self._start_idx = 1
-            return self._process_idx((idx0, idx1))
-        # No longer need the `idx.name == "t" and idx.value >= self._start_idx`
-        # double-offset guard: BaseBackend._process_idx is now idempotent for
-        # ComputeVar inputs (review §4.3).
-        return super()._process_idx(idx=idx, **kwargs)
-
-    @staticmethod
-    def expr_to_str(expr: str, args: tuple):
-
-        # replace power operator
-        func = '**'
-        while func in expr:
-            expr = expr.replace(func, '^')
-
-        return expr
+    # `_process_idx`, `create_index_str`, `expr_to_str`, and `get_var` are
+    # inherited from OneBasedCodegenMixin (also shared with MatlabBackend).

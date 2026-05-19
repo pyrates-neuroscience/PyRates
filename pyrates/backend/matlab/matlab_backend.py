@@ -30,9 +30,12 @@
 """
 
 # pyrates internal _imports
-from ..julia import JuliaBackend
-from ..julia.julia_funcs import julia_funcs
+from ..base import BaseBackend
+from ..base.base_backend import DDEHistory
+from .._one_based import OneBasedCodegenMixin
+from ..julia.julia_funcs import julia_funcs   # shared 1-indexed function vocabulary
 from ..computegraph import ComputeVar
+from .. import PyRatesException
 from .matlab_funcs import matlab_funcs
 
 # external _imports
@@ -48,25 +51,19 @@ __status__ = "development"
 #################
 
 
-class MatlabBackend(JuliaBackend):
+class MatlabBackend(OneBasedCodegenMixin, BaseBackend):
 
-    # Matlab inherits from JuliaBackend for the code-generation helpers but
-    # does not have a Julia runtime — `_solve` delegates straight to the base
-    # path.  Override SUPPORTED_SOLVERS to drop the julia_* options so users
-    # get a clear error if they ask for one.
+    # MatlabBackend inherits directly from BaseBackend (with the
+    # OneBasedCodegenMixin in front for the four helpers shared with
+    # JuliaBackend).  The previous implementation inherited from JuliaBackend
+    # and then used ``super(JuliaBackend, self).XXX`` to skip the Julia layer
+    # — a brittle MRO trick flagged in BACKEND_CONSISTENCY_REVIEW.md §4.7.
+    #
+    # Matlab has no Julia runtime, so ``_solve`` goes straight to the base
+    # Python/scipy path (via the ``func_mat`` wrapper below).  Drop the
+    # ``julia_*`` solver names from SUPPORTED_SOLVERS so users see a clear
+    # error rather than a cryptic AttributeError on a missing ``self._jl``.
     SUPPORTED_SOLVERS = ('euler', 'heun', 'scipy')
-
-    def _validate_solver(self, solver: str) -> None:
-        # Skip JuliaBackend's "accept any julia_*" override — Matlab has no
-        # Julia runtime, so those names would only fail later with a cryptic
-        # AttributeError on ``self._jl``.
-        # Use BaseBackend's strict membership check directly.
-        if solver not in self.SUPPORTED_SOLVERS:
-            from .. import PyRatesException
-            raise PyRatesException(
-                f"Backend `{type(self).__name__}` does not support solver "
-                f"`{solver}`. Supported solvers: {list(self.SUPPORTED_SOLVERS)}."
-            )
 
     def __init__(self,
                  ops: Optional[Dict[str, str]] = None,
@@ -76,15 +73,18 @@ class MatlabBackend(JuliaBackend):
         """Instantiates Matlab backend.
         """
 
-        # add user-provided operations to function dict
-        matlab_ops = matlab_funcs.copy()
+        # Build the function-vocabulary dict.  Matlab and Julia share most
+        # primitive names (sin, cos, exp, ...), so we start from
+        # ``julia_funcs`` and layer matlab-specific overrides on top.  Don't
+        # mutate the module-level ``julia_funcs`` here — the previous
+        # ``julia_funcs.update(matlab_ops)`` had a global side effect.
+        combined = julia_funcs.copy()
+        combined.update(matlab_funcs)
         if ops:
-            matlab_ops.update(ops)
-        julia_funcs.update(matlab_ops)
+            combined.update(ops)
 
-        # call parent method
-        super(JuliaBackend, self).__init__(ops=julia_funcs, imports=imports, file_ending='.m', start_idx=1,
-                                           idx_left='(', idx_right=')', add_hist_arg=True, **kwargs)
+        super().__init__(ops=combined, imports=imports, file_ending='.m', start_idx=1,
+                         idx_left='(', idx_right=')', add_hist_arg=True, **kwargs)
 
         # define matlab-specific imports
         self._imports.pop(0)
@@ -100,14 +100,13 @@ class MatlabBackend(JuliaBackend):
         self._param_names = []
         self._fcall = None
 
-    def add_var_update(self, lhs: ComputeVar, rhs: str, lhs_idx: Optional[str] = None, rhs_shape: Optional[tuple] = ()):
-
-        super(JuliaBackend, self).add_var_update(lhs=lhs, rhs=rhs, lhs_idx=lhs_idx, rhs_shape=rhs_shape)
-        line = self.code.pop()
-        lhs, rhs = line.split(' = ')
-        if rhs_shape or lhs_idx:
+    def _format_assignment(self, lhs: str, rhs: str, indexed: bool) -> str:
+        """Vectorise the RHS for indexed / shaped assignments and add the
+        trailing ``;`` that every Matlab statement requires.
+        """
+        if indexed:
             rhs = self._matlab.vectorize(rhs)
-        self.add_code_line(f"{lhs} = {rhs};")
+        return f"{lhs} = {rhs};"
 
     def add_var_hist(self, lhs: str, delay: Union[ComputeVar, float], state_idx: Union[int, tuple], **kwargs):
         self._is_dde = True
