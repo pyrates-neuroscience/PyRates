@@ -30,8 +30,6 @@
 """
 
 # pyrates internal _imports
-import sys
-
 from ..julia import JuliaBackend
 from ..julia.julia_funcs import julia_funcs
 from ..computegraph import ComputeVar

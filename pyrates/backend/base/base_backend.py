@@ -366,7 +366,6 @@ class BaseBackend(CodeGen):
             file = f'{self.fdir}/{self._fname}' if self.fdir else self._fname
             with open(f'{file}{self._fend}', 'w') as f:
                 f.writelines(func_str)
-                f.close()
 
             # Compile from the in-memory source string and exec into a fresh
             # module, bypassing the .pyc bytecode cache entirely.  A stale
