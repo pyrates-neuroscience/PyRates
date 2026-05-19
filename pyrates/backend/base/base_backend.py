@@ -68,24 +68,89 @@ class DDEHistory:
 
     Stores (time, state) pairs and returns linearly-interpolated past state.
     Pre-history (t <= t0) always returns the initial condition.
+
+    Implementation
+    --------------
+    The previous list-of-ndarrays implementation (PyRates <= 1.1.x)
+    allocated a fresh ``ndarray`` on every :meth:`update` call via
+    ``y.copy()`` — for a 100k-step simulation that was 100k small heap
+    allocations.  We replace the ``_y`` storage with a single
+    pre-allocated 2-D numpy buffer that holds one row per step; row
+    assignment ``self._y[i] = y`` still constitutes a copy, so the
+    "update takes ownership of its y argument" contract is unchanged.
+
+    ``_t`` stays as a Python list because :code:`bisect.bisect_right` on
+    a list is noticeably faster than :code:`np.searchsorted` on the
+    equivalent numpy view when called once per RHS evaluation in the
+    integration loop (per-call CPython overhead is the dominant cost
+    here, not the underlying binary search).
+
+    Parameters
+    ----------
+    y0
+        Initial state vector.  Defines the ``shape`` and ``dtype`` of all
+        subsequent history rows.
+    t0
+        Initial time.  History returns ``y0`` for any query ``t <= t0``.
+    max_steps
+        Optional hard cap on the number of stored steps.  If given, the
+        buffer is allocated once at this size and :meth:`update` raises
+        ``IndexError`` past the cap.  If ``None`` (default) the buffer
+        grows geometrically.
     """
 
-    def __init__(self, y0: np.ndarray, t0: float = 0.0):
-        self._t = [float(t0)]
-        self._y = [y0.copy()]
+    _INITIAL_CAPACITY = 1024
+    _GROW_FACTOR = 2
 
-    def update(self, t: float, y: np.ndarray):
+    def __init__(self, y0: np.ndarray, t0: float = 0.0,
+                 max_steps: Optional[int] = None):
+        y0 = np.asarray(y0)
+        if max_steps is None:
+            capacity = self._INITIAL_CAPACITY
+            self._growable = True
+        else:
+            capacity = max(int(max_steps), 1)
+            self._growable = False
+
+        self._t = [float(t0)]                                    # bisect-friendly
+        self._y = np.empty((capacity,) + y0.shape, dtype=y0.dtype)  # pre-allocated rows
+        self._y[0] = y0
+        self._n = 1
+
+    def update(self, t: float, y: np.ndarray) -> None:
+        """Record state ``y`` at time ``t``.
+
+        ``y`` is copied into the pre-allocated row buffer; the caller may
+        free or overwrite its own ``y`` after this call returns.
+        """
+        if self._n >= len(self._y):
+            if self._growable:
+                self._grow()
+            else:
+                raise IndexError(
+                    f"DDEHistory: exceeded max_steps={len(self._y)}; "
+                    "increase the bound or omit max_steps to allow growth."
+                )
         self._t.append(float(t))
-        self._y.append(y.copy())
+        self._y[self._n] = y       # row assignment copies y into the buffer
+        self._n += 1
+
+    def _grow(self) -> None:
+        old_cap = len(self._y)
+        new_cap = old_cap * self._GROW_FACTOR
+        new_y = np.empty((new_cap,) + self._y.shape[1:], dtype=self._y.dtype)
+        new_y[:self._n] = self._y[:self._n]
+        self._y = new_y
 
     def __call__(self, t: float) -> np.ndarray:
         t = float(t)
         if t <= self._t[0]:
             return self._y[0]
         if t >= self._t[-1]:
-            return self._y[-1]
+            return self._y[self._n - 1]
         idx = bisect.bisect_right(self._t, t) - 1
-        t0_, t1_ = self._t[idx], self._t[idx + 1]
+        t0_ = self._t[idx]
+        t1_ = self._t[idx + 1]
         alpha = (t - t0_) / (t1_ - t0_)
         return self._y[idx] + alpha * (self._y[idx + 1] - self._y[idx])
 
@@ -606,7 +671,8 @@ class BaseBackend(CodeGen):
         solver.set_initial_value(y, float(t0))
 
         def solout(t, y_):
-            hist.update(t, y_.copy())
+            # DDEHistory.update copies y_ into its pre-allocated buffer.
+            hist.update(t, y_)
             return 0
 
         solver.set_solout(solout)

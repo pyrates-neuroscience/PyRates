@@ -137,7 +137,8 @@ class TorchBackend(BaseBackend):
         solver.set_initial_value(y_np, float(t0))
 
         def solout(t, y_):
-            hist.update(t, y_.copy())
+            # DDEHistory.update copies y_ into its pre-allocated buffer.
+            hist.update(t, y_)
             return 0
         solver.set_solout(solout)
 
