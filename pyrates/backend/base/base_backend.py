@@ -153,6 +153,15 @@ class BaseBackend(CodeGen):
     # ----------------------------------------------------------------------
     SUPPORTED_SOLVERS: Tuple[str, ...] = ('euler', 'heun', 'scipy')
 
+    # ----------------------------------------------------------------------
+    # Class attribute: ops whose `def` strings must NOT be appended to the
+    # generated module's helper-funcs list (they are language primitives or
+    # pure-Python no-ops handled directly by the parser).  Subclasses can
+    # extend this with e.g. ``_no_funcs = BaseBackend._no_funcs + ("foo",)``.
+    # ----------------------------------------------------------------------
+    _no_funcs: Tuple[str, ...] = ("identity", "index_1d", "index_2d",
+                                  "index_range", "index_axis")
+
     def __init__(self,
                  ops: Optional[Dict[str, str]] = None,
                  imports: Optional[List[str]] = None,
@@ -187,7 +196,8 @@ class BaseBackend(CodeGen):
         self._idx_left = kwargs.pop('idx_left', '[')
         self._idx_right = kwargs.pop('idx_right', ']')
         self._start_idx = kwargs.pop('start_idx', 0)
-        self._no_funcs = ["identity", "index_1d", "index_2d", "index_range", "index_axis"]
+        # `_no_funcs` lives on the class (see top of class body).  Do not
+        # shadow it here — subclasses extend the class attribute.
 
         # file-creation-related attributes
         fdir, *fname = self.get_fname(kwargs.pop('file_name', 'pyrates_run'))
@@ -315,7 +325,20 @@ class BaseBackend(CodeGen):
             return '/'.join(path), file
 
     def generate_func_head(self, func_name: str, state_var: str = 'y', return_var: str = 'dy', func_args: list = None,
-                           add_hist_func: bool = False):
+                           add_hist_func: Optional[bool] = None):
+        """Generate the function header for the RHS file.
+
+        ``add_hist_func``
+            Whether to include the ``hist`` callable in the generated function
+            signature.  If ``None`` (default), falls back to the backend's
+            ``add_hist_arg`` constructor flag — making that flag the single
+            source of truth.  Callers that already know whether the model is a
+            DDE (e.g. ``ComputeGraph.to_func``) pass the resolved bool
+            explicitly and skip the fallback.
+        """
+        if add_hist_func is None:
+            add_hist_func = self.add_hist_arg
+
 
         imports = self._imports
         helper_funcs = self._helper_funcs

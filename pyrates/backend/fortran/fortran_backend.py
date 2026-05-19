@@ -119,7 +119,11 @@ class FortranBackend(BaseBackend):
             return super().create_index_str(idx, separator, apply, **kwargs)
 
     def generate_func_head(self, func_name: str, state_var: str = 'y', return_var: str = 'dy', func_args: list = None,
-                           add_hist_func: bool = False):
+                           add_hist_func: Optional[bool] = None):
+
+        # resolve default from the backend-level flag (see BaseBackend docstring)
+        if add_hist_func is None:
+            add_hist_func = self.add_hist_arg
 
         # finalize list of arguments for the function call
         if func_args:

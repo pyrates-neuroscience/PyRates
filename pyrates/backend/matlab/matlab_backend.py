@@ -128,8 +128,12 @@ class MatlabBackend(JuliaBackend):
         self.add_code_line(f"{lhs} = hist({idx}, {delay_idx});")
 
     def generate_func_head(self, func_name: str, state_var: str = 'y', return_var: str = 'dy', func_args: list = None,
-                           add_hist_func: bool = True):
+                           add_hist_func: Optional[bool] = None):
 
+        # The Matlab path historically defaulted to True here.  Now that the
+        # default is unified, we let BaseBackend resolve `None` from
+        # `self.add_hist_arg` (which is also True for MatlabBackend, so
+        # behavior is preserved).
         helper_funcs = tuple(self._helper_funcs)
         self._helper_funcs = []
         fhead = super().generate_func_head(func_name, state_var, return_var, func_args, add_hist_func=add_hist_func)
