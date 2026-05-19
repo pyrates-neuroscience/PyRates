@@ -545,7 +545,10 @@ class BaseBackend(CodeGen):
         steps = int(np.round(T / dt))
         store_steps = int(np.round(T / dts))
         store_step = int(np.round(dts / dt))
-        state_rec = np.zeros((store_steps, y.shape[0]) if y.shape else (store_steps, 1), dtype=y.dtype)
+        # state_rec is fully overwritten row-by-row in the loop below before any
+        # row is read, so np.empty is safe and avoids the zero-fill (which
+        # dominates startup for large state vectors).
+        state_rec = np.empty((store_steps, y.shape[0]) if y.shape else (store_steps, 1), dtype=y.dtype)
         has_dde = len(args) > 0 and isinstance(args[0], DDEHistory)
 
         # solve ivp for forward Euler method
@@ -568,7 +571,10 @@ class BaseBackend(CodeGen):
         steps = int(np.round(T / dt))
         store_steps = int(np.round(T / dts))
         store_step = int(np.round(dts / dt))
-        state_rec = np.zeros((store_steps, y.shape[0]) if y.shape else (store_steps, 1), dtype=y.dtype)
+        # state_rec is fully overwritten row-by-row in the loop below before any
+        # row is read, so np.empty is safe and avoids the zero-fill (which
+        # dominates startup for large state vectors).
+        state_rec = np.empty((store_steps, y.shape[0]) if y.shape else (store_steps, 1), dtype=y.dtype)
         has_dde = len(args) > 0 and isinstance(args[0], DDEHistory)
 
         # solve ivp via Heun's method

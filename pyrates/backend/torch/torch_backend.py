@@ -96,9 +96,11 @@ class TorchBackend(BaseBackend):
             except AttributeError:
                 dtype = torch.get_default_dtype()
 
-        # wrapper to rhs function
+        # wrapper to rhs function: use torch.as_tensor for a zero-copy view of
+        # the numpy arrays scipy hands us (a copy only occurs when the dtypes
+        # differ, matching the previous torch.tensor() behavior).
         def f(t, y):
-            rhs = func(torch.tensor(t, dtype=dtype), torch.tensor(y, dtype=dtype), *args)
+            rhs = func(torch.as_tensor(t, dtype=dtype), torch.as_tensor(y, dtype=dtype), *args)
             return rhs.numpy()
 
         # call scipy solver
