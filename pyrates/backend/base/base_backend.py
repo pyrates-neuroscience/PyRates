@@ -633,7 +633,7 @@ class BaseBackend(CodeGen):
         self.add_code_line(f"def {name}({','.join(args)}):")
 
     @staticmethod
-    def _solve_euler(func: Callable, args: tuple, T: float, dt: float, dts: float, y: np.ndarray, t0: np.ndarray):
+    def _solve_euler(func: Callable, args: tuple, T: float, dt: float, dts: float, y: np.ndarray, t0):
 
         # preparations for fixed step-size integration
         idx = 0
@@ -646,20 +646,24 @@ class BaseBackend(CodeGen):
         state_rec = np.empty((store_steps, y.shape[0]) if y.shape else (store_steps, 1), dtype=y.dtype)
         has_dde = len(args) > 0 and isinstance(args[0], DDEHistory)
 
-        # solve ivp for forward Euler method
-        for step in range(t0, steps+t0):
-            if step % store_step == t0:
+        # solve ivp for forward Euler method.  Storage cadence is driven by the
+        # iteration counter `i`, not by the wall-clock step number — using
+        # ``step % store_step == t0`` (the previous formulation) silently
+        # produces zero stored samples whenever ``t0 >= store_step``.
+        for i in range(steps):
+            if i % store_step == 0:
                 state_rec[idx, :] = y
                 idx += 1
+            step = i + t0
             rhs = func(step, y, *args)
             y += dt * rhs
             if has_dde:
-                args[0].update((step - t0 + 1) * dt, y)
+                args[0].update((i + 1) * dt, y)
 
         return state_rec
 
     @staticmethod
-    def _solve_heun(func: Callable, args: tuple, T: float, dt: float, dts: float, y: np.ndarray, t0: np.ndarray):
+    def _solve_heun(func: Callable, args: tuple, T: float, dt: float, dts: float, y: np.ndarray, t0):
 
         # preparations for fixed step-size integration
         idx = 0
@@ -672,16 +676,18 @@ class BaseBackend(CodeGen):
         state_rec = np.empty((store_steps, y.shape[0]) if y.shape else (store_steps, 1), dtype=y.dtype)
         has_dde = len(args) > 0 and isinstance(args[0], DDEHistory)
 
-        # solve ivp via Heun's method
-        for step in range(t0, steps + t0):
-            if step % store_step == t0:
+        # solve ivp via Heun's method.  See `_solve_euler` for the rationale
+        # behind the iteration-counter-based storage condition.
+        for i in range(steps):
+            if i % store_step == 0:
                 state_rec[idx, :] = y
                 idx += 1
+            step = i + t0
             rhs = func(step, y, *args)
             y_0 = y + dt * rhs
             y += dt/2 * (rhs + func(step, y_0, *args))
             if has_dde:
-                args[0].update((step - t0 + 1) * dt, y)
+                args[0].update((i + 1) * dt, y)
 
         return state_rec
 

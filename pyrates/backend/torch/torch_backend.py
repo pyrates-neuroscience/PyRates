@@ -189,11 +189,15 @@ class TorchBackend(BaseBackend):
         # zero-fill (safe now that the idx-shadow bug is fixed).
         state_rec = torch.empty((store_steps, y.shape[0]) if y.shape else (store_steps, 1), dtype=y.dtype)
 
-        # solve ivp via forward Euler
-        for step in range(int(t0), steps + int(t0)):
-            if step % store_step == int(t0):
+        # solve ivp via forward Euler.  Storage cadence is driven by the
+        # iteration counter `i` rather than the wall-clock step number — see
+        # BaseBackend._solve_euler for the rationale (review §4.2).
+        t0_int = int(t0)
+        for i in range(steps):
+            if i % store_step == 0:
                 state_rec[idx, :] = y
                 idx += 1
+            step = i + t0_int
             rhs = func(step, y, *args)
             y += dt * rhs
 
