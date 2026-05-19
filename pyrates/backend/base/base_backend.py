@@ -52,8 +52,30 @@ from .. import PyRatesException
 # external _imports
 from typing import Optional, Dict, List, Union, Tuple, Callable, Iterable
 import numpy as np
-import os, sys, importlib
+import os, sys, importlib, hashlib, types as _types
 from shutil import rmtree
+
+
+# ---------------------------------------------------------------------------
+# Module-level cache for compiled RHS modules, keyed by SHA-256 of the source
+# string passed to ``compile()``.  Lets parameter sweeps and the
+# ``get_run_func`` / ``get_jacobian_func`` paths skip the compile+exec round
+# trip when the same model is regenerated identically (which is the common
+# case during optimisation loops).  Cleared explicitly via
+# ``clear_compile_cache()`` below — there is no automatic eviction.
+# ---------------------------------------------------------------------------
+_compiled_module_cache: Dict[str, _types.ModuleType] = {}
+
+
+def clear_compile_cache() -> None:
+    """Drop all cached compiled RHS modules.
+
+    Call this if you have generated many distinct models in a long-running
+    process and want to reclaim memory.  Has no effect on already-returned
+    callables; only future :meth:`BaseBackend.generate_func` calls are
+    affected.
+    """
+    _compiled_module_cache.clear()
 
 
 # Helper Functions and Classes
@@ -448,34 +470,42 @@ class BaseBackend(CodeGen):
         # generate the current function string via the code generator
         func_str = self.generate()
 
+        # Write the source to disk first (so users can still inspect / debug it
+        # even on a cache hit) — file IO is cheap compared to compile().
         if to_file:
-
-            # save rhs function to file
             file = f'{self.fdir}/{self._fname}' if self.fdir else self._fname
-            with open(f'{file}{self._fend}', 'w') as f:
+            src_path = f'{file}{self._fend}'
+            with open(src_path, 'w') as f:
                 f.writelines(func_str)
+        else:
+            src_path = f'<pyrates:{self._fname}>'
 
-            # Compile from the in-memory source string and exec into a fresh
+        # Consult the SHA-256-keyed module cache.  A hit means we already have
+        # a fully-compiled-and-executed module for this exact source string;
+        # we can pull the function object out of its namespace directly and
+        # skip both compile() and exec().  See module-level docstring for
+        # ``_compiled_module_cache``.
+        cache_key = hashlib.sha256(func_str.encode('utf-8')).hexdigest()
+        _mod = _compiled_module_cache.get(cache_key)
+        if _mod is None:
+            _mod = _types.ModuleType(self._fname)
+            _mod.__file__ = src_path
+            # Compile from the in-memory source string and exec into the fresh
             # module, bypassing the .pyc bytecode cache entirely.  A stale
             # .pyc can persist when clear() removes the .py but not
             # __pycache__, and the next write lands in the same second, making
             # the source mtime appear unchanged to Python's cache validator.
-            if self._fname in sys.modules:
-                del sys.modules[self._fname]
-            import types as _types
-            src_path = f'{file}{self._fend}'
-            _mod = _types.ModuleType(self._fname)
-            _mod.__file__ = src_path
             exec(compile(func_str, src_path, 'exec'), _mod.__dict__)
+            _compiled_module_cache[cache_key] = _mod
+
+        # Refresh sys.modules so subsequent introspection (e.g. tracebacks)
+        # finds the right module under self._fname.  We always replace the
+        # entry — the cached module may have been registered under a previous
+        # _fname or have been removed by .clear().
+        if to_file:
             sys.modules[self._fname] = _mod
-            globals()[func_name] = _mod.__dict__[func_name]
 
-        else:
-
-            # just execute the function string, without writing it to file
-            exec(func_str, globals())
-
-        rhs_eval = globals().pop(func_name)
+        rhs_eval = _mod.__dict__[func_name]
         return self._apply_decorator(rhs_eval, **kwargs)
 
     @staticmethod
