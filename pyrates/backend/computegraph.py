@@ -645,9 +645,18 @@ class ComputeGraph(MultiDiGraph):
         code_gen = self.backend
         code_gen.code.clear()
 
-        # ensure zeros (and optionally csr_matrix) are imported
-        code_gen.add_import("from numpy import zeros")
+        # Imports that the Jacobian assembly emits.  Must be declared BEFORE
+        # generate_func_head, which materialises imports into the source file.
+        code_gen.declare_local_array_imports()   # backend-specific (numpy / jax.numpy / ...)
         if sparse:
+            if not getattr(code_gen, 'SUPPORTS_SPARSE_JACOBIAN', True):
+                raise NotImplementedError(
+                    f"Backend `{type(code_gen).__name__}` does not support "
+                    "sparse=True for get_jacobian_func.  The scipy.sparse "
+                    "csr_matrix constructor cannot consume the backend's array "
+                    "type at code-gen time.  Use sparse=False and convert "
+                    "post-hoc if needed."
+                )
             code_gen.add_import("from scipy.sparse import csr_matrix")
 
         # determine return-variable name(s) for MATLAB function signature
@@ -675,10 +684,11 @@ class ComputeGraph(MultiDiGraph):
                 d_safe = d_str.replace('.', 'p').replace('-', 'm')
                 code_gen.add_code_line(f"_yhist_{d_safe} = hist(t - {d_str})")
 
-        # allocate instantaneous Jacobian
+        # allocate instantaneous Jacobian (backend-aware: emits numpy `zeros`
+        # for the default path, jnp.zeros for JaxBackend, etc.)
         code_gen.add_linebreak()
         dtype_str = code_gen._float_precision
-        code_gen.add_code_line(f"J0 = zeros(({n}, {n}), dtype='{dtype_str}')")
+        code_gen.emit_local_array_alloc('J0', (n, n), dtype_str)
 
         # fill non-zero J0 entries
         for (i_r, j_c), d_expr in sorted(J0_entries.items()):
@@ -687,21 +697,21 @@ class ComputeGraph(MultiDiGraph):
                 code_gen.add_code_line(
                     f"# WARNING: could not differentiate J0[{i_r},{j_c}] analytically — entry left as 0")
             else:
-                code_gen.add_code_line(f"J0[{i_r + start}, {j_c + start}] = {d_str_code}")
+                code_gen.emit_local_array_assign('J0', (i_r + start, j_c + start), d_str_code)
 
         # history Jacobians
         code_gen.add_linebreak()
         for d_str, entries in J_hist.items():
             d_safe = d_str.replace('.', 'p').replace('-', 'm')
             jk = f'J_hist_{d_safe}'
-            code_gen.add_code_line(f"{jk} = zeros(({n}, {n}), dtype='{dtype_str}')")
+            code_gen.emit_local_array_alloc(jk, (n, n), dtype_str)
             for (i_r, j_c), d_expr in sorted(entries.items()):
                 d_str_code = self._expr_to_jac_str(d_expr, sym_to_y_idx, past_sym_to_str)
                 if d_str_code is None:
                     code_gen.add_code_line(
                         f"# WARNING: could not differentiate {jk}[{i_r},{j_c}] analytically — entry left as 0")
                 else:
-                    code_gen.add_code_line(f"{jk}[{i_r + start}, {j_c + start}] = {d_str_code}")
+                    code_gen.emit_local_array_assign(jk, (i_r + start, j_c + start), d_str_code)
             code_gen.add_linebreak()
 
         # return statement (replaces generate_func_tail so we control the return value)

@@ -390,9 +390,12 @@ def test_matrix_discrete_delay(backend):
     conn = Connectivity(source='p/rate_op_d/r', target='p/rate_op_d/s_in',
                         weights=W, delays=delay)
     circuit = CircuitTemplate(name='dtest', populations={'p': pop}, connections=[conn])
-    result = circuit.run(simulation_time=n_run * dt, step_size=dt, solver='euler',
-                         outputs={'r': 'p/rate_op_d/r'}, backend=backend,
-                         clear=True, verbose=False)
+    try:
+        result = circuit.run(simulation_time=n_run * dt, step_size=dt, solver='euler',
+                             outputs={'r': 'p/rate_op_d/r'}, backend=backend,
+                             clear=True, verbose=False)
+    except NotImplementedError as e:
+        pytest.skip(f"backend `{backend}` does not support discrete-delay ring buffers: {e}")
     r_pyrates = result['r'].values  # shape (n_run, N)
 
     # Reference Euler loop with explicit d-step ring buffer.

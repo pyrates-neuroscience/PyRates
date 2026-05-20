@@ -46,16 +46,6 @@ __status__ = "development"
 # ---------------------------
 sigmoid = lambda x: 1. / (1. + np.exp(-x))
 
-interp = """
-def interp(x_new, x, y):
-    idx = argmin(abs(x - x_new))
-    if abs(x[idx]) > abs(x_new):
-        i1, i2 = idx - 1, idx
-    else:
-        i1, i2 = idx, idx + 1
-    return (y[i1] + y[i2]) * 0.5
-"""
-
 # Weighted sum: einsum-based, identical algebra to base_funcs.wsum but using
 # the jax.numpy einsum so the call stays inside the JIT trace.
 wsum = """
@@ -63,8 +53,8 @@ def wsum(weight, coupling):
     return einsum('ij,ij->i', weight, coupling)
 """
 
-# Per-row 1-D interpolation.  Same algebra as base_funcs.interp_rows; relies
-# on jax.numpy's interp and array imports.
+# Per-row 1-D interpolation.  ``interp`` is now bound to jax.numpy.interp
+# (see the registry below); we still need a helper to apply it column-by-column.
 interp_rows = """
 def interp_rows(t, time, inp):
     return array([interp(t, time, inp[:, k]) for k in range(inp.shape[1])])
@@ -94,7 +84,9 @@ jax_funcs = {
     'tan':         {'call': 'tan',      'func': np.tan,          'imports': ['jax.numpy.tan']},
     'exp':         {'call': 'exp',      'func': np.exp,          'imports': ['jax.numpy.exp']},
     'sigmoid':     {'call': 'sigmoid',  'func': sigmoid,         'imports': ['jax.nn.sigmoid']},
-    'interp':      {'call': 'interp',   'func': np.interp, 'def': interp, 'imports': ['jax.numpy.abs', 'jax.numpy.argmin']},
+    # Bind PyRates' `interp` directly to jax.numpy.interp — the previous
+    # custom helper used a Python `if`, which the JIT tracer cannot handle.
+    'interp':      {'call': 'interp',   'func': np.interp, 'imports': ['jax.numpy.interp']},
     'interp_rows': {'call': 'interp_rows', 'func': np.interp, 'def': interp_rows,
                     'imports': ['jax.numpy.interp', 'jax.numpy.array']},
     'wsum':        {'call': 'wsum',     'def': wsum, 'imports': ['jax.numpy.einsum']},

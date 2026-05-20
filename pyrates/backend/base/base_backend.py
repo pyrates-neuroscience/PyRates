@@ -249,6 +249,25 @@ class BaseBackend(CodeGen):
     _no_funcs: Tuple[str, ...] = ("identity", "index_1d", "index_2d",
                                   "index_range", "index_axis")
 
+    # ----------------------------------------------------------------------
+    # Feature flags consulted by ComputeGraph at code-gen time so users get
+    # a clear, early error rather than a cryptic JIT-trace failure.
+    #
+    # ``SUPPORTS_SPARSE_JACOBIAN``: ``get_jacobian_func(..., sparse=True)``
+    #   emits ``csr_matrix(J0)``.  ``scipy.sparse.csr_matrix`` does not
+    #   understand JAX tracers, so the JAX backend sets this to False.
+    #
+    # ``SUPPORTS_EDGE_DELAY_BUFFER``: the discrete-delay path generates a
+    #   ring-buffer that's updated in-place each step via
+    #   ``buf[:] = roll(buf, 1); buf[0] = current``.  JAX arrays are
+    #   immutable; the equivalent functional update produces a new array
+    #   that's never threaded back into the solver's state, so the buffer
+    #   stays at its initial value forever.  JaxBackend sets this False;
+    #   users should switch to the DDEHistory / ``past(x, tau)`` path.
+    # ----------------------------------------------------------------------
+    SUPPORTS_SPARSE_JACOBIAN: bool = True
+    SUPPORTS_EDGE_DELAY_BUFFER: bool = True
+
     def __init__(self,
                  ops: Optional[Dict[str, str]] = None,
                  imports: Optional[List[str]] = None,
@@ -385,6 +404,35 @@ class BaseBackend(CodeGen):
         shape — i.e. the cases where broadcasting matters.
         """
         return f"{lhs} = {rhs}"
+
+    # ------------------------------------------------------------------
+    # Jacobian-emission hooks — used by ComputeGraph.get_jacobian_func to
+    # emit local-array allocations and per-element assignments that match
+    # the target language's mutation semantics.  The default emits plain
+    # numpy code; JaxBackend overrides for functional ``.at[i, j].set(...)``
+    # updates (and importing zeros from jax.numpy instead of numpy).
+    #
+    # ``declare_local_array_imports`` must be called *before*
+    # ``generate_func_head`` because that method materialises ``self._imports``
+    # into source-file lines.  Adding an import inside
+    # ``emit_local_array_alloc`` (which runs after the function head) would be
+    # too late — the import section is already closed by then.
+    # ------------------------------------------------------------------
+    def declare_local_array_imports(self) -> None:
+        """Register the imports needed by :meth:`emit_local_array_alloc`."""
+        self.add_import("from numpy import zeros")
+
+    def emit_local_array_alloc(self, name: str, shape: tuple, dtype: str) -> None:
+        """Emit ``name = zeros(shape, dtype=dtype)``.
+
+        Requires :meth:`declare_local_array_imports` to have been called earlier.
+        """
+        self.add_code_line(f"{name} = zeros({shape}, dtype='{dtype}')")
+
+    def emit_local_array_assign(self, name: str, indices: tuple, expr: str) -> None:
+        """Emit ``name[i, j, ...] = expr`` for a previously-allocated array."""
+        idx_str = ', '.join(str(i) for i in indices)
+        self.add_code_line(f"{name}[{idx_str}] = {expr}")
 
     def add_var_hist(self, lhs: str, delay: Union[ComputeVar, float], state_idx: str,
                      dt: Optional[float] = None, dt_adapt: bool = True, **kwargs):

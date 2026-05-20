@@ -171,10 +171,13 @@ def test_jacobian_sparse(backend):
     clear_ir_caches()
 
     vdp_s = _vdp_circuit()
-    jac_sparse, jargs_s, _, _ = vdp_s.get_jacobian_func(
-        func_name='vdp_jac_sparse', step_size=1e-3, solver='euler', sparse=True,
-        in_place=False, clear=True, vectorize=False, backend=backend,
-    )
+    try:
+        jac_sparse, jargs_s, _, _ = vdp_s.get_jacobian_func(
+            func_name='vdp_jac_sparse', step_size=1e-3, solver='euler', sparse=True,
+            in_place=False, clear=True, vectorize=False, backend=backend,
+        )
+    except NotImplementedError as e:
+        pytest.skip(f"backend `{backend}` does not support sparse Jacobian: {e}")
     clear_ir_caches()
 
     t0 = float(jargs_d[0])

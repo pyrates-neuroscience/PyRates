@@ -72,6 +72,10 @@ class NetworkGraph(AbstractBaseIR):
         self.step_size = step_size
         self.step_size_adaptation = step_size_adaptation
         self.graph = MultiDiGraph()
+        # Set to True by `_add_edge_buffer` when the in-place ring-buffer
+        # delay path is taken; consulted by CircuitIR.__init__ to fail early
+        # on backends that don't support mutable-buffer code-gen.
+        self._uses_edge_delay_buffer = False
 
         if verbose:
             print("Compilation Progress")
@@ -395,6 +399,11 @@ class NetworkGraph(AbstractBaseIR):
         )
 
         if use_ring_buffer:
+            # Record the in-place-buffer requirement so CircuitIR.__init__
+            # can reject backends that can't honor it (see the matching
+            # branch in `_add_edge_buffer` and the check in CircuitIR).
+            self._uses_edge_delay_buffer = True
+
             # --- Discrete ring buffer of shape (Ns, d_steps+1) ---
             d_steps = self._preprocess_delay(delay, discretize=True)
             buf = f'{var}_buffer{buffer_id}'
@@ -559,7 +568,13 @@ class NetworkGraph(AbstractBaseIR):
                 else:
                     prev = chain_in  # zero-order: pass-through (no ODE stages)
 
-                # Write chain output into the correct slots of the buffer
+                # Write chain output into the correct slots of the buffer.
+                # Partial-buffer writes (the G == 1 and else branches below)
+                # are JAX-compatible when ALL chains write the buffer on every
+                # call — the buffer doesn't carry state across calls.  Ring
+                # buffers are different: they DO carry state across calls and
+                # are flagged separately in the `_add_edge_buffer` discrete
+                # branch (and in `_add_matrix_delay`'s ring-buffer branch).
                 all_slots = (slot_indices == list(range(len(delays))))
                 if all_slots:
                     buffer_eqs.append(f"{buf_var} = {prev}")
@@ -576,6 +591,12 @@ class NetworkGraph(AbstractBaseIR):
         ##########################
 
         elif not self.step_size_adaptation:
+
+            # Record that this network uses the in-place ring-buffer edge-delay
+            # path; CircuitIR.__init__ will refuse to compile if the chosen
+            # backend can't support it (notably JaxBackend, whose arrays are
+            # immutable — the buffer would never accumulate).
+            self._uses_edge_delay_buffer = True
 
             # create buffer variable shapes
             if len(target_shape) < 1 or (len(target_shape) == 1 and target_shape[0] == 1):
@@ -1136,6 +1157,26 @@ class CircuitIR(AbstractBaseIR):
             print("\t(3) Parsing the model equations into a compute graph...")
 
         self.graph = self.network_to_computegraph(graph=net, backend=backend, **kwargs)
+
+        # Reject combinations the chosen backend can't support.  Doing this
+        # here (after the compute graph exists, so `self.graph.backend` is
+        # populated, but before the user gets a callable) gives a single
+        # actionable error instead of a downstream JIT failure.
+        if getattr(net, '_uses_edge_delay_buffer', False):
+            be = self.graph.backend
+            if not getattr(be, 'SUPPORTS_EDGE_DELAY_BUFFER', True):
+                raise NotImplementedError(
+                    f"Backend `{type(be).__name__}` does not support the "
+                    "discrete edge-delay ring-buffer path emitted by PyRates "
+                    "for fixed-step solvers with `delay=...` edges.  The "
+                    "buffer is updated in place via `buf[:] = roll(buf, 1)`, "
+                    "which is incompatible with the backend's immutable "
+                    "arrays — the delayed value would never accumulate.  "
+                    "Use an adaptive solver (e.g. solver='scipy' or "
+                    "solver='diffrax') so PyRates emits the DDEHistory path "
+                    "instead, or rewrite the edge with the explicit "
+                    "`past(x, tau)` notation."
+                )
 
         if verbose:
             print("\t\t...finished.")
