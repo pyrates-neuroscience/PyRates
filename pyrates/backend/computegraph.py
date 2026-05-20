@@ -404,6 +404,21 @@ class ComputeGraph(MultiDiGraph):
                                 dtype='float' if dt_adapt else 'int', shape=())
         self.backend.register_vars([t, y])
 
+        # When the backend's auto-07p path is active, compute symbolic ∂F/∂U
+        # and ∂F/∂PAR *before* ``_to_str`` runs — ``_to_str`` consumes the
+        # ``var_updates['non-DEs']`` dict during code generation, after which
+        # ``_get_symbolic_rhs`` can no longer expand auxiliary variables (and
+        # the parameter dependency they introduce, e.g. ``weight`` via
+        # ``r_in = r*weight``, is missing from the symbolic vector field).
+        # Skipping DDE models: auto-07p doesn't continue them natively.
+        if kwargs.get('auto', False) and kwargs.get('auto_jac', True):
+            try:
+                jac_data = self._compute_symbolic_jacobian(include_dfdp=True)
+                if not jac_data['is_dde']:
+                    kwargs['auto_jacobian'] = jac_data
+            except Exception:                                            # pragma: no cover
+                pass
+
         # create a string containing all computations and variable updates represented by the compute graph
         func_args, code_gen = self._to_str()
         func_body = code_gen.generate()
@@ -812,6 +827,148 @@ class ComputeGraph(MultiDiGraph):
                 seen.add(a)
                 ordered.append(a)
         return f_exprs, y_syms, past_map, ordered, var_is_vector
+
+    def _compute_symbolic_jacobian(self, include_dfdp: bool = True) -> dict:
+        """Compute symbolic ∂F/∂U and (optionally) ∂F/∂PAR dictionaries.
+
+        Shared helper used by both :meth:`get_jacobian_func` and the auto-07p
+        path of the Fortran backend (which inlines the entries into the
+        ``FUNC`` wrapper guarded by ``IJAC > 0``).
+
+        Parameters
+        ----------
+        include_dfdp
+            When True, also compute ∂F/∂PAR for every non-state, non-time
+            argument the vector field depends on (used by auto-07p so it
+            can be ``IJAC = 2``-compatible).
+
+        Returns
+        -------
+        dict with the following keys:
+            ``state_var_indices``
+                ``{state_var_name: int_or_(int,int)}``: position(s) of each
+                state variable in the flat ``y`` vector.
+            ``f_exprs``
+                ``list[sympy.Expr]``: one expression per ``DE`` update, in
+                the order they appear in ``self.var_updates['DEs']``.
+            ``y_syms``
+                ``list[sympy.Symbol]``: state-variable symbols, parallel to
+                ``f_exprs`` (so ``y_syms[i]`` is the LHS symbol of
+                ``f_exprs[i]``).
+            ``var_is_vector``
+                ``list[bool]``: True for each entry that has shape > 1.
+            ``dfdu``
+                ``dict[(i, j) -> sympy.Expr]``: non-zero ∂F_i/∂U_j entries,
+                indices into the flat state vector.
+            ``param_syms``
+                ``dict[name -> sympy.Symbol]``: parameter symbols PyRates
+                exposed to the vector field, in the order they appear in
+                the model (excluding state vars and ``t``).
+            ``dfdp``
+                ``dict[(i, name) -> sympy.Expr]``: non-zero ∂F_i/∂PAR_name
+                entries — populated only when ``include_dfdp`` is True.
+            ``is_dde``
+                bool — True iff the vector field references past states
+                (``past(var, tau)``).  Auto-07p doesn't natively continue
+                DDEs, so callers may want to skip the analytical Jacobian
+                in that case.
+            ``vector_blocks``
+                Blocks ``(i_lo, i_hi, j_lo, j_hi)`` of the Jacobian that
+                couldn't be differentiated analytically because they
+                involve a vector-valued state variable.  Caller decides
+                whether to fall back to FD or just warn.
+        """
+        import sympy as sp
+
+        # ``compile`` calls ``_prune`` which removes nodes the graph hasn't
+        # connected yet — including the ``dy`` node that ``to_func`` has just
+        # registered with ``_generate_vecfield_var``.  Only compile if the
+        # graph hasn't been processed yet.  ``_eq_nodes`` is populated by
+        # ``eval_subgraph`` (invoked from compile) so it's a reliable
+        # "already compiled" marker.
+        if not self._eq_nodes:
+            self.compile()
+
+        # build state-vector indices (matches get_jacobian_func / to_func)
+        idx = 0
+        state_var_indices = {}
+        for var in self.var_updates['DEs']:
+            lhs = self.get_var(var)
+            vshape = sum(lhs.shape)
+            if vshape > 1:
+                state_var_indices[var] = (idx, idx + vshape)
+                idx += vshape
+            else:
+                state_var_indices[var] = idx
+                idx += 1
+
+        # symbolic vector field
+        f_exprs, y_syms, past_map, func_args, var_is_vector = self._get_symbolic_rhs()
+        sym_to_y_idx = {sym: state_var_indices[var]
+                        for var, sym in zip(self.var_updates['DEs'].keys(), y_syms)}
+
+        # ∂F/∂U
+        dfdu: dict = {}
+        vector_blocks: list = []
+        i_row = 0
+        for f_i, yi_sym, fi_is_vec in zip(f_exprs, y_syms, var_is_vector):
+            fi_idx = sym_to_y_idx[yi_sym]
+            fi_nrows = (fi_idx[1] - fi_idx[0]) if isinstance(fi_idx, tuple) else 1
+            j_col = 0
+            for yj_sym, fj_is_vec in zip(y_syms, var_is_vector):
+                fj_idx = sym_to_y_idx[yj_sym]
+                fj_ncols = (fj_idx[1] - fj_idx[0]) if isinstance(fj_idx, tuple) else 1
+                if fi_is_vec or fj_is_vec:
+                    vector_blocks.append((i_row, i_row + fi_nrows, j_col, j_col + fj_ncols))
+                else:
+                    d = sp.diff(f_i, yj_sym)
+                    d = self._resolve_derivatives(d)
+                    if d != 0:
+                        dfdu[(i_row, j_col)] = d
+                j_col += fj_ncols
+            i_row += fi_nrows
+
+        # ∂F/∂PAR — for every argument that's neither a state variable nor `t`
+        param_syms: dict = {}
+        dfdp: dict = {}
+        if include_dfdp:
+            state_var_names = set(self.var_updates['DEs'].keys())
+            for arg_name in func_args:
+                if arg_name in state_var_names or arg_name == 't':
+                    continue
+                try:
+                    v = self.get_var(arg_name)
+                except KeyError:
+                    continue
+                # Only include true parameters (constants); skip dy buffers, hist callables, etc.
+                if v.vtype != 'constant':
+                    continue
+                param_syms[arg_name] = v.symbol
+
+            i_row = 0
+            for f_i, yi_sym, fi_is_vec in zip(f_exprs, y_syms, var_is_vector):
+                fi_idx = sym_to_y_idx[yi_sym]
+                fi_nrows = (fi_idx[1] - fi_idx[0]) if isinstance(fi_idx, tuple) else 1
+                if not fi_is_vec:
+                    for name, psym in param_syms.items():
+                        d = sp.diff(f_i, psym)
+                        d = self._resolve_derivatives(d)
+                        if d != 0:
+                            dfdp[(i_row, name)] = d
+                i_row += fi_nrows
+
+        return {
+            'state_var_indices': state_var_indices,
+            'f_exprs': f_exprs,
+            'y_syms': y_syms,
+            'var_is_vector': var_is_vector,
+            'sym_to_y_idx': sym_to_y_idx,
+            'dfdu': dfdu,
+            'param_syms': param_syms,
+            'dfdp': dfdp,
+            'is_dde': bool(past_map),
+            'vector_blocks': vector_blocks,
+        }
 
     def _extract_past_terms(self, expr) -> tuple:
         """Replace every ``past(var, delay)`` call in *expr* with a fresh Symbol.

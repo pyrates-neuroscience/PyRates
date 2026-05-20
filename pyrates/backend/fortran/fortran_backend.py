@@ -402,6 +402,12 @@ class FortranBackend(BaseBackend):
         dtype = self._get_dtype(self._var_declaration_info['y'].dtype)
         param_indices = self._auto_param_indices(func_args, blocked_indices)
 
+        # Optional symbolic Jacobian data — passed by ComputeGraph.to_func when
+        # ``auto=True`` and ``auto_jac=True``.  Used to emit DFDU/DFDP inside the
+        # ``func`` wrapper, gated by IJAC > 0.  Absent → JAC=0 path (auto-07p
+        # uses finite differences).
+        auto_jac = kwargs.pop('auto_jacobian', None)
+
         # `func` wrapper around the pyrates RHS subroutine
         self.add_linebreak()
         self.add_linebreak()
@@ -418,6 +424,12 @@ class FortranBackend(BaseBackend):
         additional_args = f", {', '.join(params)}" if params else ""
         self.add_linebreak()
         self.add_code_line(f"call {func_name}(args(14), y, dy{additional_args})")
+
+        # Emit the analytical Jacobian if available.
+        provides_jac = self._emit_auto_jacobian_block(
+            auto_jac, func_args, param_indices,
+        ) if auto_jac else False
+
         self.add_linebreak()
         self.add_code_line("end subroutine func")
         self.add_linebreak()
@@ -492,6 +504,12 @@ class FortranBackend(BaseBackend):
         # auto constant names) — applied to every scenario.
         overrides = {k: kwargs.pop(k) for k in list(kwargs.keys())
                      if k in self._AUTO_CONSTANTS_DEFAULTS}
+        # Tell auto-07p to use the user-supplied analytical Jacobian if we
+        # emitted one.  ``JAC=1`` makes it call FUNC with IJAC=2 during
+        # equilibrium / limit-cycle continuation; the inline block we
+        # generated below fills both DFDU and DFDP.
+        if provides_jac:
+            overrides.setdefault('JAC', 1)
 
         constants_files: Dict[str, str] = {}
         for scen in scenarios:
@@ -505,6 +523,138 @@ class FortranBackend(BaseBackend):
             )
 
         return func_file, constants_files
+
+    def _emit_auto_jacobian_block(self, jac: dict, func_args: tuple,
+                                  param_indices: list) -> bool:
+        """Emit ``IF(IJAC > 0)`` / ``IF(IJAC > 1)`` blocks filling DFDU / DFDP.
+
+        Parameters
+        ----------
+        jac
+            Output of :meth:`ComputeGraph._compute_symbolic_jacobian`
+            (or compatible dict).  Must carry ``dfdu`` and ``dfdp``
+            sympy-expression dicts plus the metadata needed to translate
+            symbols to ``U(i)`` / ``args(idx)`` references.
+        func_args
+            Ordered tuple of parameter names PyRates passes to the RHS —
+            same as in the surrounding ``_generate_auto_files`` call.
+        param_indices
+            1-based ``PAR(...)`` slot for each entry of ``func_args``,
+            already accounting for auto-07p's reserved PAR(11..14) range.
+
+        Returns
+        -------
+        bool
+            True if any analytical Jacobian content was emitted (and the
+            caller should set ``JAC=1`` in the constants files), else False.
+        """
+        import sympy as sp
+
+        dfdu_entries = jac.get('dfdu') or {}
+        dfdp_entries = jac.get('dfdp') or {}
+        if not dfdu_entries and not dfdp_entries:
+            return False
+
+        # Build substitution maps so the sympy expressions print with the
+        # Fortran identifiers PyRates' auto-07p ``func`` wrapper exposes.
+        # ``sym_to_y_idx`` is 0-based; the generated Fortran signature
+        # declares ``y(ndim)`` (lowercase, matching PyRates' convention),
+        # so emit ``y(i)`` for 1-based ``i``.  Auto-07p docs use ``U`` but
+        # Fortran is case-insensitive only when names match exactly — we
+        # have to use the actual signature identifier.
+        sym_to_y_idx: dict = jac.get('sym_to_y_idx', {})
+        u_subs = {}
+        for sym, idx in sym_to_y_idx.items():
+            if isinstance(idx, tuple):
+                # vector state — skipped by the Jacobian builder anyway
+                continue
+            u_subs[sym] = sp.Symbol(f'__PYR_Y_{idx + 1}__')
+
+        # ``param_indices`` is parallel to ``func_args``; we want a quick
+        # lookup from the *param name* (matches the dfdp keys) to its
+        # ``args(k)`` slot, plus a mapping from the param's *sympy symbol*
+        # to that same slot (used for substituting DFDU entries that
+        # reference parameters explicitly).
+        param_syms: dict = jac.get('param_syms', {})
+        name_to_arg_idx = {n: i for n, i in zip(func_args, param_indices)}
+        arg_subs = {}
+        for name, sym in param_syms.items():
+            if name in name_to_arg_idx:
+                arg_subs[sym] = sp.Symbol(f'__PYR_ARG_{name_to_arg_idx[name]}__')
+
+        def _to_fortran(expr) -> str:
+            return self._sympy_to_fortran(expr, {**u_subs, **arg_subs})
+
+        # ------- DFDU: ∂F/∂U(j), gated by IJAC > 0 -------
+        if dfdu_entries:
+            self.add_linebreak()
+            self.add_code_line("if (ijac .eq. 0) return")
+            self.add_linebreak()
+            for (i_row, j_col), expr in sorted(dfdu_entries.items()):
+                self.add_code_line(f"dfdu({i_row + 1},{j_col + 1}) = {_to_fortran(expr)}")
+
+        # ------- DFDP: ∂F/∂PAR, gated by IJAC > 1 -------
+        if dfdp_entries:
+            self.add_linebreak()
+            self.add_code_line("if (ijac .eq. 1) return")
+            self.add_linebreak()
+            for (i_row, pname), expr in sorted(
+                dfdp_entries.items(), key=lambda kv: (kv[0][0], name_to_arg_idx.get(kv[0][1], 0))
+            ):
+                arg_idx = name_to_arg_idx.get(pname)
+                if arg_idx is None:
+                    continue
+                self.add_code_line(f"dfdp({i_row + 1},{arg_idx}) = {_to_fortran(expr)}")
+
+        return True
+
+    def _sympy_to_fortran(self, expr, substitutions: dict) -> str:
+        """Render a sympy expression as a Fortran (free-form, F90) literal.
+
+        ``substitutions`` maps original sympy symbols to placeholder symbols
+        whose names spell out the desired Fortran reference (e.g.
+        ``__PYR_U_1__``).  After ``fcode`` prints the expression the
+        placeholders are textually replaced with proper ``U(...)`` /
+        ``args(...)`` calls — going via placeholders avoids ``fcode``
+        mangling parentheses in symbol names.
+
+        Two ``fcode`` quirks we work around:
+
+        * ``sympy.pi`` makes ``fcode`` prepend a ``parameter (pi = ...)``
+          declaration to the returned string — illegal mid-statement.  We
+          replace ``sp.pi`` with a plain ``Symbol('pi')`` first; the
+          surrounding module already declares ``PI`` as a constant.
+        * ``fcode`` line-wraps long expressions with ``&`` continuation
+          markers and indents the continuation lines.  Our own
+          ``add_code_line`` does line-wrapping at the Fortran statement
+          level, so we collapse fcode's wrapping back to one line and
+          let ``add_code_line`` rebreak it.
+        """
+        import sympy as sp
+        from sympy.printing.fortran import fcode
+
+        substituted = expr.xreplace(substitutions) if substitutions else expr
+        substituted = substituted.xreplace({sp.pi: sp.Symbol('pi')})
+        # ``human=False`` returns ``(constants, not_supported, code)`` and
+        # therefore skips the leading ``parameter (...)`` declarations.
+        _consts, _not_supported, text = fcode(
+            substituted, source_format='free', standard=95, human=False,
+        )
+        # Collapse fcode's own line wrapping — re-emit as a single line and
+        # let our add_code_line rewrap.  The trailing ``&`` marks lines that
+        # continue to the next; the leading whitespace on the continuation
+        # line is harmless once we join.
+        text = ' '.join(line.rstrip('&').strip() for line in text.splitlines())
+        text = ' '.join(text.split())  # collapse runs of whitespace
+        for sym in substitutions.values():
+            name = sym.name
+            if name.startswith('__PYR_Y_'):
+                idx = name[len('__PYR_Y_'):-2]
+                text = text.replace(name, f'y({idx})')
+            elif name.startswith('__PYR_ARG_'):
+                idx = name[len('__PYR_ARG_'):-2]
+                text = text.replace(name, f'args({idx})')
+        return text.strip()
 
     def _auto_param_indices(self, func_args: tuple, blocked: tuple) -> list:
         """Map each func arg to its 1-based PAR(...) slot, skipping reserved range."""
