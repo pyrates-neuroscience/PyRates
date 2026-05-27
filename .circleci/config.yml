@@ -2,6 +2,17 @@
 # See: https://circleci.com/docs/2.0/configuration-reference
 version: 2.1
 
+# Reusable command: install the system-level Fortran compiler used by the
+# Fortran backend's f2py path. `meson` + `ninja` come in via the `[tests]`
+# pip extras (they ship as wheels), but the toolchain itself has to be
+# apt-installed on the bare cimg/python image.
+commands:
+  install_fortran_toolchain:
+    steps:
+      - run:
+          name: Install gfortran
+          command: sudo apt-get update && sudo apt-get install -y gfortran
+
 # Define a job to be invoked later in a workflow.
 # See: https://circleci.com/docs/2.0/configuration-reference/#jobs
 jobs:
@@ -10,20 +21,25 @@ jobs:
       - image: cimg/python:3.8.12
     steps:
       - checkout
-      - run: pip install .[tests] 
+      - install_fortran_toolchain
+      - run: pip install --upgrade pip
+      - run: pip install .[tests]
       - run: pytest tests/
   p39:
     docker:
       - image: cimg/python:3.9.10
     steps:
       - checkout
-      - run: pip install .[tests] 
+      - install_fortran_toolchain
+      - run: pip install --upgrade pip
+      - run: pip install .[tests]
       - run: pytest tests/
   p310:
     docker:
       - image: cimg/python:3.10.18
     steps:
       - checkout
+      - install_fortran_toolchain
       - run: pip install --upgrade pip
       - run: pip install .[tests]
       - run: pytest tests/
@@ -32,6 +48,7 @@ jobs:
       - image: cimg/python:3.11.13
     steps:
       - checkout
+      - install_fortran_toolchain
       - run: pip install --upgrade pip
       - run: pip install .[tests]
       - run: pytest tests/
@@ -40,6 +57,7 @@ jobs:
       - image: cimg/python:3.12.11
     steps:
       - checkout
+      - install_fortran_toolchain
       - run: pip install --upgrade pip
       - run: pip install .[tests]
       - run: pytest tests/

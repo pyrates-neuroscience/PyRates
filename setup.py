@@ -25,10 +25,17 @@ CLASSIFIERS = ["Programming Language :: Python :: 3",
                ]
 
 EXTRAS = {"backends": ["torch", "jax", "diffrax"],
+          # numpy >= 2.0 dropped distutils; `python -m numpy.f2py -c ...` now
+          # shells out to `meson` + `ninja`. PyPI ships both as binary wheels,
+          # so adding them here is enough on CI (no sudo / system package
+          # required). A Fortran compiler (e.g. gfortran) is still needed at
+          # the system level.
+          "fortran": ["meson", "meson-python", "ninja"],
           "dev": ["pytest", "bump2version"]}
 
 EXTRAS["all"] = [item for sublist in EXTRAS.values() for item in sublist]
-EXTRAS["tests"] = [item for key, sublist in EXTRAS.items() for item in sublist if key in ("backends", "dev")]
+EXTRAS["tests"] = [item for key, sublist in EXTRAS.items() for item in sublist
+                   if key in ("backends", "fortran", "dev")]
 
 with open("VERSION", "r", encoding="utf8") as fh:
     VERSION = fh.read().strip()
