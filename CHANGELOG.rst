@@ -4,6 +4,15 @@ Changelog
 1.2
 ---
 
+1.2.1
+-----
+
+CI maintenance release. No library-code changes from 1.2.0.
+
+- Fixed CircleCI test failure ``FileNotFoundError: [Errno 2] No such file or directory: 'meson'``. numpy 2.0 removed distutils from ``numpy.f2py``, so ``python -m numpy.f2py -c ...`` now shells out to ``meson`` and ``ninja``; the bare ``cimg/python`` images don't ship either, so the Fortran-backend tests crashed on every CI job.
+- Added a new ``fortran`` extras_require bucket (``pip install pyrates[fortran]``) pulling ``meson``, ``meson-python``, and ``ninja`` from PyPI (binary wheels, no sudo needed). The ``[tests]`` extras now include it.
+- CircleCI config: every job now apt-installs ``gfortran`` via a reusable ``install_fortran_toolchain`` step and runs ``pip install --upgrade pip`` before installing the test extras.
+
 1.2.0
 -----
 
