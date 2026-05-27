@@ -156,6 +156,67 @@ def test_jacobian_ode_analytical_values(backend):
 
 
 # ---------------------------------------------------------------------------
+# Test 3b: ODE Jacobian on a system with transcendentals (exp / sin / cos)
+# ---------------------------------------------------------------------------
+
+def test_jacobian_ode_transcendentals(backend):
+    """Symbolic Jacobian differentiates through ``exp``, ``sin``, ``cos`` etc.
+
+    Regression for the rebind in ``_node_to_expr`` that used to replace
+    ``sp.exp`` with ``Function('exp')`` (an UndefinedFunction). After that
+    rebind, ``sp.diff(exp(x), x)`` returned the unevaluated
+    ``Derivative(exp(x), x)`` — the analytical-Jacobian path
+    (``_compute_symbolic_jacobian``) then produced uncompilable Fortran
+    (``Derivative(...)`` written verbatim) for any model with a
+    transcendental in its RHS. Now the rebind only fires when the backend's
+    call name actually differs from the sympy one, so stdlib functions keep
+    their built-in derivative rules.
+    """
+    from pyrates.frontend.template.operator import OperatorTemplate
+    from pyrates.frontend.template.node import NodeTemplate
+    from pyrates.frontend.template.circuit import CircuitTemplate
+
+    def _build_circuit(circuit_name: str, op_name: str, node_name: str):
+        # Fresh templates per call — both get_jacobian_func and get_run_func
+        # mutate the circuit internally (see test_jacobian_ode_vs_finite_difference
+        # for the same pattern).
+        op = OperatorTemplate(
+            name=op_name,
+            equations=[
+                "u' = -u + exp(-a*u) + cos(w)",
+                "w' = -w + sin(u)",
+            ],
+            variables={'u': 'output(0.1)', 'w': 'variable(0.2)', 'a': 1.5},
+        )
+        node = NodeTemplate(name=node_name, operators=[op])
+        return CircuitTemplate(name=circuit_name, nodes={'p': node})
+
+    circuit_jac = _build_circuit('trans_jac_circ', 'trans_op_jac', 'trans_pop_jac')
+    jac_func, jac_args, _, _ = circuit_jac.get_jacobian_func(
+        func_name='trans_jac', step_size=1e-3, solver='euler', in_place=False, clear=True,
+        vectorize=False, backend=backend,
+    )
+    clear_ir_caches()
+
+    circuit_run = _build_circuit('trans_run_circ', 'trans_op_run', 'trans_pop_run')
+    run_func, run_args, _, _ = circuit_run.get_run_func(
+        func_name='trans_run', step_size=1e-3, solver='euler', in_place=False, clear=True,
+        vectorize=False, backend=backend,
+    )
+    clear_ir_caches()
+
+    t0 = float(run_args[0])
+    y0 = np.array(run_args[1], dtype=float)
+    J_sym = np.asarray(jac_func(t0, y0, *jac_args[2:]), dtype=float)
+    J_fd = fd_jacobian(run_func, t0, y0, run_args[2:], eps=1e-3)
+
+    np.testing.assert_allclose(
+        J_sym, J_fd, atol=0.01,
+        err_msg="Symbolic Jacobian disagrees with finite difference on transcendental-RHS system",
+    )
+
+
+# ---------------------------------------------------------------------------
 # Test 4: Sparse ODE Jacobian
 # ---------------------------------------------------------------------------
 

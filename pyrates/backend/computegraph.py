@@ -1233,11 +1233,24 @@ class ComputeGraph(MultiDiGraph):
                     expr = expr.replace(expr_old, expr_new)
                 expr_args.extend(args)
 
-            # replace generic function calls with the backend-specific function calls
+            # Replace generic function calls with the backend-specific function calls.
+            # We deliberately SKIP the rebind when the backend's call name matches
+            # the original sympy name (the typical case for sympy stdlib functions
+            # like ``exp``, ``sin``, ``cos``, ``log``, ...) — rebinding ``sp.exp``
+            # to ``Function('exp')`` would replace the sympy stdlib class with an
+            # ``UndefinedFunction`` of the same name, losing sympy's built-in
+            # differentiation rule. Without this guard, ``sp.diff(exp(x), x)``
+            # returns the unevaluated ``Derivative(exp(x), x)`` and the analytical
+            # Jacobian path (``_compute_symbolic_jacobian``) breaks for any model
+            # with a transcendental in its RHS. Renames that actually differ
+            # (e.g. ``matmul`` → ``dot``, ``no_op`` → ``identity``) still rebind
+            # as before; those cases never benefit from sympy.diff anyway.
             try:
                 expr_old = expr.func.__name__
                 func_info = self.get_op(expr_old, shape=node.shape)
-                expr = expr.replace(expr.func, Function(func_info['call']))
+                new_call = func_info['call']
+                if new_call != expr_old:
+                    expr = expr.replace(expr.func, Function(new_call))
             except (AttributeError, KeyError):
                 pass
 
