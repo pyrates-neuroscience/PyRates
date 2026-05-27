@@ -1,6 +1,76 @@
 Changelog
 =========
 
+1.2
+---
+
+1.2.0
+-----
+
+This release rounds out PyRates' Fortran/auto-07p path for analytical-Jacobian
+continuation, replaces the legacy tensorflow backend with a diffrax-driven JAX
+backend, hardens the symbolic Jacobian against transcendentals and sympy
+namespace collisions, and bundles a substantial backend-consistency pass and
+performance improvements across all backends.
+
+Major changes:
+
+- **JAX backend**: new backend (`backend='jax'`) using diffrax for ODE integration; the legacy tensorflow backend has been removed in its favour. Includes `lax.scan`-fused fixed-step Euler/Heun solvers and a targeted 0-d constant optimisation.
+- **Symbolic Jacobian API**: new `CircuitTemplate.get_jacobian_func()` method returns a callable Jacobian built via sympy. A documentation gallery example (QIF parameter fitting with sensitivity equations) demonstrates its use.
+- **Analytical Jacobian for auto-07p**: the Fortran backend now emits `DFDU`/`DFDP` inside the generated `func` subroutine and auto-sets `JAC=1` in the generated `c.*` file (`auto_jac=True`, on by default). Auto-07p's IJAC=1/2 paths are wired through end to end.
+- **Complete auto-07p input file generation**: multi-scenario `c.*` emission (ivp / eq / lc) and full `parnames` / `unames` declarations. YAML parameter declaration order is preserved into `parnames` and the Fortran subroutine signature (regression fix: equation-walk order used to leak in, silently mis-addressing PAR slots for integer-keyed `UZSTOP`/`ICP` arguments).
+- **Equation parser robustness**: sympy stdlib transcendentals (`exp`, `log`, `sin`, `cos`, `tan`, ...) are no longer rebound to undefined functions, so symbolic differentiation works for any RHS that uses them. The reserved-variable-name guard (`check_vname`) was extended to cover sympy function classes (`beta`, `gamma`, ...), singletons (`S`, `Q`, `oo`, `nan`), and the math-function names themselves — previously these would either silently produce wrong values or crash deep inside the parser.
+
+Backend consistency and performance:
+
+- **Backend consistency review**: the Matlab backend now inherits from `BaseBackend` directly with a `_format_assignment` hook; decorator application is factored into `BaseBackend._apply_decorator`; supported solvers are declared via a class-level `SUPPORTED_SOLVERS` attribute with early validation; class-level `_no_funcs` and a unified `add_hist_func` default. JAX/Torch gained parity functions (`wsum`, JAX `interp_rows`).
+- **Compiled module cache**: `BaseBackend` now keys cached compiled RHS modules by SHA-256 of the source so different models with the same filename no longer collide.
+- **Fixed-step solver storage** is now driven by iteration count rather than modulo-on-step, fixing intermittent off-by-one storage drift on long runs.
+- **Torch backend**: zero-copy `torch.as_tensor` + `np.empty` for state recording; `_solve_scipy_dde` override; fixed an index-shadow bug in `_solve_euler`.
+- **DDE history**: pre-allocated row buffer replaces the previous list-of-ndarrays accumulator.
+- **Fortran backend**: lazy `numpy.f2py` import with a clear error path when f2py isn't installed; hardened the f2py subprocess call.
+
+Minor improvements and fixes:
+
+- Fixed issue #42: `CircuitTemplate.clear()` now clears the `OperatorTemplate` cache.
+- Fixed `update_var` docstring (edge_vars takes 3-tuples, not 4-tuples).
+- Added `--backends` pytest CLI option for selecting which backend(s) to test against.
+- Documentation: 6 post-1.1.0 accuracy fixes; new DDE gallery sections; new `PopulationTemplate` + `Connectivity` gallery example.
+- New benchmarks: population-connectivity scaling figures.
+
+1.1
+---
+
+1.1.0
+-----
+
+This release adds first-class support for delay differential equations (DDEs),
+vector/matrix-native large-network construction via `PopulationTemplate` and
+`Connectivity`, broader cross-backend coverage (MATLAB / Julia DDE consistency,
+DDE-BIFTOOL integration), and a range of input-pipeline and numerical fixes.
+
+Major changes:
+
+- **DDE support**: `x(t-d)` syntax for delayed-state references in equations, a `DDEHistory` data structure for history-buffer management, and integration with the solver pipeline so DDE systems can be simulated end to end through the same `CircuitTemplate.run` API as ODE models.
+- **Matrix Connectivity edges**: `add_edges_from_matrix` now accepts dynamic and non-dynamic `EdgeTemplate`s plus delay coupling for matrix-defined edge sets, making it easier to build large networks programmatically.
+- **PopulationTemplate + Connectivity**: new vector/matrix-native frontend types for large-network construction; lets users define populations of vectorised units and their connectivity as compact tensor expressions.
+- **MATLAB backend**: correctness fixes, DDE tracking, and DDE-BIFTOOL integration (bifurcation analysis of DDE systems through MATLAB).
+- **Julia backend**: DDE consistency with the other backends, correctness fixes, and an `interp_rows` function.
+
+Performance and robustness:
+
+- Reduced model-compilation time via lazy `lambdify` and `sympify` caching.
+- Hardened the input pipeline against scalar/vector and fixed/adaptive solver mismatches.
+- Fixed numpy 2.3+ shape errors triggered by scalar state-vector assignments.
+- Simplified ODE cascade-delay handling and separated collection from mutation for safer in-place edits.
+- Guarded `_add_edge_buffer` against empty delays and added buffer-variable collision detection.
+- Fixed a stale `.pyc` bytecode cache bug that caused cross-contamination between sequential circuit runs sharing a filename.
+
+Other:
+
+- Tried fixing issue #44 (#45): safer time-point generation.
+- Restricted networkx to `<= 3.5` (networkx 3.6 introduced breaking changes).
+
 1.0
 ---
 
