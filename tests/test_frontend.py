@@ -168,6 +168,53 @@ def test_multi_circuit_instantiation():
     assert circuit
 
 
+def test_reserved_variable_names():
+    """`check_vname` rejects variable names that collide with PyRates-internal
+    slots or sympy globals, with a clear error message that names the collision.
+
+    Pins the expanded guard added for sympy-namespace collisions. Without
+    these checks, e.g. naming a parameter ``beta`` would make sympify resolve
+    it to ``sympy.beta`` (a function class) — ``beta * x`` then crashes
+    silently with ``TypeError: unsupported operand type(s) for *:
+    'FunctionClass' and 'Symbol'`` deep inside the parser.
+    """
+    import pytest
+    from pyrates.frontend.template.operator import OperatorTemplate
+    from pyrates.backend import PyRatesException
+
+    def _apply_with_var(varname):
+        # Construction is permissive; `check_vname` runs on `.apply()` (which
+        # is the path every model loader takes before code generation), so
+        # that's what we trigger here.
+        OperatorTemplate(
+            name=f"reserved_{varname}_op",
+            equations=[f"x' = -x + {varname}"],
+            variables={'x': 'output(0.0)', varname: 1.0},
+            path=None,
+        ).apply()
+
+    # Sympy function classes that surfaced as the original report (PyCoBi ops
+    # parity test): naming a parameter `beta` or `gamma` used to TypeError
+    # inside the parser.
+    for name in ('beta', 'gamma', 'Beta', 'Gamma'):
+        with pytest.raises(PyRatesException, match=f"variable name {name} is reserved"):
+            _apply_with_var(name)
+
+    # Sympy singletons / constants.
+    for name in ('S', 'Q', 'oo', 'nan'):
+        with pytest.raises(PyRatesException, match=f"variable name {name} is reserved"):
+            _apply_with_var(name)
+
+    # Common math-function names — using one as a Symbol would silently shadow
+    # the equation parser's stdlib lookup.
+    for name in ('exp', 'log', 'sin', 'cos', 'sqrt'):
+        with pytest.raises(PyRatesException, match=f"variable name {name} is reserved"):
+            _apply_with_var(name)
+
+    # Sanity check: a non-colliding name still applies cleanly.
+    _apply_with_var('alpha')
+
+
 def test_equation_alteration():
     """Test, if properties of a template that mean to alter a certain parent equation are treated correctly"""
 

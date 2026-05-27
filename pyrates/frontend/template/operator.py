@@ -181,7 +181,36 @@ class OperatorTemplate(AbstractBaseTemplate):
 
 def check_vname(v: str, vtype: str):
 
-    disallowed_names = ['y', 'dy', 'source_idx', 'target_idx', 'pi', 'I', 'E']
+    # Variable names that would collide with either a PyRates-internal slot
+    # or a sympy global. Categories:
+    #
+    #   * PyRates-internal names — collide with auto-generated buffer
+    #     variables for delays, history, and state-vector indices.
+    #   * sympy constants / singletons — would resolve to a non-Symbol
+    #     object when the parser sympifies an equation containing the name,
+    #     producing wrong values silently (``pi``, ``E``, ``I``) or
+    #     unhelpful exceptions (``S``, ``Q``, ``oo``, ``zoo``, ``nan``).
+    #   * sympy function classes — using one as a Symbol value crashes the
+    #     parser with ``TypeError: unsupported operand type(s) for *:
+    #     'FunctionClass' and 'Symbol'`` because ``sympify('beta * x')``
+    #     resolves ``beta`` to ``sympy.beta`` (a function class) rather than
+    #     a free symbol. ``beta``/``gamma`` are the common ones in
+    #     scientific parameter sets; the trig / exp / log / sqrt entries
+    #     also avoid silently shadowing the equation-parser's call site
+    #     when a user writes e.g. ``exp(x)`` after declaring a variable
+    #     named ``exp``.
+    disallowed_names = [
+        # PyRates-internal slots
+        'y', 'dy', 'source_idx', 'target_idx',
+        # sympy constants / singletons
+        'pi', 'I', 'E', 'S', 'Q', 'O', 'N', 'oo', 'zoo', 'nan',
+        # sympy function classes that look like scientific parameter names
+        'beta', 'gamma', 'Beta', 'Gamma',
+        # common math-function names — protect against silent shadowing
+        # of the equation parser's stdlib lookup
+        'exp', 'log', 'sin', 'cos', 'tan', 'cot', 'sec', 'csc',
+        'sinh', 'cosh', 'tanh', 'sqrt', 'abs',
+    ]
     disallowed_name_parts = ['_buffer', '_delays', '_maxdelay', '_idx', '_hist']
 
     if v == 't' and vtype != 'state_var':
