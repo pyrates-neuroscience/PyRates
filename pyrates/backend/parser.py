@@ -565,6 +565,39 @@ def parse_equations(equations: list, equation_args: dict, cg: ComputeGraph, def_
 
         instantaneous = is_diff_eq(eq) is False
 
+        # Pre-register all of the operator's variables with the compute graph
+        # AND the backend in their declaration order (matches the YAML
+        # `variables:` dict order as preserved through `_collect_ops` /
+        # `_collect_variables_and_equations`) before the equation parser
+        # walks the RHS. Without this, vars get registered in equation-walk
+        # order — the FIRST equation that mentions them — which scrambles
+        # `_var_declaration_info` and downstream the auto-07p `parnames` dict
+        # (e.g. YAML order `p1, p2, p3, p4` would become
+        # `{1: 'p4', 2: 'p2', 3: 'p1', 4: 'p3'}`).
+        # `cg.add_var` / `backend.register_vars` are both idempotent (existing
+        # names are skipped), so this is a no-op for vars already registered
+        # by an earlier equation.
+        for arg_name, var_info in list(op_args.items()):
+            if isinstance(var_info, ComputeNode):
+                # already a ComputeNode (registered by an earlier equation):
+                # ensure the backend has it too, in case the earlier equation
+                # only walked the compute graph and didn't reach register_vars
+                try:
+                    cg.backend.register_vars([var_info])
+                except Exception:
+                    pass
+                continue
+            if not isinstance(var_info, dict):
+                continue  # placeholder / inputs / etc. — let the equation parser handle
+            try:
+                _, var = cg.add_var(label=arg_name, def_shape=def_shape, **var_info)
+                op_args[arg_name] = var
+                cg.backend.register_vars([var])
+            except Exception:
+                # the parser's own add_var call will handle whatever shape this
+                # variable turns out to need at evaluation time
+                pass
+
         # initialize parser
         parser = ExpressionParser(expr_str=eq, args=op_args, cg=cg, def_shape=def_shape, **kwargs)
 

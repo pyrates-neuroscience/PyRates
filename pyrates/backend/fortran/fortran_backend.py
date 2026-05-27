@@ -135,7 +135,32 @@ class FortranBackend(BaseBackend):
         if add_hist_func:
             state_vars.append('hist')
         _, indices = np.unique(func_args, return_index=True)
-        func_args = state_vars + [func_args[idx] for idx in np.sort(indices)]
+        func_args = [func_args[idx] for idx in np.sort(indices)]
+        # Reorder PARAMETERS to match `_var_declaration_info`'s declaration
+        # order so the generated subroutine signature matches the PAR slot
+        # ordering downstream (the auto-07p wrapper calls `vfx(..., args(1),
+        # args(2), ...)` where `args(i)` corresponds to PAR(i) per the c.*
+        # `parnames` dict, which is itself indexed by `_var_declaration_info`
+        # order in `_generate_auto_files`). Without this, the subroutine
+        # would declare parameters in equation-walk order while the call
+        # passes them in declaration order — parameter values get silently
+        # assigned to wrong named slots inside the routine.
+        #
+        # `return_var` (`dy`) is pinned to position 0 of the reordered list
+        # because `to_func` in computegraph.py slices `func_args[3:]` to
+        # peel off `[t, y, dy]` and treat the remainder as parameters —
+        # any move of `dy` would break that contract for downstream
+        # consumers.
+        if self._var_declaration_info and func_args:
+            params = [n for n in func_args if n != return_var]
+            declared_params = [n for n in self._var_declaration_info if n in params]
+            other_params = [n for n in params if n not in declared_params]
+            reordered = declared_params + other_params
+            if return_var in func_args:
+                func_args = [return_var] + reordered
+            else:
+                func_args = reordered
+        func_args = state_vars + func_args
 
         # define module
         self.add_code_line(f"module {self._fname}")
@@ -400,6 +425,21 @@ class FortranBackend(BaseBackend):
         # 1. Generate the fortran source file (func + stpnt + dummy stubs).
         # ------------------------------------------------------------------
         dtype = self._get_dtype(self._var_declaration_info['y'].dtype)
+
+        # Reorder `func_args` to match `_var_declaration_info`'s order before
+        # computing PAR slots. After the YAML-order-preservation fix in
+        # `parse_equations`, `_var_declaration_info` carries variables in the
+        # user's original declaration order; without this reordering step the
+        # equation-walk order coming in via `func_args` would still drive the
+        # resulting `parnames` dict (e.g. YAML order p1, p2, p3, p4 would
+        # become {1: 'p4', 2: 'p2', 3: 'p1', 4: 'p3'} just from the first
+        # equation's RHS arrangement).
+        if func_args:
+            declaration_order = [a for a in self._var_declaration_info if a in func_args]
+            # Defensive: include any args present in func_args but somehow
+            # missing from _var_declaration_info (no-op for normal flows).
+            declaration_order += [a for a in func_args if a not in declaration_order]
+            func_args = tuple(declaration_order)
         param_indices = self._auto_param_indices(func_args, blocked_indices)
 
         # Optional symbolic Jacobian data — passed by ComputeGraph.to_func when
