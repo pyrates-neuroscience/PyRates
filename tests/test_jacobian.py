@@ -217,6 +217,94 @@ def test_jacobian_ode_transcendentals(backend):
 
 
 # ---------------------------------------------------------------------------
+# Test 3b: ODE Jacobian for circuits with stateful (plastic) edges
+# ---------------------------------------------------------------------------
+
+def test_jacobian_stateful_edge(backend):
+    """Symbolic Jacobian compiles when the circuit contains a stateful edge.
+
+    Regression for the ``identity()`` derivative bug in
+    ``_compute_symbolic_jacobian``.  Plastic edges route their pre-synaptic
+    state through the internal ``identity()`` marker before it reaches the
+    target's ``s_in`` input.  Because ``identity`` is registered as a bare
+    ``sympy.Function`` with no ``fdiff`` defined, chain-rule applications
+    used to leave behind ``Subs(Derivative(identity(_xi), _xi), _xi, expr)``
+    wrappers — and bare ``identity(...)`` calls in Jacobian entries — that
+    the Fortran printer emitted verbatim, producing uncompilable output
+    (``Integer too big for its kind`` on the dummy-symbol hash and
+    ``Function 'identity' has no IMPLICIT type``).  ``_resolve_derivatives``
+    now collapses leftover ``Subs`` wrappers via ``.doit()`` and strips
+    ``identity(arg)`` markers down to ``arg`` at the sympy level so the
+    Jacobian stringifier never sees them.
+    """
+    from pyrates.frontend.template.operator import OperatorTemplate
+    from pyrates.frontend.template.node import NodeTemplate
+    from pyrates.frontend.template.edge import EdgeTemplate
+    from pyrates.frontend.template.circuit import CircuitTemplate
+
+    def _build_circuit(circuit_name: str, op_suffix: str):
+        qif_op = OperatorTemplate(
+            name=f'qif_op_{op_suffix}',
+            equations=[
+                "r' = D + 2.0*r*v",
+                "v' = v*v + J*s_in + eta - (pi*r)*(pi*r)",
+            ],
+            variables={'r': 'output(0.1)', 'v': 'variable(-2.0)',
+                       'eta': -5.0, 'J': 1.0, 'D': 0.1,
+                       's_in': 'input(0.0)'},
+        )
+        sd_op = OperatorTemplate(
+            name=f'sd_op_{op_suffix}',
+            equations=["s' = r - s/tau_s"],
+            variables={'s': 'output(0.0)', 'tau_s': 0.5, 'r': 'input(0.0)'},
+        )
+        # stateful edge: w' = -w/tau_w + a*pre_s, s_out = pre_s * w
+        weight_op = OperatorTemplate(
+            name=f'weight_op_{op_suffix}',
+            equations=["w' = -w/tau_w + a*pre_s",
+                       "s_out = pre_s*w"],
+            variables={'s_out': 'output(0.0)', 'w': 'variable(0.5)',
+                       'tau_w': 10.0, 'a': 0.1, 'pre_s': 'input(0.0)'},
+        )
+        node = NodeTemplate(name=f'qif_node_{op_suffix}',
+                            operators=[qif_op, sd_op])
+        edge = EdgeTemplate(name=f'plastic_edge_{op_suffix}',
+                            operators=[weight_op])
+        return CircuitTemplate(
+            name=circuit_name,
+            nodes={'p0': node, 'p1': node},
+            edges=[
+                (f'p0/sd_op_{op_suffix}/s', f'p1/qif_op_{op_suffix}/s_in', edge, {'weight': 1.0}),
+                (f'p1/sd_op_{op_suffix}/s', f'p0/qif_op_{op_suffix}/s_in', edge, {'weight': 1.0}),
+            ],
+        )
+
+    circuit_jac = _build_circuit('stateful_jac_circ', 'jac')
+    jac_func, jac_args, _, _ = circuit_jac.get_jacobian_func(
+        func_name='stateful_jac', step_size=1e-3, solver='euler',
+        in_place=False, clear=True, vectorize=False, backend=backend,
+    )
+    clear_ir_caches()
+
+    circuit_run = _build_circuit('stateful_run_circ', 'run')
+    run_func, run_args, _, _ = circuit_run.get_run_func(
+        func_name='stateful_run', step_size=1e-3, solver='euler',
+        in_place=False, clear=True, vectorize=False, backend=backend,
+    )
+    clear_ir_caches()
+
+    t0 = float(run_args[0])
+    y0 = np.array(run_args[1], dtype=float)
+    J_sym = np.asarray(jac_func(t0, y0, *jac_args[2:]), dtype=float)
+    J_fd = fd_jacobian(run_func, t0, y0, run_args[2:], eps=1e-3)
+
+    np.testing.assert_allclose(
+        J_sym, J_fd, atol=0.01,
+        err_msg="Symbolic Jacobian disagrees with finite difference on stateful-edge circuit",
+    )
+
+
+# ---------------------------------------------------------------------------
 # Test 4: Sparse ODE Jacobian
 # ---------------------------------------------------------------------------
 

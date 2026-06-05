@@ -1001,7 +1001,7 @@ class ComputeGraph(MultiDiGraph):
         Currently handles: ``identity`` (pass-through), ``sigmoid``, and ``absv``.
         """
         import sympy as sp
-        from sympy import Derivative, Function
+        from sympy import Derivative, Function, Subs
 
         # identity(x) = x  →  d/dx = 1
         expr = expr.replace(
@@ -1015,6 +1015,25 @@ class ComputeGraph(MultiDiGraph):
         expr = expr.replace(
             lambda e: isinstance(e, Derivative) and e.expr.func.__name__ == 'absv',
             lambda e: Function('sign')(e.expr.args[0])
+        )
+        # Sympy wraps chain-rule applications of identity/sigmoid/absv in
+        # Subs(Derivative(f(_xi), _xi), _xi, real_arg) because these functions
+        # have no fdiff defined.  Once the inner Derivative has been replaced
+        # with its known analytical form by the rules above, the Subs becomes
+        # Subs(known_form, _xi, real_arg) — semantically known_form[_xi → real_arg].
+        # Evaluate the wrappers so the printer only sees clean atoms.
+        subs_atoms = expr.atoms(Subs)
+        if subs_atoms:
+            expr = expr.xreplace({s: s.doit() for s in subs_atoms})
+        # identity(x) is a pass-through marker (used by the IR to tag edge inputs).
+        # The RHS code generator strips identity(...) at the string level after
+        # equation evaluation, but symbolic-Jacobian entries are stringified
+        # directly — so we have to strip the marker here too, otherwise the
+        # Fortran printer emits bare `identity(...)` calls that gfortran flags
+        # as undefined functions.
+        expr = expr.replace(
+            lambda e: isinstance(e, sp.Function) and e.func.__name__ == 'identity',
+            lambda e: e.args[0]
         )
         return expr
 
