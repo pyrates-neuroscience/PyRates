@@ -440,7 +440,27 @@ class FortranBackend(BaseBackend):
             # missing from _var_declaration_info (no-op for normal flows).
             declaration_order += [a for a in func_args if a not in declaration_order]
             func_args = tuple(declaration_order)
+
+        # Boundary-value problems often reference parameters that appear ONLY
+        # in BCND / ICND residuals (e.g. ``intval`` for ``∫u dt = intval``),
+        # not in the FUNC body. Track them separately: ``rhs_args`` is what the
+        # inner ``vector_field`` subroutine actually accepts; ``func_args`` is
+        # the full PAR-slot vector (rhs_args + bvp extras) used for STPNT,
+        # parnames, and param_indices.
+        rhs_args = tuple(func_args)
+        bvp_extras = self._collect_bvp_extra_params(
+            kwargs.get('boundary_conditions') or (),
+            kwargs.get('integral_constraints') or (),
+        )
+        bvp_extras = tuple(p for p in bvp_extras
+                           if p in self._var_declaration_info and p not in rhs_args)
+        if bvp_extras:
+            func_args = rhs_args + bvp_extras
+
         param_indices = self._auto_param_indices(func_args, blocked_indices)
+        # Indices that line up with rhs_args specifically — the inner call below
+        # passes only those slots, leaving BVP-extras untouched by FUNC.
+        rhs_param_indices = param_indices[:len(rhs_args)]
 
         # Optional symbolic Jacobian data — passed by ComputeGraph.to_func when
         # ``auto=True`` and ``auto_jac=True``.  Used to emit DFDU/DFDP inside the
@@ -460,8 +480,10 @@ class FortranBackend(BaseBackend):
         self.add_code_line(f"{dtype}, intent(out) :: dy(ndim)")
         self.add_code_line(f"{dtype}, intent(inout) :: dfdu(ndim,ndim), dfdp(ndim,*)")
 
-        params = [f'args({i})' for i in param_indices]
-        additional_args = f", {', '.join(params)}" if params else ""
+        # Only pass the inner RHS's actual arguments; BVP-extra parameters live
+        # in PAR slots but are not consumed by FUNC.
+        rhs_params = [f'args({i})' for i in rhs_param_indices]
+        additional_args = f", {', '.join(rhs_params)}" if rhs_params else ""
         self.add_linebreak()
         self.add_code_line(f"call {func_name}(args(14), y, dy{additional_args})")
 
@@ -500,12 +522,56 @@ class FortranBackend(BaseBackend):
         self.add_code_line("end subroutine stpnt")
         self.add_linebreak()
 
-        # Dummy stubs for the four unused user-defined routines.  Auto-07p's
-        # own demos (`ab.f90`, `lor.f90`) use exactly this bare form, so we
-        # do the same — full signatures only matter when the routine is
-        # actually exercised by the chosen IPS.
+        # BCND / ICND — boundary-value problem residuals (IPS=4 path).
+        #
+        # Two ways for the user to populate these routines:
+        #
+        # (a) DSL: ``boundary_conditions=['u1_r - u0_r', ...]`` lists residuals
+        #     in PyRates-name space.  Each entry is sympified and tokens like
+        #     ``u0_<var>`` / ``u1_<var>`` / ``par_<param>`` resolve to the
+        #     proper ``u0(idx)`` / ``args(idx)`` references.  NBC / NINT are
+        #     derived from the list length.
+        # (b) Escape hatch: ``bcnd_fortran="FB(1) = U1(1) - U0(1)\nFB(2)=..."``
+        #     plus an explicit ``nbc`` lets the user write raw Fortran when the
+        #     DSL is too restrictive (PDE BCs, custom Jacobians, etc.).
+        #
+        # When neither is given the routines fall back to the auto-07p
+        # ``ab.f90`` / ``lor.f90`` bare stub form so IPS=1/2/-2 paths stay
+        # unchanged.
+        bc_dsl   = kwargs.pop('boundary_conditions', None)
+        ic_dsl   = kwargs.pop('integral_constraints', None)
+        bc_raw   = kwargs.pop('bcnd_fortran', None)
+        ic_raw   = kwargs.pop('icnd_fortran', None)
+        nbc_user = kwargs.pop('nbc', None)
+        nint_user = kwargs.pop('nint', None)
+
+        if bc_dsl and bc_raw is not None:
+            raise ValueError("Pass either `boundary_conditions` (DSL) or "
+                             "`bcnd_fortran` (raw Fortran), not both.")
+        if ic_dsl and ic_raw is not None:
+            raise ValueError("Pass either `integral_constraints` (DSL) or "
+                             "`icnd_fortran` (raw Fortran), not both.")
+
+        # State / param name → 1-based index dicts that the DSL needs.
+        state_indices = {self._var_declaration_info[v].name: i + 1
+                         for i, v in enumerate(state_vars)}
+        param_idx_by_name = {self._var_declaration_info[a].name: i
+                             for i, a in zip(param_indices, func_args)}
+
+        bcnd_body, nbc_emit = self._compose_bvp_body(
+            dsl=bc_dsl, raw=bc_raw, n_user=nbc_user, kind='bcnd',
+            state_indices=state_indices, param_idx=param_idx_by_name,
+        )
+        icnd_body, nint_emit = self._compose_bvp_body(
+            dsl=ic_dsl, raw=ic_raw, n_user=nint_user, kind='icnd',
+            state_indices=state_indices, param_idx=param_idx_by_name,
+        )
+
         self.add_linebreak()
-        for routine in ['bcnd', 'icnd', 'fopt', 'pvls']:
+        self._emit_bcnd_subroutine(dtype, bcnd_body)
+        self._emit_icnd_subroutine(dtype, icnd_body)
+        # FOPT / PVLS are not yet exposed to the user — keep bare stubs.
+        for routine in ('fopt', 'pvls'):
             self.add_linebreak()
             self.add_code_line(f"subroutine {routine}")
             self.add_code_line(f"end subroutine {routine}")
@@ -544,12 +610,27 @@ class FortranBackend(BaseBackend):
         # auto constant names) — applied to every scenario.
         overrides = {k: kwargs.pop(k) for k in list(kwargs.keys())
                      if k in self._AUTO_CONSTANTS_DEFAULTS}
-        # Tell auto-07p to use the user-supplied analytical Jacobian if we
-        # emitted one.  ``JAC=1`` makes it call FUNC with IJAC=2 during
-        # equilibrium / limit-cycle continuation; the inline block we
-        # generated below fills both DFDU and DFDP.
-        if provides_jac:
-            overrides.setdefault('JAC', 1)
+        user_set_jac = 'JAC' in overrides
+        # NBC / NINT auto-derived from the populated BCND / ICND bodies so
+        # the c.* file matches the emitted subroutines.  User-supplied
+        # ``nbc`` / ``nint`` kwargs (or explicit overrides on the
+        # ``ODESystem.run`` call) still win via ``overrides``.
+        if nbc_emit:
+            overrides.setdefault('NBC', nbc_emit)
+        if nint_emit:
+            overrides.setdefault('NINT', nint_emit)
+        # JAC selection.  With BVP residuals present, auto-07p's ``JAC=1`` path
+        # expects ALL four routines (FUNC + BCND + ICND + their Jacobians DBC /
+        # DINT) to be user-supplied, but we only emit FUNC's DFDU / DFDP. Force
+        # ``JAC=0`` (finite differences everywhere) in that case unless the
+        # user explicitly opted in. Without BVP residuals, the analytical FUNC
+        # Jacobian is safe to use — ``provides_jac`` reflects whether it was
+        # emitted.
+        if not user_set_jac:
+            if nbc_emit or nint_emit:
+                overrides['JAC'] = 0
+            elif provides_jac:
+                overrides['JAC'] = 1
 
         constants_files: Dict[str, str] = {}
         for scen in scenarios:
@@ -563,6 +644,183 @@ class FortranBackend(BaseBackend):
             )
 
         return func_file, constants_files
+
+    # ------------------------------------------------------------------
+    # Boundary-value problem helpers: emit populated BCND / ICND with
+    # either DSL-resolved residuals or raw user-supplied Fortran.
+    # ------------------------------------------------------------------
+
+    # ICP and NBC / NINT are positional in the auto-07p contract; the
+    # local parameter-name choices below (``args`` for PAR, lowercase
+    # array names) are free.  We pick names that match the rest of the
+    # generated code so identifier conventions stay consistent.
+    _BVP_PREFIXES = {
+        'bcnd': {'u0': 'u0', 'u1': 'u1'},
+        'icnd': {'u': 'u', 'uold': 'uold', 'udot': 'udot', 'upold': 'upold'},
+    }
+
+    @staticmethod
+    def _collect_bvp_extra_params(bc_dsl, ic_dsl) -> list:
+        """Scan DSL residuals for ``par_<name>`` tokens and return the names.
+
+        Used so ICND-only / BCND-only parameters (the ``intval`` style of
+        integral target) still get a PAR slot in the c.* file. Order is
+        preserved with deduplication.
+        """
+        import re
+        seen, out = set(), []
+        # Same identifier regex sympify accepts; we just want to enumerate.
+        pat = re.compile(r'\bpar_([A-Za-z_][A-Za-z0-9_]*)\b')
+        for expr_str in tuple(bc_dsl) + tuple(ic_dsl):
+            for name in pat.findall(expr_str):
+                if name not in seen:
+                    seen.add(name)
+                    out.append(name)
+        return out
+
+    def _compose_bvp_body(self, dsl, raw, n_user, kind: str,
+                          state_indices: dict, param_idx: dict):
+        """Return ``(body_lines, n_residuals)`` for a BCND / ICND subroutine.
+
+        Resolution order: DSL list → raw Fortran block → empty (bare stub).
+        ``n_residuals == 0`` means we should fall back to the bare stub.
+        """
+        residual_arr = 'fb' if kind == 'bcnd' else 'fi'
+        n_kw = 'nbc' if kind == 'bcnd' else 'nint'
+
+        if dsl:
+            prefixes = self._BVP_PREFIXES[kind]
+            lines = []
+            for i, expr_str in enumerate(dsl, start=1):
+                resolved = self._resolve_bvp_residual(
+                    expr_str, prefixes=prefixes,
+                    state_indices=state_indices, param_indices=param_idx,
+                )
+                lines.append(f"{residual_arr}({i}) = {resolved}")
+            n = len(dsl)
+            if n_user is not None and n_user != n:
+                raise ValueError(
+                    f"{kind}: provided {n} DSL residual(s) but {n_kw}={n_user}. "
+                    f"Drop {n_kw} (it is auto-derived from the list length)."
+                )
+            return lines, n
+
+        if raw is not None:
+            if n_user is None:
+                raise ValueError(
+                    f"`{kind}_fortran` requires an explicit `{n_kw}` "
+                    f"(the number of residuals the raw block fills)."
+                )
+            lines = [line for line in raw.splitlines() if line.strip()]
+            return lines, int(n_user)
+
+        # nothing populated — caller will emit a bare stub.
+        return [], 0
+
+    def _resolve_bvp_residual(self, expr_str: str, prefixes: dict,
+                              state_indices: dict, param_indices: dict) -> str:
+        """Resolve one DSL residual to a Fortran expression string.
+
+        Tokens recognised:
+          * ``{prefix}_{statevar}`` for each prefix in *prefixes* → ``{prefix}(idx)``
+            (e.g. ``u0_r`` → ``u0(1)`` in BCND, ``udot_v`` → ``udot(2)`` in ICND)
+          * ``par_{paramname}`` → ``args(idx)``
+          * standard arithmetic, ``pi``, and sympy-known math functions
+            (``sin``, ``cos``, ``exp``, ``sqrt``, ...)
+
+        Any free symbol that does not match one of these patterns is an error
+        (typo in a state/param name, or use of an unsupported function).
+        """
+        import sympy as sp
+        import re
+
+        # build the substitution dict from PyRates names → unique placeholders
+        # that survive fcode pretty-printing untouched.
+        subs: dict = {}
+        for prefix, arr_name in prefixes.items():
+            for vname, idx in state_indices.items():
+                subs[sp.Symbol(f'{prefix}_{vname}')] = sp.Symbol(
+                    f'__PYR_ARR_{arr_name}_{idx}__'
+                )
+        for pname, idx in param_indices.items():
+            subs[sp.Symbol(f'par_{pname}')] = sp.Symbol(f'__PYR_ARG_{idx}__')
+
+        try:
+            expr = sp.sympify(expr_str)
+        except (sp.SympifyError, SyntaxError) as e:
+            raise ValueError(f"Could not parse BVP residual {expr_str!r}: {e}") from e
+
+        # Validate: every free symbol should either be in `subs` (which then
+        # gets replaced) or be a math-only Symbol like `pi`.  Catch typos up
+        # front rather than letting them slip through to gfortran.
+        known_symbols = set(subs.keys()) | {sp.Symbol('pi')}
+        unknown = {s for s in expr.free_symbols if s not in known_symbols}
+        if unknown:
+            raise ValueError(
+                f"BVP residual {expr_str!r} contains unrecognised symbol(s) "
+                f"{sorted(s.name for s in unknown)}. Use `u0_<var>` / `u1_<var>` "
+                f"(BCND) or `u_<var>` / `uold_<var>` / `udot_<var>` / "
+                f"`upold_<var>` (ICND) for state references, and "
+                f"`par_<param>` for parameters."
+            )
+
+        expr = expr.xreplace(subs)
+        text = self._sympy_to_fortran(expr, {})  # no extra subs — already done
+
+        # Textual replacement: __PYR_ARR_<arr>_<idx>__ → <arr>(<idx>),
+        #                     __PYR_ARG_<idx>__       → args(<idx>).
+        text = re.sub(r'__PYR_ARR_([A-Za-z][A-Za-z0-9]*)_(\d+)__',
+                      r'\1(\2)', text)
+        text = re.sub(r'__PYR_ARG_(\d+)__', r'args(\1)', text)
+        return text.strip()
+
+    def _emit_bcnd_subroutine(self, dtype: str, body_lines: list) -> None:
+        self.add_linebreak()
+        if not body_lines:
+            self.add_code_line("subroutine bcnd")
+            self.add_code_line("end subroutine bcnd")
+            self.add_linebreak()
+            return
+        self.add_code_line(
+            "subroutine bcnd(ndim, args, icp, nbc, u0, u1, fb, ijac, dbc)"
+        )
+        self.add_code_line("implicit none")
+        self.add_code_line("integer, intent(in) :: ndim, icp(*), nbc, ijac")
+        self.add_code_line(f"{dtype}, intent(in) :: args(*), u0(ndim), u1(ndim)")
+        self.add_code_line(f"{dtype}, intent(out) :: fb(nbc)")
+        self.add_code_line(f"{dtype}, intent(inout) :: dbc(nbc, *)")
+        self.add_linebreak()
+        for line in body_lines:
+            self.add_code_line(line)
+        self.add_linebreak()
+        self.add_code_line("end subroutine bcnd")
+        self.add_linebreak()
+
+    def _emit_icnd_subroutine(self, dtype: str, body_lines: list) -> None:
+        self.add_linebreak()
+        if not body_lines:
+            self.add_code_line("subroutine icnd")
+            self.add_code_line("end subroutine icnd")
+            self.add_linebreak()
+            return
+        self.add_code_line(
+            "subroutine icnd(ndim, args, icp, nint, u, uold, "
+            "udot, upold, fi, ijac, dint)"
+        )
+        self.add_code_line("implicit none")
+        self.add_code_line("integer, intent(in) :: ndim, icp(*), nint, ijac")
+        self.add_code_line(
+            f"{dtype}, intent(in) :: args(*), u(ndim), uold(ndim), "
+            f"udot(ndim), upold(ndim)"
+        )
+        self.add_code_line(f"{dtype}, intent(out) :: fi(nint)")
+        self.add_code_line(f"{dtype}, intent(inout) :: dint(nint, *)")
+        self.add_linebreak()
+        for line in body_lines:
+            self.add_code_line(line)
+        self.add_linebreak()
+        self.add_code_line("end subroutine icnd")
+        self.add_linebreak()
 
     def _emit_auto_jacobian_block(self, jac: dict, func_args: tuple,
                                   param_indices: list) -> bool:
