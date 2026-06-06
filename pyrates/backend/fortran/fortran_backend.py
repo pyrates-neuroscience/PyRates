@@ -409,9 +409,18 @@ class FortranBackend(BaseBackend):
                  'NMX': 2000, 'NTST': 1, 'NCOL': 4,
                  'DS': 1e-3, 'DSMIN': 1e-6, 'DSMAX': 1e-1},
         # Limit cycle continuation in 1 parameter; PAR(11)=period.
+        # Limit-cycle continuation tolerances differ from the equilibrium
+        # defaults: the BVP system auto-07p solves at IPS=2 has dimension
+        # NTST*NCOL*NDIM, so Newton residuals and bifurcation test functions
+        # need ~1-2 extra digits of accuracy to avoid spurious LP / BP / PD
+        # detections from numerical noise.  EPSL/EPSU 1e-7 (vs the global
+        # 1e-6) and EPSS 1e-5 (vs 1e-4) match the auto-07p LC demo
+        # conventions and reliably suppress the spurious-LP failure mode
+        # where a "fold" is detected but no stability flip follows.
         'lc':   {'IPS': 2, 'ICP': [1, 11], 'ILP': 1, 'ISP': 2,
                  'NMX': 2000, 'NTST': 50, 'NCOL': 4,
-                 'DS': 1e-3, 'DSMIN': 1e-6, 'DSMAX': 1e-1},
+                 'DS': 1e-3, 'DSMIN': 1e-6, 'DSMAX': 1e-1,
+                 'EPSL': 1e-7, 'EPSU': 1e-7, 'EPSS': 1e-5},
         # Boundary-value problem.
         'bvp':  {'IPS': 4, 'ICP': [1, 2], 'ILP': 1, 'ISP': 2,
                  'NMX': 500, 'NTST': 20, 'NCOL': 4,
