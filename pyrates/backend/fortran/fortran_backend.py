@@ -376,7 +376,25 @@ class FortranBackend(BaseBackend):
         'EPSL': 1e-6, 'EPSU': 1e-6, 'EPSS': 1e-4,
         'IRS': 0, 'DS': 1e-4, 'DSMIN': 1e-8, 'DSMAX': 1e-2, 'IADS': 1,
         'THL': {}, 'THU': {}, 'UZR': {}, 'UZSTOP': {},
+        # HomCont (IPS=9) extension — see auto-07p Ch 20.  Defaults below
+        # are HomCont's own neutral values; the entries appear only in the
+        # generated ``c.hom`` file (the ``_HOMCONT_KEYS`` filter below drops
+        # them from every other scenario).  Users tune them via the same
+        # kwargs path as any other auto-07p constant on ``from_template`` /
+        # ``run``.
+        'NUNSTAB': -1, 'NSTAB': -1,         # -1: derive from NDIM
+        'IEQUIB': 1, 'ITWIST': 0, 'ISTART': 5,
+        'IREV': [], 'IFIXED': [], 'IPSI': [],
     }
+
+    # HomCont-only keys (auto-07p's ``main.f90:286`` re-routes these through
+    # ``INSTRHO`` only — they're harmless in non-HomCont c.* files but clutter
+    # them, and ``IPSI`` / ``IREV`` etc. would print as ``[]`` everywhere
+    # without the filter below).  Bundle them so we can drop them in one go.
+    _HOMCONT_KEYS = frozenset({
+        'NUNSTAB', 'NSTAB', 'IEQUIB', 'ITWIST', 'ISTART',
+        'IREV', 'IFIXED', 'IPSI',
+    })
 
     # Per-scenario overrides.  The user picks a scenario by name (e.g.
     # ``auto_constants=('ivp', 'eq')``); each generates a separate
@@ -398,6 +416,20 @@ class FortranBackend(BaseBackend):
         'bvp':  {'IPS': 4, 'ICP': [1, 2], 'ILP': 1, 'ISP': 2,
                  'NMX': 500, 'NTST': 20, 'NCOL': 4,
                  'DS': 1e-2, 'DSMIN': 1e-6, 'DSMAX': 2e-1},
+        # Homoclinic continuation via auto-07p's HomCont extension (IPS=9).
+        # ICP defaults to ``[1, 11]`` — one model parameter + the orbit's
+        # truncation interval (period); two-parameter HomCont continuations
+        # extend this to ``ICP=['eta', 'J', 22, 24, 25, ...]`` etc. (the
+        # test-function PARs at 20 + IPSI(j) are appended at run time).
+        # JAC=1 because PyRates emits the analytical Jacobian and HomCont
+        # consumes DFDU through the BVP wrapper.  NUNSTAB/NSTAB default to
+        # -1 ("auto-derive from NDIM") since the right values depend on
+        # the saddle, which is model-specific.
+        'hom':  {'IPS': 9, 'ICP': [1, 11], 'ILP': 0, 'ISP': 0,
+                 'NMX': 200, 'NPR': 100, 'NTST': 35, 'NCOL': 4,
+                 'NBC': 0, 'NINT': 0, 'JAC': 1,
+                 'DS': 0.05, 'DSMIN': 1e-4, 'DSMAX': 0.5,
+                 'EPSL': 1e-7, 'EPSU': 1e-7, 'EPSS': 1e-5},
     }
 
     def _generate_auto_files(self, func_name: str, func_args: tuple = (), state_vars: tuple = (),
@@ -975,6 +1007,25 @@ class FortranBackend(BaseBackend):
         consts['NDIM'] = ndim
         consts['NPAR'] = npar
         consts.update(overrides)
+
+        # HomCont keys (NUNSTAB / IEQUIB / IPSI / ...) are only consumed when
+        # the run uses IPS=9; the auto-07p c.* parser silently routes them to
+        # the HomCont module via INSTRHO regardless, but emitting them in
+        # every scenario produces noisy and misleading c.eq / c.lc files.
+        # Drop them when the scenario isn't the homoclinic one.
+        if scenario != 'hom':
+            for key in self._HOMCONT_KEYS:
+                consts.pop(key, None)
+        else:
+            # Drop empty list-valued HomCont keys (IREV / IFIXED / IPSI).
+            # Auto-07p's INSTRHO sets ``NREV=1`` unconditionally whenever
+            # ``IREV`` is parsed — even for ``IREV=[]`` (LISTLEN=0).  An
+            # accidental reversibility flag breaks NFREE bookkeeping in
+            # ``INHO``, so the cleanest fix is to not write the key at all
+            # when the user hasn't picked any indices.
+            for key in ('IREV', 'IFIXED', 'IPSI'):
+                if not consts.get(key):
+                    consts.pop(key, None)
 
         lines = []
         if parnames:
