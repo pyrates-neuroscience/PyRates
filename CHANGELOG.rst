@@ -4,6 +4,64 @@ Changelog
 1.2
 ---
 
+1.2.2
+-----
+
+Auto-07p code-generation patch.  Adds two new scenarios on the Fortran
+backend (BVP / HomCont) so PyCoBi can drive boundary-value problems and
+homoclinic continuations without hand-editing the generated ``.f90`` /
+``c.*`` files, plus two follow-up fixes on the symbolic-Jacobian and
+limit-cycle paths.
+
+- **BVP scenario**: ``_generate_auto_files`` now emits populated
+  ``BCND`` / ``ICND`` routines from a name-resolved DSL.  New kwargs on
+  ``CircuitTemplate.get_run_func`` / ``ODESystem.from_template``:
+  ``boundary_conditions=['u0_r - u0_v', ...]`` and
+  ``integral_constraints=['u_r * udot_r', ...]`` are sympified and
+  rendered to Fortran via the same ``_sympy_to_fortran`` helper as the
+  analytical-Jacobian path.  The DSL recognises ``u0_<var>`` /
+  ``u1_<var>`` (BCND), ``u_<var>`` / ``uold_<var>`` / ``udot_<var>`` /
+  ``upold_<var>`` (ICND), and ``par_<param>`` in either.  NBC / NINT
+  are auto-derived from list length; BVP-only parameters
+  (e.g. ``intval`` for ``∫u dt = intval``) are auto-registered as
+  PAR slots with ``STPNT`` initialisation but not passed to the inner
+  ``vector_field`` subroutine.  Raw ``bcnd_fortran`` / ``icnd_fortran``
+  / ``nbc`` / ``nint`` escape hatches kept for advanced use; mutually
+  exclusive with the DSL.  Verified end-to-end on the Gelfand-Bratu
+  BVP: recovers the canonical fold at λ\* = 3.513830719 to 10 decimals.
+- **HomCont scenario**: new ``'hom'`` entry in
+  ``_AUTO_CONSTANTS_SCENARIOS`` plus the eight HomCont keys from
+  auto-07p Ch. 20 (``NUNSTAB``, ``NSTAB``, ``IEQUIB``, ``ITWIST``,
+  ``ISTART``, ``IREV``, ``IFIXED``, ``IPSI``).  Defaults match HomCont's
+  own initial values (NUNSTAB/NSTAB auto-derived from NDIM,
+  ``IEQUIB=1``, ``ITWIST=0``, ``ISTART=5``); ``IPS=9, ILP=0, ISP=0,
+  JAC=1, ICP=[1, 11]``.  A new ``_HOMCONT_KEYS`` filter restricts
+  HomCont keys to ``c.hom`` so they don't leak into c.eq / c.lc /
+  c.ivp / c.bvp.  Empty ``IREV`` / ``IFIXED`` / ``IPSI`` lists are
+  dropped (HomCont's ``INSTRHO`` sets ``NREV=1`` whenever ``IREV`` is
+  parsed regardless of ``LISTLEN``, so a stray ``IREV=[]`` would
+  spuriously enable reversibility).
+- **'lc' scenario tolerances**: ``EPSL = EPSU = 1e-7`` and
+  ``EPSS = 1e-5`` (was 1e-6 / 1e-4, the auto-07p global default).  The
+  global defaults are too coarse for the BVP system solved at IPS=2:
+  test functions that flag LP / BP / PD along an LC become
+  noise-dominated, producing folds without stability flips.  On the
+  QIF-SFA homoclinic example at NMX=5000 / period ~200, the old
+  defaults reported 21 LPs / 8 BPs / 8 PDs (most without stability
+  flips); the new defaults report 2 LPs / 2 BPs / 12 PDs — a 10x drop
+  in spurious LP detections.  Users running unusually high-period LCs
+  may still need to go tighter (e.g. EPSL=EPSU=1e-8, EPSS=1e-6).
+- **Symbolic Jacobian — identity() / Subs cleanup**: plastic edges
+  and any other RHS routed through the IR's ``identity()`` marker
+  caused ``_compute_symbolic_jacobian`` to emit uncompilable Fortran
+  (sympy ``Subs`` wrappers and bare ``identity()`` survived into
+  Jacobian entries).  ``_resolve_derivatives`` now (1) ``.doit()``-evals
+  leftover ``Subs`` atoms once the inner derivative is resolved, and
+  (2) strips ``identity(arg) → arg`` at the sympy level so the Jacobian
+  stringifier never sees the marker.  New regression test
+  ``test_jacobian_stateful_edge`` (2-node QIF coupled by a plastic
+  edge) checks the symbolic Jacobian against finite differences.
+
 1.2.1
 -----
 
