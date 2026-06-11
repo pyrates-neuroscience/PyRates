@@ -127,9 +127,17 @@ class Connectivity:
     target
         Target variable path in ``'population_name/op/var'`` notation.
     weights
-        Weight matrix of shape ``(n_target, n_source)``.  A scalar is accepted
-        and will be stored as a 0-d array (must be combined with explicit
-        source/target shapes at compile time — use an explicit matrix for clarity).
+        Connection weights, either:
+
+        * a full ``(n_target, n_source)`` matrix → compiled to a ``matvec`` (or, with
+          an *edge*, a ``wsum`` over the pair space), or
+        * a **scalar** → uniform all-to-all (global / mean-field) coupling. It is
+          stored as a 0-d array and compiled to the reduction
+          ``target = weights * vsum(source)``, broadcast to every target, *without
+          ever forming an* ``(n_target, n_source)`` *weight matrix*. This keeps global
+          coupling at O(N) (memory and compute) for large populations. To realise a
+          weighted sum ``Σ_l v_l x_l``, scale the source variable by ``v_l`` inside the
+          source operator and pass the remaining scalar gain as ``weights``.
     edge
         Optional ``EdgeTemplate`` defining a non-dynamic coupling function.  The
         template's operators must contain **no state variables**.  Each equation is

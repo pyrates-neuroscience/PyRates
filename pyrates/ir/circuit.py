@@ -192,17 +192,22 @@ class NetworkGraph(AbstractBaseIR):
                 # extract delay info from variable projections
                 op_name, var_name = out_var.split('/')
 
-                # Separate matrix-connectivity edges (2-D weight array) from scalar edges.
-                # Matrix edges carry their own delay handling via _add_matrix_delay.
-                matrix_edges, scalar_edges = [], []
+                # Separate matrix-connectivity edges (2-D weight array) and global
+                # edges (0-d / scalar weight → uniform all-to-all coupling, realized
+                # as a reduction without ever forming a weight matrix) from ordinary
+                # scalar edges. Matrix and global edges carry their own delay handling
+                # via _add_matrix_delay (a delay buffer on the source output).
+                matrix_edges, global_edges, scalar_edges = [], [], []
                 for s, t, e in edges:
                     w = self.edges[s, t, e]['weight']
                     if isinstance(w, np.ndarray) and w.ndim == 2:
                         matrix_edges.append((s, t, e))
+                    elif isinstance(w, np.ndarray) and w.ndim == 0:
+                        global_edges.append((s, t, e))
                     else:
                         scalar_edges.append((s, t, e))
 
-                for s, t, e in matrix_edges:
+                for s, t, e in matrix_edges + global_edges:
                     d = self.edges[s, t, e].get('delay')
                     v = self.edges[s, t, e].get('spread')
                     if d is not None and d > self.step_size:
@@ -736,6 +741,24 @@ class NetworkGraph(AbstractBaseIR):
                 s_str = svar
                 sidx_str = 'source_idx'
                 tidx_str = 'target_idx'
+
+            # case 0g: global edge — weight is a 0-d (scalar) array (used by
+            # Connectivity for uniform all-to-all coupling). Realized as a reduction
+            # t = w * vsum(source), broadcast to all targets, WITHOUT ever forming an
+            # (n_target x n_source) weight matrix. The source is the (possibly delayed,
+            # via _add_matrix_delay) population output vector; vsum collapses it to the
+            # scalar mean field. The target coupling variable is scalar and broadcasts
+            # against the vectorized target state inside the target operator.
+            if isinstance(weight, np.ndarray) and weight.ndim == 0:
+                source_vars[s_str] = {'sources': [sop], 'node': snode, 'var': svar}
+                if abs(float(weight) - 1.0) < weight_minimum:
+                    eqs.append(f"{t_str} = vsum({s_str})")
+                else:
+                    args[w_str] = {'vtype': 'constant', 'value': float(weight),
+                                   'dtype': 'float', 'shape': (1,)}
+                    eqs.append(f"{t_str} = {w_str} * vsum({s_str})")
+                in_vars.append(t_str)
+                continue
 
             # case 0: matrix edge — weight is a 2-D numpy array supplied directly
             # (used by Connectivity; no scalar expansion needed)

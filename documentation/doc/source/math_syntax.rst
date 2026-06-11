@@ -104,7 +104,7 @@ The following function calls can be used for model definitions in `PyRates`:
 - :code:`real`: returns the real part of its argument, e.g. :code:`real(1.0+3.0j) = 1.0`
 - :code:`conj`: returns the complex conjugate of its argument, e.g. :code:`conj(1.0+3.0j) = 1.0-3.0j`
 - :code:`log`: implements the natural logarithm, i.e. :math:`log(e^x) = x`
-- :code:`sum`: implements the sum operator, e.g. :code:`sum([1, 2, 3]) = 6`
+- :code:`vsum`: implements the (vector) sum operator, e.g. :code:`vsum([1, 2, 3]) = 6` (named :code:`vsum` rather than :code:`sum` to avoid a clash with Python's built-in :code:`sum` during equation parsing)
 - :code:`mean`: calculates the unweighted average of a vector, e.g. :code:`mean([1, 2, 3]) = 2`
 - :code:`maxi`: returns the maximum value of a vector, e.g. :code:`maxi([1, 2, 3]) = 3`
 - :code:`mini`: returns the minimum value of a vector, e.g. :code:`mini([1, 2, 3]) = 1`

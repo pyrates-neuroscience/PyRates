@@ -136,7 +136,7 @@ base_funcs = {
     'maxi': {'call': 'maximum', 'func': np.maximum, 'imports': ['numpy.maximum']},
     'mini': {'call': 'minimum', 'func': np.minimum, 'imports': ['numpy.minimum']},
     'round': {'call': 'round', 'func': np.round, 'imports': ['numpy.round']},
-    'sum': {'call': 'sum', 'func': np.sum, 'imports': ['numpy.sum']},
+    'vsum': {'call': 'sum', 'func': np.sum, 'imports': ['numpy.sum']},
     'mean': {'call': 'mean', 'func': np.mean, 'imports': ['numpy.mean']},
     'matmul': {'call': 'dot', 'func': np.dot, 'imports': ['numpy.dot']},
     'matvec': {'call': 'dot', 'func': np.dot, 'imports': ['numpy.dot']},

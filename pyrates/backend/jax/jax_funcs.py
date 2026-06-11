@@ -67,7 +67,7 @@ jax_funcs = {
     'maxi':        {'call': 'maximum',  'func': np.maximum,      'imports': ['jax.numpy.maximum']},
     'mini':        {'call': 'minimum',  'func': np.minimum,      'imports': ['jax.numpy.minimum']},
     'round':       {'call': 'round',    'func': np.round,        'imports': ['jax.numpy.round']},
-    'sum':         {'call': 'sum',      'func': np.sum,          'imports': ['jax.numpy.sum']},
+    'vsum':        {'call': 'sum',      'func': np.sum,          'imports': ['jax.numpy.sum']},
     'mean':        {'call': 'mean',     'func': np.mean,         'imports': ['jax.numpy.mean']},
     'matmul':      {'call': 'matmul',   'func': np.dot,          'imports': ['jax.numpy.matmul']},
     'matvec':      {'call': 'matmul',   'func': np.dot,          'imports': ['jax.numpy.matmul']},

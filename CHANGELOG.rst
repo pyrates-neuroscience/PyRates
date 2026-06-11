@@ -4,6 +4,34 @@ Changelog
 1.2
 ---
 
+1.2.3
+-----
+
+Matrix-free global (all-to-all / mean-field) coupling for vectorized
+populations, plus a fix to the equation-level ``sum`` function.
+
+- **Scalar-weight Connectivity → reduction**: a
+  ``Connectivity(source, target, weights=<scalar>)`` now realises uniform
+  all-to-all coupling as a reduction rather than a dense weight matrix.
+  ``CircuitIR._generate_edge_equation`` gained a global-edge case that emits
+  ``target = weights * vsum(source)`` (broadcast to all targets) for a 0-d
+  weight, and ``_preprocess_edge_operations`` routes such edges through the
+  same source-delay buffer (``_add_matrix_delay``) as matrix edges, so scalar
+  transmission delays are still honoured. No ``(n_target, n_source)`` matrix is
+  ever formed, keeping global coupling at O(N) in memory and compute — this is
+  what makes large globally coupled networks (e.g. an N≈5000 Kuramoto network)
+  tractable as a vector-based PyRates model. For a weighted sum ``Σ_l v_l x_l``,
+  scale the source variable by ``v_l`` in the source operator and pass the
+  remaining scalar gain as the connection weight. 2-D matrix edges and ordinary
+  scalar edges are unaffected.
+- **``sum`` → ``vsum``**: the equation-level reduction function was renamed from
+  ``sum`` to ``vsum`` across all backend function registries (numpy/base, jax,
+  torch, julia, fortran) and the parser's DDE-exclusion set. The old name
+  ``sum`` was unusable in model equations because it collided with Python's
+  built-in ``sum`` during sympy parsing; ``vsum`` parses correctly and maps to
+  the backend-native sum (``numpy.sum`` etc.). Documentation
+  (``math_syntax.rst``, ``Connectivity`` docstring) updated accordingly.
+
 1.2.2
 -----
 

@@ -67,7 +67,7 @@ torch_funcs = {
     'maxi': {'call': 'maximum', 'func': np.maximum, 'imports': ['torch.maximum']},
     'mini': {'call': 'minimum', 'func': np.minimum, 'imports': ['torch.minimum']},
     'round': {'call': 'round', 'func': np.round, 'imports': ['torch.round']},
-    'sum': {'call': 'sum', 'func': np.sum, 'imports': ['torch.sum']},
+    'vsum': {'call': 'sum', 'func': np.sum, 'imports': ['torch.sum']},
     'mean': {'call': 'mean', 'func': np.mean, 'imports': ['torch.mean']},
     'matmul': {'call': 'matmul', 'func': np.dot, 'imports': ['torch.matmul']},
     'matvec': {'call': 'matmul', 'func': np.dot, 'imports': ['torch.matmul']},

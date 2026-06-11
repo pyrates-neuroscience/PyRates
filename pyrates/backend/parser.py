@@ -50,7 +50,7 @@ _sympify_cache: dict = {}
 _DDE_EXCLUDE = {
     'sin', 'cos', 'tan', 'tanh', 'sinh', 'cosh', 'exp', 'log', 'sqrt', 'abs',
     'arcsin', 'arccos', 'arctan', 'real', 'imag', 'round', 'sign', 'maximum',
-    'minimum', 'mean', 'sum', 'dot', 'roll', 'interp', 'interp_rows', 'randn',
+    'minimum', 'mean', 'vsum', 'dot', 'roll', 'interp', 'interp_rows', 'randn',
     'sigmoid', 'broadcast_pre', 'broadcast_post', 'wsum', 'reshape2d', 'flatten1d',
     'past', 'index', 'index_1d', 'index_2d', 'index_range', 'index_axis', 'identity',
     'concatenate',

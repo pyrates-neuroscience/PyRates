@@ -133,7 +133,7 @@ fortran_funcs = {
     'maxi': {'call': 'max', 'func': np.maximum},
     'mini': {'call': 'min', 'func': np.minimum},
     'round': {'call': 'nint', 'func': np.round},
-    'sum': {'call': 'sum', 'func': np.sum},
+    'vsum': {'call': 'sum', 'func': np.sum},
     'matmul': {'call': 'matmul', 'func': np.dot},
     'matvec': {'call': 'matmul', 'func': np.dot},
     'roll': {'call': 'cshift', 'func': np.roll},
